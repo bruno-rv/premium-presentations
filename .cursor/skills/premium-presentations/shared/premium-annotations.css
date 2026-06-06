@@ -1,0 +1,207 @@
+/* Text marker + laser pointer — theme-aware contrast */
+
+html[data-theme="editorial"] {
+  --mark-bg: rgba(255, 220, 100, 0.58);
+  --mark-text: #0a0c10;
+  --mark-border: rgba(255, 200, 60, 0.35);
+  --laser-core: #ff3b4f;
+  --laser-glow: rgba(255, 59, 79, 0.55);
+  --laser-ring: rgba(255, 120, 130, 0.25);
+}
+
+html[data-theme="warm"] {
+  --mark-bg: rgba(130, 235, 200, 0.52);
+  --mark-text: #14110d;
+  --mark-border: rgba(100, 210, 170, 0.4);
+  --laser-core: #ff4d3a;
+  --laser-glow: rgba(255, 100, 70, 0.5);
+  --laser-ring: rgba(255, 180, 120, 0.22);
+}
+
+html[data-theme="red"] {
+  --mark-bg: rgba(255, 230, 120, 0.65);
+  --mark-text: #1a1a1a;
+  --mark-border: rgba(255, 2, 48, 0.2);
+  --laser-core: #FF0230;
+  --laser-glow: rgba(255, 2, 48, 0.45);
+  --laser-ring: rgba(255, 2, 48, 0.18);
+}
+
+/* Live selection (marker mode on) */
+html[data-marker="on"] .deck ::selection {
+  background: var(--mark-bg);
+  color: var(--mark-text);
+}
+
+html[data-marker="on"] .deck ::-moz-selection {
+  background: var(--mark-bg);
+  color: var(--mark-text);
+}
+
+/* Persistent highlights */
+.premium-mark {
+  background: linear-gradient(
+    180deg,
+    transparent 8%,
+    var(--mark-bg) 8%,
+    var(--mark-bg) 92%,
+    transparent 92%
+  );
+  color: var(--mark-text);
+  border-radius: 3px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  padding: 0 0.12em;
+  margin: 0 -0.06em;
+  box-shadow: inset 0 -2px 0 var(--mark-border);
+}
+
+.premium-mark--ghost {
+  outline: 1px dashed var(--mark-border);
+  outline-offset: 2px;
+}
+
+/* Laser pointer */
+.premium-laser {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  z-index: 105;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+html[data-laser="on"] .premium-laser {
+  opacity: 1;
+}
+
+.premium-laser__trail {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: calc(12px + var(--trail-index, 0) * 3px);
+  height: calc(12px + var(--trail-index, 0) * 3px);
+  margin: calc(-6px - var(--trail-index, 0) * 1.5px) 0 0 calc(-6px - var(--trail-index, 0) * 1.5px);
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--laser-core) 0%, var(--laser-glow) 70%);
+  opacity: calc(0.32 - var(--trail-index, 0) * 0.08);
+  filter: blur(calc(2.5px + var(--trail-index, 0) * 1.5px));
+  box-shadow: 0 0 8px var(--laser-glow);
+  will-change: transform;
+}
+
+.premium-laser__dot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #fff 0%, var(--laser-core) 40%, var(--laser-core) 100%);
+  box-shadow:
+    0 0 3px 1px var(--laser-core),
+    0 0 10px 3px var(--laser-glow),
+    0 0 20px 6px var(--laser-ring);
+  will-change: transform;
+}
+
+.premium-laser__ring-wrap {
+  position: absolute;
+  top: 0;
+  left: 0;
+  will-change: transform;
+}
+
+.premium-laser__ring {
+  width: 20px;
+  height: 20px;
+  margin: -10px 0 0 -10px;
+  border-radius: 50%;
+  border: 1px solid var(--laser-ring);
+  box-shadow: 0 0 6px var(--laser-glow);
+  animation: premium-laser-pulse 1.8s ease-in-out infinite;
+}
+
+.premium-laser__beam {
+  position: absolute;
+  width: 2px;
+  height: 120px;
+  margin: -120px 0 0 -1px;
+  transform-origin: bottom center;
+  background: linear-gradient(to top, var(--laser-core), transparent);
+  opacity: 0.35;
+  filter: blur(0.5px);
+}
+
+@keyframes premium-laser-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.45; }
+  50% { transform: scale(1.08); opacity: 0.75; }
+}
+
+/* Click attention pulse (laser mode) */
+.premium-laser-pulse {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  z-index: 104;
+  pointer-events: none;
+}
+
+.premium-laser-pulse__ring {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  margin: -22px 0 0 -22px;
+  border-radius: 50%;
+  border: 2px solid var(--laser-core);
+  background: radial-gradient(circle, var(--laser-glow) 0%, transparent 68%);
+  box-shadow:
+    0 0 8px var(--laser-glow),
+    0 0 20px var(--laser-ring);
+  animation: premium-laser-attention 0.85s ease-out forwards;
+}
+
+@keyframes premium-laser-attention {
+  0% {
+    transform: scale(0.55);
+    opacity: 0.75;
+  }
+  100% {
+    transform: scale(1.65);
+    opacity: 0;
+  }
+}
+
+html[data-laser="on"] .deck,
+html[data-laser="on"] .deck * {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+html[data-laser="on"] .deck ::selection,
+html[data-laser="on"] .deck ::-moz-selection {
+  background: transparent;
+  color: inherit;
+}
+
+html[data-laser="on"] .deck {
+  cursor: none;
+}
+html[data-laser="on"] .premium-controls-shell,
+html[data-laser="on"] .premium-controls-shell * {
+  cursor: default;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .premium-laser__ring { animation: none; }
+  .premium-laser__trail { display: none; }
+  .premium-laser-pulse__ring {
+    animation-duration: 0.45s;
+  }
+  html[data-laser="on"] .deck { cursor: auto; }
+}

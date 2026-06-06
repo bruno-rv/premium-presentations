@@ -1,97 +1,87 @@
 ---
 name: premium-presentations
 description: >-
-  Generate, edit, validate, and bundle complete HTML slide decks using the
-  Premium Presentations repository: SlideEngine navigation, dynamic theme
-  discovery, theme visuals, presenter mode, timer, annotations, search, TTS,
-  clicker support, OG covers, Mermaid/diagram tooling, and reusable creative
-  components. Use when creating or modifying any presentation, slide deck,
-  talk, lecture, workshop, pitch, or browser-rendered HTML deck.
+  Generate, edit, validate, and bundle complete Premium Presentations HTML slide
+  decks from this self-contained repository skill. Use when creating or
+  modifying presentations, slide decks, talks, lectures, workshops, pitches,
+  browser-rendered HTML decks, presenter-mode decks, themed decks, Mermaid
+  diagram decks, or reusable presentation templates with the bundled scripts,
+  themes, runtime, assets, and validators.
 ---
 
 # Premium Presentations
 
-Use this skill to create production HTML decks from the repo, not from memory.
-Prefer repo scripts and shared runtime modules over hand-rolled deck engines.
+This directory is the self-contained skill package and deck generator. Use the
+bundled scripts, templates, shared runtime, assets, and references from this
+folder instead of recreating a slide framework from memory.
 
-## Repo Setup
+## Start
 
-1. Work from the Premium Presentations repo root. If the repo is not the current
-   workspace, locate it via the user-provided path or `PREMIUM_PRESENTATIONS_REPO`.
+1. Work from the directory containing this `SKILL.md`. If the current workspace
+   is elsewhere, locate this folder through the skill path, the user-provided
+   path, or `PREMIUM_PRESENTATIONS_SKILL`.
 2. Discover themes dynamically:
 
 ```bash
 ./scripts/list-themes.py
 ```
 
-Never treat the current theme names as a closed list. Themes are declared by
-`html[data-theme="..."]` selectors in `shared/premium-themes.css`. If
-`templates/<theme>-base.html` exists, the scaffold script uses it; otherwise it
-falls back to `templates/premium-base.html`.
+Themes come from `html[data-theme="..."]` selectors in
+`shared/premium-themes.css`. Do not hardcode the current theme names.
 
 ## Create A Deck
 
 ```bash
 ./scripts/new-deck.sh <theme> <slug> "<title>" <slide_count>
-./scripts/validate-deck.sh decks/<slug>/<slug>-slides.html decks/<slug>/<slug>-slide-spec.md
+./scripts/validate-deck.sh decks/<slug>/<slug>-slides.html
 ```
 
-For unspecified themes, use the first theme returned by `list-themes.py` unless
-the topic clearly calls for another discovered theme. Use lowercase hyphenated
-slugs.
+Use lowercase hyphenated slugs. For unspecified themes, use the first theme
+returned by `list-themes.py` unless the topic clearly calls for another
+discovered theme. For 8+ slides, use the generated slide spec as the authoring
+contract, then validate against it after the HTML has been expanded to the
+planned slide count.
 
-For 8+ slides, use the generated slide spec as the contract. Fill content in the
-HTML deck, keeping one main idea per slide and using shared components for
-layout.
+## Runtime Contract
 
-## Required Runtime
+Keep generated decks on the shared runtime stack:
 
-New decks must keep the shared runtime included by the templates:
+- CSS: `premium-themes.css`, `premium-deck.css`, `premium-components.css`,
+  `premium-diagrams.css`, `premium-annotations.css`, `premium-extras.css`.
+- JS: `premium-controller.js`, `premium-controls.js`,
+  `premium-annotations.js`, `premium-timer.js`, `premium-tts.js`,
+  `premium-search.js`, `premium-clicker.js`, `premium-og-cover.js`,
+  `premium-presenter.js`, `slide-engine.js`.
+- Red decks also include `premium-red-brand.css` and `premium-red-chrome.js`.
 
-- `premium-themes.css`: theme tokens discovered from CSS selectors.
-- `premium-deck.css`: slide layout, title/divider visual injection, dot nav.
-- `premium-components.css`: compare, journey, timeline, cards, bars, code panes.
-- `premium-diagrams.css` and `premium-mermaid.js`: diagram slides and fit checks.
-- `premium-controller.js`: shared deck state, presenter events, and navigation API.
-- `premium-controls.js`: theme switch, parallax, curtain, theme visuals.
-- `premium-annotations.js`: marker and laser tools.
-- `premium-timer.js`, `premium-presenter.js`, `premium-search.js`,
-  `premium-clicker.js`, `premium-tts.js`, `premium-og-cover.js`.
-- `slide-engine.js`: scroll-snap navigation, counters, auto-hiding dot rail,
-  presenter events, keyboard/touch navigation.
+Run `./scripts/validate-runtime-contract.py` after template, theme, bundler, or
+shared runtime edits.
 
-## Theme Visuals
+## Reference Files
 
-Theme visuals are theme-level, not deck-specific.
+- `reference/runtime.md`: runtime modules, extension points, theme visuals,
+  Mermaid, presenter/chrome behavior.
+- `reference/components.md`: reusable visual components and snippet IDs.
+- `reference/examples.md`: copy-paste slide markup patterns.
+- `reference/themes-red.md`: red theme rules.
+- `reference/slide-spec-template.md`: deck planning template used by
+  `scripts/new-deck.sh`.
 
-- Title slides (`.slide--title`) get a `hero` visual.
-- Divider slides (`.slide--divider`) get a `map` visual.
-- Default asset convention: `shared/assets/chatgpt-theme-visuals/<theme>-hero.png`
-  and `<theme>-map.png`.
-- Override per deck with `data-theme-visual-<theme>-<role>` attributes or
-  `window.PremiumThemeVisuals`.
-- Disable on a slide with `data-theme-visual="off"`.
-
-When adding a new theme, add its `html[data-theme="new-theme"]` token block,
-optional `templates/new-theme-base.html`, and optional visual assets using the
-same naming convention. Load custom webfonts through the template `<link>` tags
-or `data-theme-fonts-<theme>="https://..."` on `<html>`. Do not update skill
-prose just to add a theme.
+Load only the reference needed for the current task.
 
 ## Build Guidance
 
-- Start from `new-deck.sh`; do not create a parallel deck scaffold.
-- Use `components.md` only when choosing advanced visual blocks.
-- Use `reference.md` for runtime details and extension points.
-- Use `examples.md` for copy-paste slide markup.
+- Start from `scripts/new-deck.sh`; do not create a parallel scaffold.
+- Use `templates/` and `shared/` as the source of truth.
+- Use `templates/components/` snippets for advanced visual blocks.
+- Keep one dominant idea per slide.
 - Keep branding generic unless the user explicitly requests brand chrome.
 - Do not add closing footer-note rows, "NEXT:" citations, or lesson-pill rows.
-- Use icons/controls already provided by the shared runtime rather than adding
-  ad hoc UI controls.
+- Use the provided runtime controls instead of ad hoc controls.
 
 ## Validate
 
-Run validation before completion:
+Before completion, run the checks that match the change:
 
 ```bash
 ./scripts/validate-runtime-contract.py
@@ -99,13 +89,12 @@ Run validation before completion:
 git diff --check
 ```
 
-For shared runtime or template edits, re-bundle affected generated HTML files
-and rerun the runtime contract:
+For shared runtime or template edits, re-bundle affected generated HTML files:
 
 ```bash
 python3 scripts/bundle_deck.py decks/<slug>/<slug>-slides.html --in-place --force
 ./scripts/validate-runtime-contract.py
 ```
 
-Then run a browser smoke test for navigation/theme visuals when the change
-touches runtime CSS/JS.
+When changing browser behavior, run a browser smoke test for navigation, theme
+visuals, and controls.

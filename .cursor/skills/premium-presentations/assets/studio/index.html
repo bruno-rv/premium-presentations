@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="editorial" data-parallax="off">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Premium Presentations: Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../shared/premium-themes.css">
+<link rel="stylesheet" href="../../shared/premium-annotations.css">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--font-body);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100dvh;
+    padding: clamp(24px, 5vw, 64px);
+    position: relative;
+    z-index: 1;
+  }
+  h1 {
+    font-family: var(--font-display);
+    font-size: clamp(2rem, 5vw, 3.2rem);
+    font-weight: 400;
+    margin-bottom: 0.5rem;
+  }
+  .lead { color: var(--text-dim); max-width: 40rem; line-height: 1.6; margin-bottom: 2rem; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1rem;
+    max-width: 920px;
+    margin-bottom: 2rem;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.25rem;
+    text-decoration: none;
+    color: inherit;
+    transition: transform 0.2s, border-color 0.2s;
+  }
+  .card:hover { transform: translateY(-3px); border-color: var(--border-bright); }
+  .card h2 { font-family: var(--font-display); font-size: 1.35rem; font-weight: 400; line-height: 1.15; margin-bottom: 0.5rem; }
+  .card p { font-size: 0.9rem; color: var(--text-dim); line-height: 1.5; }
+  code {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    background: var(--surface2);
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+  }
+  .cmds { font-size: 0.85rem; color: var(--text-dim); line-height: 1.8; max-width: 52rem; }
+  .cmds a { color: var(--accent); }
+  .foot { margin-top: 2rem; font-size: 0.8rem; color: var(--text-dim); }
+</style>
+</head>
+<body>
+  <h1>Premium Presentations</h1>
+  <p class="lead">Hover the left edge for controls. Shortcuts: <strong>M</strong> marker · <strong>L</strong> laser · <strong>C</strong> clear · <strong>H</strong> hide/show panel · <strong>3</strong> 3D.</p>
+
+  <div class="grid">
+    <a class="card" href="../../templates/preview-editorial.html">
+      <h2>Editorial preview</h2>
+      <p>Dark editorial voice with restrained blue and gold accents.</p>
+    </a>
+    <a class="card" href="../../templates/preview-warm.html">
+      <h2>Warm Signal preview</h2>
+      <p>Low-light workshop palette for data engineering talks.</p>
+    </a>
+    <a class="card" href="../../decks/rag-vector-graph/rag-vector-graph-slides.html">
+      <h2>RAG · Vector · Graph</h2>
+      <p>16-slide example with Mermaid diagrams, tables, and act dividers.</p>
+    </a>
+    <a class="card" href="../../decks/red-smoke/red-smoke-slides.html">
+      <h2>Red theme</h2>
+      <p>Brand preview with broadcast red, Focus Frame, and act divider.</p>
+    </a>
+    <a class="card" href="../../templates/preview-red.html">
+      <h2>Red preview</h2>
+      <p>White broadcast surface with the red brand system.</p>
+    </a>
+  </div>
+
+  <div class="cmds">
+    <p><code>./scripts/new-deck.sh warm &lt;slug&gt; "&lt;title&gt;" 15</code></p>
+    <p><code>./scripts/validate-deck.sh decks/&lt;slug&gt;/&lt;slug&gt;-slides.html</code></p>
+    <p>Skill: <code>premium-presentations</code></p>
+    <p>Repository: <a href="https://github.com/bruno-rv/premium-presentations.git">bruno-rv/premium-presentations.git</a></p>
+  </div>
+
+  <p class="foot">Premium Presentations repository: <a href="https://github.com/bruno-rv/premium-presentations.git">bruno-rv/premium-presentations.git</a></p>
+
+  <script src="../../shared/premium-controls.js" defer></script>
+  <script src="../../shared/premium-annotations.js" defer></script>
+</body>
+</html>

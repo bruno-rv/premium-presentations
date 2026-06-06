@@ -4,14 +4,19 @@ HTML slide decks with live theme switching, optional 3D parallax background, and
 
 Repository: [bruno-rv/premium-presentations.git](https://github.com/bruno-rv/premium-presentations.git)
 
+The repository root is a wrapper for documentation and vendor packages. The
+actual skill and deck framework live under `skill/`.
+
 ## Quick start
 
 ```bash
+cd skill
+
 # Scaffold (spec auto-created when slides ≥ 8)
 ./scripts/new-deck.sh warm rag-vector-graph "My Title" 15
 
-# Validate structure
-./scripts/validate-deck.sh decks/rag-vector-graph/rag-vector-graph-slides.html decks/rag-vector-graph/rag-vector-graph-slide-spec.md
+# Validate starter structure
+./scripts/validate-deck.sh decks/rag-vector-graph/rag-vector-graph-slides.html
 
 # Open
 open assets/studio/index.html
@@ -25,7 +30,9 @@ python3 -m http.server 8765
 # http://localhost:8765/decks/rag-vector-graph/rag-vector-graph-slides.html
 ```
 
-## Scripts
+## Skill Scripts
+
+Run these from `skill/`.
 
 | Script | Purpose |
 |--------|---------|
@@ -45,21 +52,27 @@ Each deck is a **single HTML file** (all engine CSS/JS inlined). Open it directl
 
 Optional `*.linked.html` sources (with `../../shared/` links) are for maintainers who edit the framework and re-bundle. Slide **content** lives in the standalone `*-slides.html`.
 
+When scaffolding with a slide count of 8 or more, `new-deck.sh` also creates a
+planning spec. Validate against that spec after the deck HTML has been authored
+to the planned slide count.
+
 **External deps (CDN):** Google Fonts, and Mermaid on diagram decks.
 
-## Shared runtime (source for bundler)
+## Shared Runtime
+
+These paths are under `skill/`.
 
 | File | Purpose |
 |------|---------|
-| `shared/premium-themes.css` | Editorial · Warm · Red tokens |
-| `shared/premium-deck.css` | Slide layout, typography, tables |
-| `shared/premium-components.css` | Illustrative components (journey, compare, timeline, code window, bars) — see skill `components.md` |
-| `shared/premium-diagrams.css` | Diagram slides — centered Excalidraw-style canvas |
-| `shared/premium-mermaid.js` | Mermaid hand-drawn theme + theme-change re-render |
-| `shared/premium-controls.js` | Theme switch + 3D background toggle |
-| `shared/premium-annotations.css` | Marker + laser styles (theme contrast) |
-| `shared/premium-annotations.js` | Marker + laser behavior |
-| `shared/slide-engine.js` | Navigation |
+| `skill/shared/premium-themes.css` | Editorial · Warm · Red tokens |
+| `skill/shared/premium-deck.css` | Slide layout, typography, tables |
+| `skill/shared/premium-components.css` | Illustrative components (journey, compare, timeline, code window, bars) |
+| `skill/shared/premium-diagrams.css` | Diagram slides and centered Excalidraw-style canvas |
+| `skill/shared/premium-mermaid.js` | Mermaid hand-drawn theme and theme-change re-render |
+| `skill/shared/premium-controls.js` | Theme switch and 3D background toggle |
+| `skill/shared/premium-annotations.css` | Marker and laser styles |
+| `skill/shared/premium-annotations.js` | Marker and laser behavior |
+| `skill/shared/slide-engine.js` | Navigation |
 
 **Controls (left edge, hover to expand):** Theme · **Marker** · **Clear** · **Laser** · **3D background**.
 
@@ -67,7 +80,7 @@ Optional `*.linked.html` sources (with `../../shared/` links) are for maintainer
 
 ## Extras (Cluster A — Live + Cluster B — Distribution)
 
-Engine modules in `shared/premium-{timer,presenter,clicker,tts,search,og-cover}.js` + `shared/premium-extras.css`. Auto-bundled by `bundle-deck.py` when the template links them.
+Engine modules in `skill/shared/premium-{timer,presenter,clicker,tts,search,og-cover}.js` plus `skill/shared/premium-extras.css`. Auto-bundled by `bundle-deck.py` when the template links them.
 
 | Shortcut | Feature |
 |----------|---------|
@@ -87,44 +100,50 @@ Engine modules in `shared/premium-{timer,presenter,clicker,tts,search,og-cover}.
 
 ## Skill
 
-This repository is also a root-level skill: it contains `SKILL.md`,
-`agents/openai.yaml`, `reference/`, `scripts/`, `templates/`, and `shared/`.
-Copy or clone the whole `premium-presentations/` folder into a Claude, Cursor,
-or Codex skills directory to deploy it as one self-contained skill.
+The canonical skill package lives in `skill/`. It contains `SKILL.md`,
+`agents/openai.yaml`, `reference/`, `scripts/`, `templates/`, `shared/`,
+`assets/`, and `decks/`. Copy the `skill/` directory to a skills directory as
+`premium-presentations/` to deploy it as one self-contained skill.
 
 Platform-specific copies are also checked in under
-`.cursor/skills/premium-presentations/`, `.codex/skills/premium-presentations/`,
-and `.claude/skills/premium-presentations/`. They are mirrored convenience
-packages; the root folder is the primary skill package.
+`.claude/skills/premium-presentations/`, `.cursor/skills/premium-presentations/`,
+`.agents/skills/premium-presentations/`, and `.codex/skills/premium-presentations/`.
+They are generated convenience packages; `skill/` is the source of truth.
+
+Refresh mirrored packages after editing `skill/`:
+
+```bash
+./tools/sync-skill-packages.sh
+```
 
 ### Skill structure
 
-The root skill follows
+The canonical skill follows
 [Claude skill authoring best practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices):
 
 | Path | Purpose |
 |------|---------|
-| `SKILL.md` | Concise entry point and trigger metadata |
-| `reference/` | One-level, progressively loaded guidance files |
-| `scripts/` | Deterministic scaffolding, bundling, validation, and Node test metadata |
-| `assets/studio/` | Static local gallery for previews and example decks |
-| `templates/` | Deck and component source templates |
-| `shared/` | Runtime CSS, JavaScript, and theme assets |
-| `decks/` | Complete example decks and generated artifacts |
+| `skill/SKILL.md` | Concise entry point and trigger metadata |
+| `skill/reference/` | One-level, progressively loaded guidance files |
+| `skill/scripts/` | Deterministic scaffolding, bundling, validation, and Node test metadata |
+| `skill/assets/studio/` | Static local gallery for previews and example decks |
+| `skill/templates/` | Deck and component source templates |
+| `skill/shared/` | Runtime CSS, JavaScript, and theme assets |
+| `skill/decks/` | Complete example decks and generated artifacts |
 
 Long reference files include a `Contents` section so an agent can preview scope
 before loading details. Avoid adding new nested reference directories unless a
 domain grows large enough to justify a separate directly linked file. Keep new
-agent-facing docs under `reference/`; reserve `docs/` for project history and
-planning artifacts that should not be loaded by default.
+agent-facing docs under `skill/reference/`; reserve root `docs/` for repository
+history and planning artifacts that should not be loaded by default.
 
-Root-level files are intentionally limited to skill/repo entry points. Historical
-planning files live under `docs/project/`, static preview UI lives under
-`assets/studio/`, and npm metadata lives under `scripts/` because it only
-supports script/test execution.
+Root-level files are intentionally limited to repository entry points and
+repository maintenance. The skill payload is inside `skill/`; root `docs/` and
+`tools/` are not part of the generated skill packages.
 
-Repository reference: [bruno-rv/premium-presentations.git](https://github.com/bruno-rv/premium-presentations.git). Red theme: [themes-red.md](.cursor/skills/premium-presentations/themes-red.md).
+Repository reference: [bruno-rv/premium-presentations.git](https://github.com/bruno-rv/premium-presentations.git). Red theme: [themes-red.md](skill/reference/themes-red.md).
 
 ```bash
+cd skill
 ./scripts/new-deck.sh red my-show "Show Review" 12
 ```

@@ -4,6 +4,7 @@
 .idea/
 .vscode/
 node_modules/
+.impeccable/
 __pycache__/
 *.pyc
 .env
