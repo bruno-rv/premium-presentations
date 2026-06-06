@@ -14,7 +14,7 @@ Repository: [bruno-rv/premium-presentations.git](https://github.com/bruno-rv/pre
 ./scripts/validate-deck.sh decks/rag-vector-graph/rag-vector-graph-slides.html decks/rag-vector-graph/rag-vector-graph-slide-spec.md
 
 # Open
-open app/index.html
+open assets/studio/index.html
 open decks/rag-vector-graph/rag-vector-graph-slides.html
 ```
 
@@ -106,7 +106,8 @@ The root skill follows
 |------|---------|
 | `SKILL.md` | Concise entry point and trigger metadata |
 | `reference/` | One-level, progressively loaded guidance files |
-| `scripts/` | Deterministic scaffolding, bundling, and validation |
+| `scripts/` | Deterministic scaffolding, bundling, validation, and Node test metadata |
+| `assets/studio/` | Static local gallery for previews and example decks |
 | `templates/` | Deck and component source templates |
 | `shared/` | Runtime CSS, JavaScript, and theme assets |
 | `decks/` | Complete example decks and generated artifacts |
@@ -116,6 +117,11 @@ before loading details. Avoid adding new nested reference directories unless a
 domain grows large enough to justify a separate directly linked file. Keep new
 agent-facing docs under `reference/`; reserve `docs/` for project history and
 planning artifacts that should not be loaded by default.
+
+Root-level files are intentionally limited to skill/repo entry points. Historical
+planning files live under `docs/project/`, static preview UI lives under
+`assets/studio/`, and npm metadata lives under `scripts/` because it only
+supports script/test execution.
 
 Repository reference: [bruno-rv/premium-presentations.git](https://github.com/bruno-rv/premium-presentations.git). Red theme: [themes-red.md](.cursor/skills/premium-presentations/themes-red.md).
 

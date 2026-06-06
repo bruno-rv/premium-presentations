@@ -3502,7 +3502,10 @@ html[data-presenter-display="on"] .slide {
 
     const path = location.pathname;
     if (path.includes('/decks/')) return '../../shared/assets/chatgpt-theme-visuals/';
-    if (path.includes('/app/') || path.includes('/templates/')) {
+    if (path.includes('/assets/studio/')) {
+      return '../../shared/assets/chatgpt-theme-visuals/';
+    }
+    if (path.includes('/templates/')) {
       return '../shared/assets/chatgpt-theme-visuals/';
     }
     return 'shared/assets/chatgpt-theme-visuals/';

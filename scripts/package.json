@@ -10,7 +10,9 @@
   "homepage": "https://github.com/bruno-rv/premium-presentations",
   "type": "module",
   "scripts": {
-    "test:presenter": "node scripts/presenter-smoke.mjs"
+    "test": "node --test theme-quality.test.mjs",
+    "test:presenter": "node presenter-smoke.mjs",
+    "test:theme": "node --test theme-quality.test.mjs"
   },
   "devDependencies": {
     "jsdom": "^25.0.0"

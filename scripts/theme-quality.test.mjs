@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { JSDOM } from 'jsdom';
 
-const root = process.cwd();
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 function read(path) {
   return readFileSync(resolve(root, path), 'utf8');
@@ -20,8 +21,8 @@ function localHtmlLinks(htmlPath) {
 }
 
 test('studio gallery links only to preview-safe HTML', () => {
-  const linkedHtmlFiles = localHtmlLinks('app/index.html');
-  assert.ok(linkedHtmlFiles.length > 0, 'expected app/index.html to link to local HTML');
+  const linkedHtmlFiles = localHtmlLinks('assets/studio/index.html');
+  assert.ok(linkedHtmlFiles.length > 0, 'expected assets/studio/index.html to link to local HTML');
 
   for (const absPath of linkedHtmlFiles) {
     const body = readFileSync(absPath, 'utf8');
@@ -96,7 +97,7 @@ test('mobile controls meet touch target minimums', () => {
 
 test('theme font stacks avoid reported overused families and keep warm hierarchy split', () => {
   const files = [
-    'app/index.html',
+    'assets/studio/index.html',
     'templates/premium-base.html',
     'templates/red-base.html',
     'templates/warm-signal-base.html',

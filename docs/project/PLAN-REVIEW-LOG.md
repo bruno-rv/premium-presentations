@@ -219,8 +219,8 @@ No material issues found. Round 4 fix confirmed.
 
 **APPROVED** — survived 5 rounds of adversarial Codex review.
 
-Final plan: `/Users/bruno/Dev/presentations/PLAN.md`
-Review log: `/Users/bruno/Dev/presentations/PLAN-REVIEW-LOG.md`
+Final plan: `docs/project/PLAN.md`
+Review log: `docs/project/PLAN-REVIEW-LOG.md`
 
 **What two acts improved:**
 - **Act 1 (grill, 10 questions)** — locked the open questions that

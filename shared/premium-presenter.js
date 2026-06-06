@@ -1,7 +1,7 @@
 /**
  * Premium Presentations — presenter view.
  *
- * Architecture (per PLAN.md, 5-round Codex-approved):
+ * Architecture (per docs/project/PLAN.md, 5-round Codex-approved):
  *   - Two windows: deck (audience-shared) + popup (presenter).
  *   - Per-session BroadcastChannel ('premium-deck:<uuid>') with sessionId in
  *     every message. Mismatched sessionIds are ignored.

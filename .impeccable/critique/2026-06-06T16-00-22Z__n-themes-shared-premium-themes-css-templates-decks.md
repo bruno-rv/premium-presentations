@@ -53,7 +53,7 @@ Deterministic scan on primary templates, primary decks, and app index returned 6
 Key source examples:
 
 - `templates/premium-base.html:2` and `templates/red-base.html:2` contain `{{THEME}}`; `:10` links use `{{SHARED}}`, so direct previews fail.
-- `app/index.html:66` and `app/index.html:78` link directly to raw templates.
+- `assets/studio/index.html:66` and `assets/studio/index.html:78` link directly to raw templates.
 - `shared/premium-themes.css:153-173` uses gradient-clipped ghost numerals in red dividers.
 - `shared/premium-themes.css:342-347` uses red/silver side-tab borders on compare callouts.
 - `shared/premium-deck.css:63-66` transitions progress width; `:85-98` transitions max-width for dot labels.
@@ -78,7 +78,7 @@ Why it matters: the studio app promises "New deck template" and "Red template", 
 
 Fix: point the studio cards to generated preview decks, or add static preview HTML files with concrete `data-theme`, title, and shared paths. Keep raw templates out of the clickable gallery.
 
-Suggested command: `/impeccable harden app/index.html`
+Suggested command: `/impeccable harden assets/studio/index.html`
 
 **[P1] Theme state is global when deck intent should often be local**
 
