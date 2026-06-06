@@ -1,12 +1,6 @@
 ---
 name: premium-presentations
-description: >-
-  Generate, edit, validate, and bundle complete Premium Presentations HTML slide
-  decks from this self-contained skill repository. Use when creating or
-  modifying presentations, slide decks, talks, lectures, workshops, pitches,
-  browser-rendered HTML decks, presenter-mode decks, themed decks, Mermaid
-  diagram decks, or reusable presentation templates with the bundled scripts,
-  themes, runtime, assets, and validators.
+description: Generate, edit, validate, and bundle premium HTML slide decks with themes, templates, presenter mode, Mermaid diagrams, controls, and scripts. Use for talks, workshops, pitches, and lectures.
 ---
 
 # Premium Presentations
