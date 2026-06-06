@@ -1,0 +1,4 @@
+interface:
+  display_name: "Premium Presentations"
+  short_description: "Generate full-featured HTML slide decks"
+  default_prompt: "Use $premium-presentations to create a polished HTML presentation deck."
