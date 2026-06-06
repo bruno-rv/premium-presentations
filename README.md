@@ -4,8 +4,8 @@ HTML slide decks with live theme switching, optional 3D parallax background, and
 
 Repository: [bruno-rv/premium-presentations.git](https://github.com/bruno-rv/premium-presentations.git)
 
-The repository root is a wrapper for documentation and vendor packages. The
-actual skill and deck framework live under `skill/`.
+The repository root only carries repository metadata. The actual skill and deck
+framework live under `skill/`.
 
 ## Quick start
 
@@ -105,16 +105,8 @@ The canonical skill package lives in `skill/`. It contains `SKILL.md`,
 `assets/`, and `decks/`. Copy the `skill/` directory to a skills directory as
 `premium-presentations/` to deploy it as one self-contained skill.
 
-Platform-specific copies are also checked in under
-`.claude/skills/premium-presentations/`, `.cursor/skills/premium-presentations/`,
-`.agents/skills/premium-presentations/`, and `.codex/skills/premium-presentations/`.
-They are generated convenience packages; `skill/` is the source of truth.
-
-Refresh mirrored packages after editing `skill/`:
-
-```bash
-./tools/sync-skill-packages.sh
-```
+Do not commit generated vendor mirrors. Claude, Cursor, Codex, and other agents
+should consume the same `skill/` payload by copying or packaging that directory.
 
 ### Skill structure
 
@@ -134,12 +126,10 @@ The canonical skill follows
 Long reference files include a `Contents` section so an agent can preview scope
 before loading details. Avoid adding new nested reference directories unless a
 domain grows large enough to justify a separate directly linked file. Keep new
-agent-facing docs under `skill/reference/`; reserve root `docs/` for repository
-history and planning artifacts that should not be loaded by default.
+agent-facing docs under `skill/reference/`.
 
 Root-level files are intentionally limited to repository entry points and
-repository maintenance. The skill payload is inside `skill/`; root `docs/` and
-`tools/` are not part of the generated skill packages.
+repository metadata. The skill payload is inside `skill/`.
 
 Repository reference: [bruno-rv/premium-presentations.git](https://github.com/bruno-rv/premium-presentations.git). Red theme: [themes-red.md](skill/reference/themes-red.md).
 

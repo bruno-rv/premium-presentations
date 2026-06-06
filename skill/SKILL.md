@@ -59,6 +59,8 @@ shared runtime edits.
 
 ## Reference Files
 
+- `reference/design.md`: audience, style, anti-patterns, and deck design
+  principles.
 - `reference/runtime.md`: runtime modules, extension points, theme visuals,
   Mermaid, presenter/chrome behavior.
 - `reference/components.md`: reusable visual components and snippet IDs.
@@ -74,6 +76,7 @@ Load only the reference needed for the current task.
 - Start from `scripts/new-deck.sh`; do not create a parallel scaffold.
 - Use `templates/` and `shared/` as the source of truth.
 - Use `templates/components/` snippets for advanced visual blocks.
+- Read `reference/design.md` before large new decks or broad redesigns.
 - Keep one dominant idea per slide.
 - Keep branding generic unless the user explicitly requests brand chrome.
 - Do not add closing footer-note rows, "NEXT:" citations, or lesson-pill rows.

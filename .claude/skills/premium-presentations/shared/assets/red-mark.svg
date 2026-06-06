@@ -1,5 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="Red mark">
-  <!-- Red mark: a #FF0230 rounded square with a white centered square (negative space). No brand glyph. -->
-  <rect x="0" y="0" width="48" height="48" rx="10" ry="10" fill="#FF0230"/>
-  <rect x="16" y="16" width="16" height="16" rx="2" ry="2" fill="#FFFFFF"/>
-</svg>
