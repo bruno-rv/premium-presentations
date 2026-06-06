@@ -4,14 +4,12 @@ HTML slide decks with live theme switching, optional 3D parallax background, and
 
 Repository: [bruno-rv/premium-presentations.git](https://github.com/bruno-rv/premium-presentations.git)
 
-The repository root only carries repository metadata. The actual skill and deck
-framework live under `skill/`.
+This repository root is the skill directory. Its folder name must remain
+`premium-presentations`, matching the `name` field in `SKILL.md`.
 
 ## Quick start
 
 ```bash
-cd skill
-
 # Scaffold (spec auto-created when slides ≥ 8)
 ./scripts/new-deck.sh warm rag-vector-graph "My Title" 15
 
@@ -32,7 +30,7 @@ python3 -m http.server 8765
 
 ## Skill Scripts
 
-Run these from `skill/`.
+Run these from the repository root.
 
 | Script | Purpose |
 |--------|---------|
@@ -60,19 +58,17 @@ to the planned slide count.
 
 ## Shared Runtime
 
-These paths are under `skill/`.
-
 | File | Purpose |
 |------|---------|
-| `skill/shared/premium-themes.css` | Editorial · Warm · Red tokens |
-| `skill/shared/premium-deck.css` | Slide layout, typography, tables |
-| `skill/shared/premium-components.css` | Illustrative components (journey, compare, timeline, code window, bars) |
-| `skill/shared/premium-diagrams.css` | Diagram slides and centered Excalidraw-style canvas |
-| `skill/shared/premium-mermaid.js` | Mermaid hand-drawn theme and theme-change re-render |
-| `skill/shared/premium-controls.js` | Theme switch and 3D background toggle |
-| `skill/shared/premium-annotations.css` | Marker and laser styles |
-| `skill/shared/premium-annotations.js` | Marker and laser behavior |
-| `skill/shared/slide-engine.js` | Navigation |
+| `shared/premium-themes.css` | Editorial · Warm · Red tokens |
+| `shared/premium-deck.css` | Slide layout, typography, tables |
+| `shared/premium-components.css` | Illustrative components (journey, compare, timeline, code window, bars) |
+| `shared/premium-diagrams.css` | Diagram slides and centered Excalidraw-style canvas |
+| `shared/premium-mermaid.js` | Mermaid hand-drawn theme and theme-change re-render |
+| `shared/premium-controls.js` | Theme switch and 3D background toggle |
+| `shared/premium-annotations.css` | Marker and laser styles |
+| `shared/premium-annotations.js` | Marker and laser behavior |
+| `shared/slide-engine.js` | Navigation |
 
 **Controls (left edge, hover to expand):** Theme · **Marker** · **Clear** · **Laser** · **3D background**.
 
@@ -80,7 +76,7 @@ These paths are under `skill/`.
 
 ## Extras (Cluster A — Live + Cluster B — Distribution)
 
-Engine modules in `skill/shared/premium-{timer,presenter,clicker,tts,search,og-cover}.js` plus `skill/shared/premium-extras.css`. Auto-bundled by `bundle-deck.py` when the template links them.
+Engine modules in `shared/premium-{timer,presenter,clicker,tts,search,og-cover}.js` plus `shared/premium-extras.css`. Auto-bundled by `bundle-deck.py` when the template links them.
 
 | Shortcut | Feature |
 |----------|---------|
@@ -100,13 +96,17 @@ Engine modules in `skill/shared/premium-{timer,presenter,clicker,tts,search,og-c
 
 ## Skill
 
-The canonical skill package lives in `skill/`. It contains `SKILL.md`,
-`agents/openai.yaml`, `reference/`, `scripts/`, `templates/`, `shared/`,
-`assets/`, and `decks/`. Copy the `skill/` directory to a skills directory as
-`premium-presentations/` to deploy it as one self-contained skill.
+The canonical skill package is this repository root. It contains `SKILL.md`,
+`agents/openai.yaml`, `references/`, `scripts/`, `templates/`, `shared/`,
+`assets/`, and `decks/`.
 
-Do not commit generated vendor mirrors. Claude, Cursor, Codex, and other agents
-should consume the same `skill/` payload by copying or packaging that directory.
+For filesystem-based clients, clone or copy this repository as the skill
+directory named `premium-presentations`. Do not commit generated vendor mirrors
+such as `.claude/skills/`, `.cursor/skills/`, `.codex/skills/`, or
+`.agents/skills/`.
+
+For Claude.ai ZIP upload, zip the `premium-presentations/` directory itself, not
+only its contents, so the archive contains `premium-presentations/SKILL.md`.
 
 ### Skill structure
 
@@ -115,25 +115,24 @@ The canonical skill follows
 
 | Path | Purpose |
 |------|---------|
-| `skill/SKILL.md` | Concise entry point and trigger metadata |
-| `skill/reference/` | One-level, progressively loaded guidance files |
-| `skill/scripts/` | Deterministic scaffolding, bundling, validation, and Node test metadata |
-| `skill/assets/studio/` | Static local gallery for previews and example decks |
-| `skill/templates/` | Deck and component source templates |
-| `skill/shared/` | Runtime CSS, JavaScript, and theme assets |
-| `skill/decks/` | Complete example decks and generated artifacts |
+| `SKILL.md` | Concise entry point and trigger metadata |
+| `references/` | One-level, progressively loaded guidance files |
+| `scripts/` | Deterministic scaffolding, bundling, validation, and Node test metadata |
+| `assets/studio/` | Static local gallery for previews and example decks |
+| `templates/` | Deck and component source templates |
+| `shared/` | Runtime CSS, JavaScript, and theme assets |
+| `decks/` | Complete example decks and generated artifacts |
 
 Long reference files include a `Contents` section so an agent can preview scope
 before loading details. Avoid adding new nested reference directories unless a
 domain grows large enough to justify a separate directly linked file. Keep new
-agent-facing docs under `skill/reference/`.
+agent-facing docs under `references/`.
 
-Root-level files are intentionally limited to repository entry points and
-repository metadata. The skill payload is inside `skill/`.
+The root-level resource directories are intentional because the repository root
+is the skill package. Do not add another generic wrapper folder.
 
-Repository reference: [bruno-rv/premium-presentations.git](https://github.com/bruno-rv/premium-presentations.git). Red theme: [themes-red.md](skill/reference/themes-red.md).
+Repository reference: [bruno-rv/premium-presentations.git](https://github.com/bruno-rv/premium-presentations.git). Red theme: [themes-red.md](references/themes-red.md).
 
 ```bash
-cd skill
 ./scripts/new-deck.sh red my-show "Show Review" 12
 ```

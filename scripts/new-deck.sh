@@ -74,9 +74,9 @@ export VALIDATE_SPEC=""
 python3 "$ROOT/scripts/validate_deck.py" || exit 1
 
 if [[ "$COUNT" -ge 8 ]]; then
-  SPEC_TEMPLATE="$ROOT/reference/slide-spec-template.md"
+  SPEC_TEMPLATE="$ROOT/references/slide-spec-template.md"
   if [[ ! -f "$SPEC_TEMPLATE" ]]; then
-    echo "Missing slide spec template: reference/slide-spec-template.md" >&2
+    echo "Missing slide spec template: references/slide-spec-template.md" >&2
     exit 1
   fi
   cp "$SPEC_TEMPLATE" "$SPEC_FILE"

@@ -2,7 +2,7 @@
 name: premium-presentations
 description: >-
   Generate, edit, validate, and bundle complete Premium Presentations HTML slide
-  decks from this self-contained repository skill. Use when creating or
+  decks from this self-contained skill repository. Use when creating or
   modifying presentations, slide decks, talks, lectures, workshops, pitches,
   browser-rendered HTML decks, presenter-mode decks, themed decks, Mermaid
   diagram decks, or reusable presentation templates with the bundled scripts,
@@ -11,7 +11,7 @@ description: >-
 
 # Premium Presentations
 
-This directory is the self-contained skill package and deck generator. Use the
+This repository root is the self-contained skill package and deck generator. Use the
 bundled scripts, templates, shared runtime, assets, and references from this
 folder instead of recreating a slide framework from memory.
 
@@ -59,14 +59,14 @@ shared runtime edits.
 
 ## Reference Files
 
-- `reference/design.md`: audience, style, anti-patterns, and deck design
+- `references/design.md`: audience, style, anti-patterns, and deck design
   principles.
-- `reference/runtime.md`: runtime modules, extension points, theme visuals,
+- `references/runtime.md`: runtime modules, extension points, theme visuals,
   Mermaid, presenter/chrome behavior.
-- `reference/components.md`: reusable visual components and snippet IDs.
-- `reference/examples.md`: copy-paste slide markup patterns.
-- `reference/themes-red.md`: red theme rules.
-- `reference/slide-spec-template.md`: deck planning template used by
+- `references/components.md`: reusable visual components and snippet IDs.
+- `references/examples.md`: copy-paste slide markup patterns.
+- `references/themes-red.md`: red theme rules.
+- `references/slide-spec-template.md`: deck planning template used by
   `scripts/new-deck.sh`.
 
 Load only the reference needed for the current task.
@@ -76,7 +76,7 @@ Load only the reference needed for the current task.
 - Start from `scripts/new-deck.sh`; do not create a parallel scaffold.
 - Use `templates/` and `shared/` as the source of truth.
 - Use `templates/components/` snippets for advanced visual blocks.
-- Read `reference/design.md` before large new decks or broad redesigns.
+- Read `references/design.md` before large new decks or broad redesigns.
 - Keep one dominant idea per slide.
 - Keep branding generic unless the user explicitly requests brand chrome.
 - Do not add closing footer-note rows, "NEXT:" citations, or lesson-pill rows.
