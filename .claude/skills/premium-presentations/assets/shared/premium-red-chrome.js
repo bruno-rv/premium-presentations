@@ -11,8 +11,19 @@
  */
 (function () {
   const RED_THEMES = ['red'];
-  const MARK_SRC = '../../shared/assets/red-mark.svg';
-  const MARK_SRC_LIGHT = '../../shared/assets/red-mark.svg';
+  const SCRIPT_SRC = document.currentScript && document.currentScript.src ? document.currentScript.src : '';
+  const MARK_SRC = sharedAsset('red-mark.svg');
+  const MARK_SRC_LIGHT = sharedAsset('red-mark.svg');
+
+  function sharedAsset(name) {
+    if (SCRIPT_SRC) return new URL('assets/' + name, SCRIPT_SRC).href;
+    const path = location.pathname;
+    if (path.includes('/decks/')) return '../../shared/assets/' + name;
+    if (path.includes('/assets/studio/') || path.includes('/templates/')) {
+      return '../shared/assets/' + name;
+    }
+    return 'assets/shared/assets/' + name;
+  }
 
   function markImg(className, alt, src) {
     return (

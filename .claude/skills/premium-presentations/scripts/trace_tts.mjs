@@ -2,7 +2,7 @@
 import { JSDOM } from 'jsdom';
 import { readFileSync } from 'fs';
 
-const bundle = 'decks/vector-databases/vector-databases-slides.linked.html';
+const bundle = 'assets/decks/vector-databases/vector-databases-slides.linked.html';
 
 const dom = new JSDOM(readFileSync(bundle, 'utf8'), {
   url: 'http://localhost/deck.html',
@@ -65,10 +65,10 @@ console.log('errors during init:', errors.slice(0, 5));
 if (typeof dom.window.PremiumDeckControls === 'undefined') {
   console.log('\n!! SlideEngine never initialized. Forcing it now...');
   // slide-engine.js code is in the bundle; load it manually
-  const slideEngineJs = readFileSync('shared/slide-engine.js', 'utf8');
+  const slideEngineJs = readFileSync('assets/shared/slide-engine.js', 'utf8');
   dom.window.eval(slideEngineJs);
   // And init controller
-  const controllerJs = readFileSync('shared/premium-controller.js', 'utf8');
+  const controllerJs = readFileSync('assets/shared/premium-controller.js', 'utf8');
   dom.window.eval(controllerJs);
   dom.window.eval('new SlideEngine()');
   await new Promise((r) => setTimeout(r, 200));

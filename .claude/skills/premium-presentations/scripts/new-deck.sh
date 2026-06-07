@@ -9,6 +9,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ASSETS="$ROOT/assets"
 FRAMEWORK="${1:-}"
 SLUG="${2:-}"
 TITLE="${3:-}"
@@ -26,7 +27,7 @@ while IFS= read -r theme; do
   [[ -n "$theme" ]] && THEMES+=("$theme")
 done < <(python3 "$ROOT/scripts/list-themes.py")
 if [[ "${#THEMES[@]}" -eq 0 ]]; then
-  echo "No themes found in shared/premium-themes.css" >&2
+  echo "No themes found in assets/shared/premium-themes.css" >&2
   exit 1
 fi
 if ! printf '%s\n' "${THEMES[@]}" | grep -Fxq "$FRAMEWORK"; then
@@ -44,14 +45,14 @@ if ! [[ "$COUNT" =~ ^[0-9]+$ ]] || [[ "$COUNT" -lt 1 ]]; then
   exit 1
 fi
 
-DECK_DIR="$ROOT/decks/$SLUG"
+DECK_DIR="$ASSETS/decks/$SLUG"
 SLIDES_FILE="$DECK_DIR/${SLUG}-slides.html"
 SPEC_FILE="$DECK_DIR/${SLUG}-slide-spec.md"
-THEME_TEMPLATE="$ROOT/templates/${FRAMEWORK}-base.html"
+THEME_TEMPLATE="$ASSETS/templates/${FRAMEWORK}-base.html"
 if [[ -f "$THEME_TEMPLATE" ]]; then
   TEMPLATE="$THEME_TEMPLATE"
 else
-  TEMPLATE="$ROOT/templates/premium-base.html"
+  TEMPLATE="$ASSETS/templates/premium-base.html"
 fi
 
 if [[ -e "$DECK_DIR" ]]; then
@@ -107,11 +108,11 @@ for i in range(1, count + 1):
 
 table = "| # | Type | Title | Key Content | Visual Pattern | Why Panel |\n|---|------|-------|-------------|----------------|----------|\n" + "\n".join(rows)
 text = re.sub(
-    r"\| # \| Type \| Title \| Key Content \| Visual Pattern \| Why Panel \|\n\|---\|.*?\n(\| 1 \|.*?\n)?",
-    table + "\n",
+    r"(## Slide Map\n\n)\| # \| Type \| Title \| Key Content \| Visual Pattern \| Why Panel \|\n"
+    r"\|[-|]+\|\n(?:\|.*\|\n)+",
+    lambda _: "## Slide Map\n\n" + table + "\n",
     text,
     count=1,
-    flags=re.DOTALL,
 )
 open(path, "w", encoding="utf-8").write(text)
 PY
@@ -126,7 +127,7 @@ echo "Deck scaffolded (Premium Presentations):"
 echo "  Directory: $DECK_DIR"
 echo "  Slides:    $SLIDES_FILE (standalone single file)"
 echo "  Theme:     $FRAMEWORK (switch live in deck controls)"
-echo "  Re-bundle: ./scripts/bundle-deck.sh \"$SLIDES_FILE\" --in-place  (after editing shared/)"
+echo "  Re-bundle: ./scripts/bundle-deck.sh \"$SLIDES_FILE\" --in-place  (after editing assets/shared/)"
 echo "  Target:    $COUNT slides"
 echo ""
 echo "Validate: ./scripts/validate-deck.sh \"$SLIDES_FILE\" ${SPEC_FILE:+"\"$SPEC_FILE\""}"

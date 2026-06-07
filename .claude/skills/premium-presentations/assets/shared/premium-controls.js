@@ -229,12 +229,12 @@
     const path = location.pathname;
     if (path.includes('/decks/')) return '../../shared/assets/chatgpt-theme-visuals/';
     if (path.includes('/assets/studio/')) {
-      return '../../shared/assets/chatgpt-theme-visuals/';
+      return '../shared/assets/chatgpt-theme-visuals/';
     }
     if (path.includes('/templates/')) {
       return '../shared/assets/chatgpt-theme-visuals/';
     }
-    return 'shared/assets/chatgpt-theme-visuals/';
+    return 'assets/shared/assets/chatgpt-theme-visuals/';
   }
 
   function themeVisualSrc(theme, role) {

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""List Premium Presentations themes declared in shared/premium-themes.css."""
+"""List Premium Presentations themes declared in assets/shared/premium-themes.css."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent.parent
+ASSETS = ROOT / "assets"
 THEME_RE = re.compile(
     r"html\[data-theme=(?:\"([a-z0-9][a-z0-9-]*)\"|'([a-z0-9][a-z0-9-]*)'|([a-z0-9][a-z0-9-]*))\]"
 )
@@ -30,7 +31,7 @@ def main() -> int:
     parser.add_argument(
         "--css",
         type=Path,
-        default=ROOT / "shared" / "premium-themes.css",
+        default=ASSETS / "shared" / "premium-themes.css",
         help="Path to premium-themes.css",
     )
     parser.add_argument("--json", action="store_true", help="Print JSON instead of one theme per line")

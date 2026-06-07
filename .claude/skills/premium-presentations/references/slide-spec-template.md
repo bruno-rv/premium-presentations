@@ -64,7 +64,7 @@
 
 ### Signature visual (HERO slide)
 
-{Pick from [components.md](components.md): P14 journey-path, P9 compare-paradigm, DIV+ act divider, TL timeline, STG stage-card, GL glass-code-window, BAR bar-chart, FLOW setup-flow. Copy markup from `templates/components/*.snippet.html`.}
+{Pick from [components.md](components.md): P14 journey-path, P9 compare-paradigm, DIV+ act divider, TL timeline, STG stage-card, GL glass-code-window, BAR bar-chart, FLOW setup-flow. Copy markup from `assets/templates/components/*.snippet.html`.}
 
 ### Tone
 

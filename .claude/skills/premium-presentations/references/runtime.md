@@ -11,7 +11,7 @@
 - File naming
 - Anti-patterns
 
-## Shared runtime (`shared/`)
+## Shared runtime (`assets/shared/`)
 
 | File | Role |
 |------|------|
@@ -25,7 +25,7 @@
 
 ### Diagram slides (required markup)
 
-Use `templates/diagram-slide.snippet.html`. Validator enforces:
+Use `assets/templates/diagram-slide.snippet.html`. Validator enforces:
 
 - `slide--diagram` → `slide__diagram-header` → `diagram-stage` → `mermaid-wrap` → `<pre class="mermaid">`
 - `premium-diagrams.css` + `premium-mermaid.js` (inlined when bundled)
@@ -34,9 +34,10 @@ Use `templates/diagram-slide.snippet.html`. Validator enforces:
 - **Diagram zoom:** scroll/pinch on canvas, drag to pan when zoomed, toolbar **+ / − / %**, double-click reset; **`+` `−` `0`** on diagram slides
 | `slide-engine.js` | `SlideEngine` — scroll-snap nav; dot labels from heading, blockquote, cite, `data-nav-title`, etc.; auto-hide after 5s (click dot rail to show again; hover still peeks) |
 
-Decks link with `../../shared/…` from `decks/<slug>/`.
+Decks link with `../../shared/…` from `assets/decks/<slug>/`, resolving to
+`assets/shared/`.
 
-**Theme discovery:** run `./scripts/list-themes.py`, or inspect `html[data-theme="..."]` selectors in `shared/premium-themes.css`. Do not hardcode the current theme names in generators or skill instructions.
+**Theme discovery:** run `./scripts/list-themes.py`, or inspect `html[data-theme="..."]` selectors in `assets/shared/premium-themes.css`. Do not hardcode the current theme names in generators or skill instructions.
 
 **Runtime contract:** run `./scripts/validate-runtime-contract.py` after any
 template, theme, bundler, or shared runtime edit. It verifies discovered theme
@@ -46,7 +47,7 @@ red.
 
 **Live theme switch:** `PremiumPresentations.setTheme('<theme>')` or UI control. The control panel discovers themes from loaded CSS. Dispatches `premium-theme-change` on `<html>`.
 
-**Theme visuals:** `.slide--title` receives a `hero` visual; `.slide--divider` receives a `map` visual. Default assets follow `shared/assets/chatgpt-theme-visuals/<theme>-<role>.png`. Override with `data-theme-visual-<theme>-<role>` or `window.PremiumThemeVisuals`; disable per slide with `data-theme-visual="off"`.
+**Theme visuals:** `.slide--title` receives a `hero` visual; `.slide--divider` receives a `map` visual. Default assets follow `assets/shared/assets/chatgpt-theme-visuals/<theme>-<role>.png`. Override with `data-theme-visual-<theme>-<role>` or `window.PremiumThemeVisuals`; disable per slide with `data-theme-visual="off"`.
 
 **3D background:** `PremiumPresentations.setParallax(true)` or UI button / **`3`**; sets `data-parallax="on"`. Disabled when `prefers-reduced-motion`.
 
@@ -56,9 +57,9 @@ red.
 
 To add a theme:
 
-1. Add `html[data-theme="<theme>"]` tokens in `shared/premium-themes.css`.
-2. Optionally add `templates/<theme>-base.html` for theme-specific chrome.
-3. Optionally add visuals in `shared/assets/chatgpt-theme-visuals/` using
+1. Add `html[data-theme="<theme>"]` tokens in `assets/shared/premium-themes.css`.
+2. Optionally add `assets/templates/<theme>-base.html` for theme-specific chrome.
+3. Optionally add visuals in `assets/shared/assets/chatgpt-theme-visuals/` using
    `<theme>-hero.png` and `<theme>-map.png`.
 4. Load custom webfonts through template `<link>` tags or
    `data-theme-fonts-<theme>="https://..."` on `<html>`.
@@ -98,7 +99,7 @@ theme-specific slides.
 
 ## SlideEngine
 
-Prefer `shared/slide-engine.js`:
+Prefer `assets/shared/slide-engine.js`:
 
 ```javascript
 document.addEventListener('DOMContentLoaded', () => new SlideEngine());
@@ -112,7 +113,7 @@ document.addEventListener('DOMContentLoaded', () => new SlideEngine());
 
 | Pattern | Example |
 |---------|---------|
-| Deck folder | `decks/{slug}/` |
+| Deck folder | `assets/decks/{slug}/` |
 | HTML | `{slug}-slides.html` |
 | Spec (8+ slides) | `{slug}-slide-spec.md` |
 

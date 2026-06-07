@@ -6,7 +6,8 @@
 node_modules/
 .impeccable/
 .agents/skills/
-.claude/skills/
+.claude/skills/*
+!.claude/skills/premium-presentations/
 .codex/skills/
 .codex/storage/
 .cursor/skills/

@@ -2,12 +2,12 @@
 """
 Bundle a Premium Presentations deck into one standalone HTML file.
 
-Inlines local <link rel="stylesheet"> and <script src> assets from shared/.
+Inlines local <link rel="stylesheet"> and <script src> assets from assets/shared/.
 Replaces Mermaid module imports with inlined premium-mermaid.js.
 
 Usage:
-  ./scripts/bundle_deck.py decks/my-talk/my-talk-slides.html
-  ./scripts/bundle_deck.py decks/my-talk/my-talk-slides.html -o out.html --in-place
+  ./scripts/bundle_deck.py assets/decks/my-talk/my-talk-slides.html
+  ./scripts/bundle_deck.py assets/decks/my-talk/my-talk-slides.html -o out.html --in-place
 """
 
 from __future__ import annotations
@@ -20,7 +20,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SHARED = ROOT / "shared"
+ASSETS = ROOT / "assets"
+SHARED = ASSETS / "shared"
 
 JS_ORDER = (
     "premium-controller.js",
