@@ -1,6 +1,6 @@
 # Premium Presentations — Creative components
 
-Portable patterns for [bruno-rv/premium-presentations.git](https://github.com/bruno-rv/premium-presentations.git). Use with `shared/premium-components.css` linked after `premium-deck.css`.
+Portable patterns for Premium Presentations decks. Use with `assets/shared/premium-components.css` linked after `premium-deck.css`.
 
 **When generating decks:** pick 2–4 “hero” visual slides per act (journey, compare, timeline, stage card) — not every slide needs a custom component.
 
@@ -8,16 +8,16 @@ Portable patterns for [bruno-rv/premium-presentations.git](https://github.com/br
 
 | ID | Component | Use when | Snippet |
 |----|-----------|----------|---------|
-| **P14** | Journey path | Curriculum / roadmap / phases | `templates/components/journey-path.snippet.html` |
-| **P9** | Compare split | A vs B, workflow vs agentic, era shift | `templates/components/compare-paradigm.snippet.html` |
-| **DIV+** | Act divider | Section break with ghost number + shimmer title (use `<div class="slide__number">` inside `slide--divider` — sized via `premium-components.css`, not corner watermark) | `templates/components/divider-act.snippet.html` |
-| **TL** | Timeline grid | 3 eras / milestones on one line | `templates/components/timeline.snippet.html` |
-| **STG** | Stage card | Deep dive: copy + diagram column | `templates/components/stage-card.snippet.html` |
-| **GL** | Glass + code | CLAUDE.md, config, spec preview | `templates/components/glass-code-window.snippet.html` |
-| **BAR** | Bar chart | 80/20, before/after metrics | `templates/components/bar-chart.snippet.html` |
-| **FLOW** | Setup flow | 3–4 activation steps with arrows | `templates/components/setup-flow.snippet.html` |
-| **STAT** | Stats row | 3 KPIs with accent top bar | `templates/components/stats-row.snippet.html` |
-| **CHK** | Checklist grid | Closure / readiness (2 columns) | `templates/components/checklist.snippet.html` |
+| **P14** | Journey path | Curriculum / roadmap / phases | `assets/templates/components/journey-path.snippet.html` |
+| **P9** | Compare split | A vs B, workflow vs agentic, era shift | `assets/templates/components/compare-paradigm.snippet.html` |
+| **DIV+** | Act divider | Section break with ghost number + shimmer title (use `<div class="slide__number">` inside `slide--divider` — sized via `premium-components.css`, not corner watermark) | `assets/templates/components/divider-act.snippet.html` |
+| **TL** | Timeline grid | 3 eras / milestones on one line | `assets/templates/components/timeline.snippet.html` |
+| **STG** | Stage card | Deep dive: copy + diagram column | `assets/templates/components/stage-card.snippet.html` |
+| **GL** | Glass + code | CLAUDE.md, config, spec preview | `assets/templates/components/glass-code-window.snippet.html` |
+| **BAR** | Bar chart | 80/20, before/after metrics | `assets/templates/components/bar-chart.snippet.html` |
+| **FLOW** | Setup flow | 3–4 activation steps with arrows | `assets/templates/components/setup-flow.snippet.html` |
+| **STAT** | Stats row | 3 KPIs with accent top bar | `assets/templates/components/stats-row.snippet.html` |
+| **CHK** | Checklist grid | Closure / readiness (2 columns) | `assets/templates/components/checklist.snippet.html` |
 | **WHY** | Why panel | Short takeaway / implication callout | CSS-only: `.why-panel` |
 
 ## Shared utilities (CSS only)
@@ -102,4 +102,4 @@ Example row:
 <link rel="stylesheet" href="../../shared/premium-components.css">
 ```
 
-Bundled decks inline this automatically when the link is present in the source `.linked.html`.
+Bundled decks inline this automatically when the link is present in the source `.linked.html` under `assets/decks/`.

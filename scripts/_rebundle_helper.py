@@ -4,7 +4,7 @@ Convert a bundled deck HTML back to linked form (so bundle_deck.py will re-proce
 add new module <link>/<script src> tags, write to a temp file, then re-bundle in place.
 
 Usage:
-  python3 scripts/_rebundle_helper.py decks/<name>/<name>-slides.html
+  python3 scripts/_rebundle_helper.py assets/decks/<name>/<name>-slides.html
 """
 
 from __future__ import annotations

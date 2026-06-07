@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Render slide 1 of a deck as a 1200x630 PNG for OG / Twitter card.
-# Usage: ./scripts/og-cover.sh decks/<slug>/<slug>-slides.html
+# Usage: ./scripts/og-cover.sh assets/decks/<slug>/<slug>-slides.html
 #
 # Requires: headless browser. We use a tiny HTML harness + chromium's --screenshot.
 # Falls back to a CSS-rendered hint if chromium isn't installed.

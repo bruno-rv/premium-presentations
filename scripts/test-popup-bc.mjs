@@ -9,7 +9,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const SHARED = join(__dirname, '..', 'shared');
+const SHARED = join(__dirname, '..', 'assets', 'shared');
 
 // Polyfill BroadcastChannel as a cross-window router. Each window gets its
 // own BroadcastChannel constructor; messages on the same name are delivered

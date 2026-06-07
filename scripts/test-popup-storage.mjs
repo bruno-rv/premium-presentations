@@ -8,7 +8,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const SHARED = join(__dirname, '..', 'shared');
+const SHARED = join(__dirname, '..', 'assets', 'shared');
 
 function makeWindow({ url, withSlides = true, focused = true } = {}) {
   const html = `<!doctype html><html><head></head><body>

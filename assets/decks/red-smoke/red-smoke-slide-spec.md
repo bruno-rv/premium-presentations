@@ -1,6 +1,6 @@
-# {CODE} — Slide Generation Spec
+# RED SMOKE — Slide Generation Spec
 
-> Read BEFORE generating `{code}-slides.html`.
+> Read BEFORE generating `red-smoke-slides.html`.
 
 ---
 
@@ -8,12 +8,12 @@
 
 | Field | Value |
 |-------|-------|
-| **Code** | {CODE} |
-| **Title** | {Full title} |
+| **Code** | RED SMOKE |
+| **Title** | Red Theme Smoke |
 | **Title (Split)** | Line 1: "…" / Line 2: "…" (shimmer on line 2) |
 | **Subtitle** | {One line under title} |
 | **Module** | {NN — Module name} |
-| **Duration** | {N} min |
+| **Duration** | 15 min |
 | **Instructor** | {Name} |
 | **Layer** | {N — Layer name} |
 | **Mode** | Self-Paced \| Live |
@@ -41,12 +41,10 @@
 ## Slide Map
 
 | # | Type | Title | Key Content | Visual Pattern | Why Panel |
-|---|------|-------|-------------|----------------|-----------|
-| 1 | Title | … | … | slide--title | N/A |
-| 2 | Hook Quote | … | … | slide--quote | N/A |
-| 3 | Content | … | … | P9 compare-paradigm \| P14 journey \| TL timeline \| STG stage-card \| GL glass-code \| BAR bar-chart | "{Why this matters}" |
-| … | … | … | … | … | … |
-| N | Closing Quote | … | … | slide--quote | N/A |
+|---|------|-------|-------------|----------------|----------|
+| 1 | Title | Red Theme Smoke | Red theme title treatment with flat accent headline | slide--title | Confirms title, mark, and red chrome render together |
+| 2 | Act Divider | Act 1 | Divider number, section label, and heading | slide--divider | Confirms ghost numeral layout stays behind content |
+| 3 | Content | On-air metadata panel | Broadcast metadata focus frame | focus-frame | Confirms red theme panel density and typography |
 
 ---
 
@@ -60,7 +58,7 @@
 
 ### Palette
 
-{MANDATORY token overrides if the selected theme requires deck-specific additions beyond shared theme tokens.}
+{MANDATORY token overrides if not default Editorial theme.}
 
 ### Signature visual (HERO slide)
 
