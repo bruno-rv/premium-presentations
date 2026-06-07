@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parent.parent
 ALLOWED_TOP_LEVEL = {
     ".gitignore",
     "LICENSE",
+    "README.md",
     "SKILL.md",
     "assets",
     "references",
@@ -60,7 +61,6 @@ class SkillLayoutTests(unittest.TestCase):
             "PLAN.md",
             "PLAN-REVIEW-LOG.md",
             "PRODUCT.md",
-            "README.md",
             "reference",
             "REVIEW_PROMPT.txt",
             "shared",
@@ -84,6 +84,7 @@ class SkillLayoutTests(unittest.TestCase):
 
     def test_skill_docs_use_references_path(self) -> None:
         skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
         references = "\n".join(
             path.read_text(encoding="utf-8")
             for path in sorted((ROOT / "references").glob("*.md"))
@@ -92,6 +93,8 @@ class SkillLayoutTests(unittest.TestCase):
         self.assertIn("references/components.md", skill)
         self.assertIn("assets/shared/premium-themes.css", skill)
         self.assertIn("assets/templates/components", references)
+        self.assertIn("assets/decks", readme)
+        self.assertIn("assets/shared", readme)
         self.assertNotIn("reference/runtime.md", skill)
         self.assertNotIn("reference/", skill)
 
