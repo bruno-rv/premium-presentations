@@ -33,7 +33,7 @@ class RuntimeContractTests(unittest.TestCase):
         return f"<!doctype html><html><head><style>{markers}</style></head><body>{body}</body></html>"
 
     def check_temp_html(self, html: str) -> list[str]:
-        with tempfile.TemporaryDirectory(dir=ROOT / "tests") as tmp:
+        with tempfile.TemporaryDirectory(dir=ROOT / "scripts") as tmp:
             path = Path(tmp) / "fixture.html"
             path.write_text(html, encoding="utf-8")
             errors: list[str] = []

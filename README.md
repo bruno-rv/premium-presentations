@@ -14,7 +14,7 @@ Repository: [bruno-rv/premium-presentations.git](https://github.com/bruno-rv/pre
 ./scripts/validate-deck.sh decks/rag-vector-graph/rag-vector-graph-slides.html decks/rag-vector-graph/rag-vector-graph-slide-spec.md
 
 # Open
-open app/index.html
+open assets/studio/index.html
 open decks/rag-vector-graph/rag-vector-graph-slides.html
 ```
 
@@ -88,15 +88,15 @@ Engine modules in `shared/premium-{timer,presenter,clicker,tts,search,og-cover}.
 
 ## Skill
 
-This repository is also a root-level skill: it contains `SKILL.md`,
-`agents/openai.yaml`, `reference/`, `scripts/`, `templates/`, and `shared/`.
-Copy or clone the whole `premium-presentations/` folder into a Claude, Cursor,
-or Codex skills directory to deploy it as one self-contained skill.
+This repository root is the single canonical skill package: it contains
+`SKILL.md`, `agents/openai.yaml`, `references/`, `scripts/`, `assets/`,
+`templates/`, `shared/`, and `decks/`. Copy or clone the whole
+`premium-presentations/` folder into a Claude, Cursor, Codex, or agents skills
+directory to deploy it.
 
-Platform-specific copies are also checked in under
+Do not commit platform-specific mirror packages such as
 `.cursor/skills/premium-presentations/`, `.codex/skills/premium-presentations/`,
-and `.claude/skills/premium-presentations/`. They are mirrored convenience
-packages; the root folder is the primary skill package.
+`.claude/skills/premium-presentations/`, or `.agents/skills/premium-presentations/`.
 
 ### Skill structure
 
@@ -106,7 +106,7 @@ The root skill follows
 | Path | Purpose |
 |------|---------|
 | `SKILL.md` | Concise entry point and trigger metadata |
-| `reference/` | One-level, progressively loaded guidance files |
+| `references/` | One-level, progressively loaded guidance files |
 | `scripts/` | Deterministic scaffolding, bundling, and validation |
 | `templates/` | Deck and component source templates |
 | `shared/` | Runtime CSS, JavaScript, and theme assets |
@@ -115,10 +115,10 @@ The root skill follows
 Long reference files include a `Contents` section so an agent can preview scope
 before loading details. Avoid adding new nested reference directories unless a
 domain grows large enough to justify a separate directly linked file. Keep new
-agent-facing docs under `reference/`; reserve `docs/` for project history and
+agent-facing docs under `references/`; reserve `docs/` for project history and
 planning artifacts that should not be loaded by default.
 
-Repository reference: [bruno-rv/premium-presentations.git](https://github.com/bruno-rv/premium-presentations.git). Red theme: [themes-red.md](.cursor/skills/premium-presentations/themes-red.md).
+Repository reference: [bruno-rv/premium-presentations.git](https://github.com/bruno-rv/premium-presentations.git). Red theme: [themes-red.md](references/themes-red.md).
 
 ```bash
 ./scripts/new-deck.sh red my-show "Show Review" 12

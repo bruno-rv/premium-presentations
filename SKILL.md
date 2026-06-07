@@ -59,12 +59,14 @@ shared runtime edits.
 
 ## Reference Files
 
-- `reference/runtime.md`: runtime modules, extension points, theme visuals,
+- `references/runtime.md`: runtime modules, extension points, theme visuals,
   Mermaid, presenter/chrome behavior.
-- `reference/components.md`: reusable visual components and snippet IDs.
-- `reference/examples.md`: copy-paste slide markup patterns.
-- `reference/themes-red.md`: red theme rules.
-- `reference/slide-spec-template.md`: deck planning template used by
+- `references/design.md`: audience, style, anti-patterns, and deck design
+  principles.
+- `references/components.md`: reusable visual components and snippet IDs.
+- `references/examples.md`: copy-paste slide markup patterns.
+- `references/themes-red.md`: red theme rules.
+- `references/slide-spec-template.md`: deck planning template used by
   `scripts/new-deck.sh`.
 
 Load only the reference needed for the current task.
