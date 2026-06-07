@@ -4,7 +4,7 @@
 #
 # Examples:
 #   ./scripts/list-themes.py
-#   ./scripts/new-deck.sh warm rag-vector-graph "RAG, Vector and Graph Databases" 15
+#   ./scripts/new-deck.sh warm my-talk "My Talk" 15
 
 set -euo pipefail
 

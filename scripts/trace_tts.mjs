@@ -2,7 +2,11 @@
 import { JSDOM } from 'jsdom';
 import { readFileSync } from 'fs';
 
-const bundle = 'assets/decks/vector-databases/vector-databases-slides.linked.html';
+const bundle = process.argv[2];
+if (!bundle) {
+  console.error('Usage: node scripts/trace_tts.mjs assets/decks/<slug>/<slug>-slides.html');
+  process.exit(2);
+}
 
 const dom = new JSDOM(readFileSync(bundle, 'utf8'), {
   url: 'http://localhost/deck.html',

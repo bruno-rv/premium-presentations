@@ -102,4 +102,4 @@ Example row:
 <link rel="stylesheet" href="../../shared/premium-components.css">
 ```
 
-Bundled decks inline this automatically when the link is present in the source `.linked.html` under `assets/decks/`.
+Generated decks inline this automatically when the link is present in the source `.linked.html` under `assets/decks/`.
