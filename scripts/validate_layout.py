@@ -75,6 +75,9 @@ OVERLAP_SELECTORS = (
 def find_repo_shared(start: Path) -> Path | None:
     p = start.resolve().parent
     for _ in range(8):
+        asset_shared = p / "assets" / "shared"
+        if (asset_shared / "premium-components.css").is_file():
+            return asset_shared
         shared = p / "shared"
         if (shared / "premium-components.css").is_file():
             return shared

@@ -2,7 +2,7 @@
 import { JSDOM } from 'jsdom';
 import { readFileSync } from 'fs';
 
-const bundle = process.argv[2] || 'decks/vector-databases/vector-databases-slides.linked.html';
+const bundle = process.argv[2] || 'assets/decks/vector-databases/vector-databases-slides.linked.html';
 const html = readFileSync(bundle, 'utf8');
 const mermaidRuntimeCount = (html.match(/\/\*\s*---\s*premium-mermaid\s+\(inlined\)\s*---\s*\*\//g) || []).length;
 

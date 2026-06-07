@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Bundle a deck into a single standalone HTML file (inline shared CSS/JS).
+# Bundle a deck into a single standalone HTML file (inline assets/shared CSS/JS).
 # Usage: ./scripts/bundle-deck.sh <deck.html> [--in-place]
 
 set -euo pipefail

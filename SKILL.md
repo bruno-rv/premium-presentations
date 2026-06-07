@@ -11,9 +11,8 @@ description: >-
 
 # Premium Presentations
 
-This directory is the skill and the deck generator repository. Use the bundled
-scripts, templates, shared runtime, assets, and references from this folder
-instead of recreating a slide framework from memory.
+This directory is the Claude skill. Use the bundled scripts, references, and
+assets from this folder instead of recreating a slide framework from memory.
 
 ## Start
 
@@ -27,13 +26,13 @@ instead of recreating a slide framework from memory.
 ```
 
 Themes come from `html[data-theme="..."]` selectors in
-`shared/premium-themes.css`. Do not hardcode the current theme names.
+`assets/shared/premium-themes.css`. Do not hardcode the current theme names.
 
 ## Create A Deck
 
 ```bash
 ./scripts/new-deck.sh <theme> <slug> "<title>" <slide_count>
-./scripts/validate-deck.sh decks/<slug>/<slug>-slides.html decks/<slug>/<slug>-slide-spec.md
+./scripts/validate-deck.sh assets/decks/<slug>/<slug>-slides.html assets/decks/<slug>/<slug>-slide-spec.md
 ```
 
 Use lowercase hyphenated slugs. For unspecified themes, use the first theme
@@ -74,8 +73,8 @@ Load only the reference needed for the current task.
 ## Build Guidance
 
 - Start from `scripts/new-deck.sh`; do not create a parallel scaffold.
-- Use `templates/` and `shared/` as the source of truth.
-- Use `templates/components/` snippets for advanced visual blocks.
+- Use `assets/templates/` and `assets/shared/` as the source of truth.
+- Use `assets/templates/components/` snippets for advanced visual blocks.
 - Keep one dominant idea per slide.
 - Keep branding generic unless the user explicitly requests brand chrome.
 - Do not add closing footer-note rows, "NEXT:" citations, or lesson-pill rows.
@@ -87,14 +86,14 @@ Before completion, run the checks that match the change:
 
 ```bash
 ./scripts/validate-runtime-contract.py
-./scripts/validate-deck.sh decks/<slug>/<slug>-slides.html decks/<slug>/<slug>-slide-spec.md
+./scripts/validate-deck.sh assets/decks/<slug>/<slug>-slides.html assets/decks/<slug>/<slug>-slide-spec.md
 git diff --check
 ```
 
 For shared runtime or template edits, re-bundle affected generated HTML files:
 
 ```bash
-python3 scripts/bundle_deck.py decks/<slug>/<slug>-slides.html --in-place --force
+python3 scripts/bundle_deck.py assets/decks/<slug>/<slug>-slides.html --in-place --force
 ./scripts/validate-runtime-contract.py
 ```
 

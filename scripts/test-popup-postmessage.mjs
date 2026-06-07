@@ -9,7 +9,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const SHARED = join(__dirname, '..', 'shared');
+const SHARED = join(__dirname, '..', 'assets', 'shared');
 
 function loadScript(dom, path) {
   dom.window.eval(readFileSync(join(SHARED, path), 'utf8'));

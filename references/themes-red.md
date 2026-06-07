@@ -30,7 +30,7 @@ The Red theme is the framework's clean white-ground identity for broadcast-style
 | Pattern | Class / component |
 |---------|-------------------|
 | Red header bar + mark | `premium-red-chrome.js`, `premium-red-brand.css` |
-| Red mark SVG | `shared/assets/red-mark.svg` |
+| Red mark SVG | `assets/shared/assets/red-mark.svg` |
 | Title accent | `.shimmer-gold` renders as flat `var(--accent)` |
 | Focus Frame | `.focus-frame` |
 | Mermaid | White canvas, red border |
@@ -50,7 +50,7 @@ The Red theme is the framework's clean white-ground identity for broadcast-style
 ./scripts/new-deck.sh red my-deck "Deck Title" 12
 ```
 
-Template: `templates/red-base.html`.
+Template: `assets/templates/red-base.html`.
 
 ## Switch at runtime
 

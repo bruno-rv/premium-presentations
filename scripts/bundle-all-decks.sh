@@ -11,10 +11,10 @@ while IFS= read -r -d '' f; do
     python3 "$ROOT/scripts/bundle_deck.py" "$f" --in-place
     count=$((count + 1))
   fi
-done < <(find "$ROOT/decks" -name '*-slides.html' -print0)
+done < <(find "$ROOT/assets/decks" -name '*-slides.html' -print0)
 
 if [[ "$count" -eq 0 ]]; then
-  echo "No linked decks found under decks/ (all standalone or empty)."
+  echo "No linked decks found under assets/decks/ (all standalone or empty)."
 else
   echo "Re-bundled $count deck(s)."
 fi

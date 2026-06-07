@@ -50,7 +50,7 @@ def rel(path: Path) -> str:
 
 
 def discover_themes() -> list[str]:
-    css = (ROOT / "shared" / "premium-themes.css").read_text(encoding="utf-8")
+    css = (ROOT / "assets" / "shared" / "premium-themes.css").read_text(encoding="utf-8")
     themes: list[str] = []
     for match in THEME_RE.finditer(css):
         theme = next(group for group in match.groups() if group)
@@ -135,19 +135,19 @@ def main() -> int:
     errors: list[str] = []
     themes = discover_themes()
     if not themes:
-        errors.append("shared/premium-themes.css declares no html[data-theme=...] selectors")
+        errors.append("assets/shared/premium-themes.css declares no html[data-theme=...] selectors")
 
-    premium_base = ROOT / "templates" / "premium-base.html"
+    premium_base = ROOT / "assets" / "templates" / "premium-base.html"
     for theme in themes:
-        template = ROOT / "templates" / f"{theme}-base.html"
+        template = ROOT / "assets" / "templates" / f"{theme}-base.html"
         check_file(template if template.is_file() else premium_base, errors)
 
-    template_paths = sorted((ROOT / "templates").glob("*-base.html"))
-    template_paths.extend(sorted((ROOT / "templates").glob("preview-*.html")))
+    template_paths = sorted((ROOT / "assets" / "templates").glob("*-base.html"))
+    template_paths.extend(sorted((ROOT / "assets" / "templates").glob("preview-*.html")))
     for path in template_paths:
         check_file(path, errors)
 
-    deck_paths = sorted((ROOT / "decks").glob("*/*-slides*.html"))
+    deck_paths = sorted((ROOT / "assets" / "decks").glob("*/*-slides*.html"))
     for path in deck_paths:
         check_file(path, errors)
 

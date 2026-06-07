@@ -10,20 +10,20 @@
 
 Decks are **one standalone `.html` file** (engine inlined via `bundle-deck.sh`). Scaffold with `new-deck.sh`, then edit slides in place.
 
-## Re-bundle after changing `shared/`
+## Re-bundle after changing `assets/shared/`
 
 ```bash
-./scripts/bundle-deck.sh decks/my-talk/my-talk-slides.linked.html -o decks/my-talk/my-talk-slides.html
+./scripts/bundle-deck.sh assets/decks/my-talk/my-talk-slides.linked.html -o assets/decks/my-talk/my-talk-slides.html
 # or --in-place on a file that still has ../../shared/ links
 ```
 
 ## Mermaid diagram slide (content only — engine is already in the file)
 
-Add diagram markup inside a bundled deck; re-bundle from a `.linked.html` source if you changed `shared/premium-mermaid.js`.
+Add diagram markup inside a bundled deck; re-bundle from a `.linked.html` source if you changed `assets/shared/premium-mermaid.js`.
 
 ## Slide patterns
 
-Minimal copy-paste patterns below. Layout CSS: `shared/premium-deck.css`. **Illustrative components** (journey, compare, timeline, code window): `shared/premium-components.css` + [components.md](components.md) + `templates/components/*.snippet.html`.
+Minimal copy-paste patterns below. Layout CSS: `assets/shared/premium-deck.css`. **Illustrative components** (journey, compare, timeline, code window): `assets/shared/premium-components.css` + [components.md](components.md) + `assets/templates/components/*.snippet.html`.
 
 ## Title slide
 

@@ -9,7 +9,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const SHARED = join(__dirname, '..', 'shared');
+const SHARED = join(__dirname, '..', 'assets', 'shared');
 
 // Real BroadcastChannel backed by a per-process map (cross-DOM).
 class FakeBC {
