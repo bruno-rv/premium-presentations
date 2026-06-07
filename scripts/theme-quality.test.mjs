@@ -39,7 +39,7 @@ test('theme preference is scoped by deck path, not restored globally', async () 
   const dom = new JSDOM(
     `<!doctype html><html data-theme="warm" data-parallax="off"><head></head><body><section class="slide slide--title"></section><script>${controlsScript}</script></body></html>`,
     {
-      url: 'http://localhost/assets/decks/vector-databases/vector-databases-slides.html',
+      url: 'http://localhost/assets/decks/generated/generated-slides.html',
       runScripts: 'dangerously',
       pretendToBeVisual: true,
       beforeParse(window) {
@@ -57,7 +57,7 @@ test('theme preference is scoped by deck path, not restored globally', async () 
   dom.window.PremiumPresentations.setTheme('editorial');
 
   assert.equal(
-    dom.window.localStorage.getItem('premium-theme:/assets/decks/vector-databases/vector-databases-slides.html'),
+    dom.window.localStorage.getItem('premium-theme:/assets/decks/generated/generated-slides.html'),
     'editorial',
   );
   assert.equal(dom.window.localStorage.getItem('premium-theme'), 'red');

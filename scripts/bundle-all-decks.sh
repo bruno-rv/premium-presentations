@@ -4,6 +4,12 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 shopt -s nullglob
+DECK_ROOT="$ROOT/assets/decks"
+
+if [[ ! -d "$DECK_ROOT" ]]; then
+  echo "No generated decks found under assets/decks/."
+  exit 0
+fi
 
 count=0
 while IFS= read -r -d '' f; do
@@ -11,7 +17,7 @@ while IFS= read -r -d '' f; do
     python3 "$ROOT/scripts/bundle_deck.py" "$f" --in-place
     count=$((count + 1))
   fi
-done < <(find "$ROOT/assets/decks" -name '*-slides.html' -print0)
+done < <(find "$DECK_ROOT" -name '*-slides.html' -print0)
 
 if [[ "$count" -eq 0 ]]; then
   echo "No linked decks found under assets/decks/ (all standalone or empty)."

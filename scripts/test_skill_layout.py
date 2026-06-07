@@ -34,7 +34,6 @@ class SkillLayoutTests(unittest.TestCase):
         required = [
             "SKILL.md",
             "assets",
-            "assets/decks",
             "assets/shared",
             "assets/studio/index.html",
             "assets/templates",
@@ -56,6 +55,7 @@ class SkillLayoutTests(unittest.TestCase):
             ".impeccable",
             ".remember",
             "app",
+            "assets/decks",
             "decks",
             "docs",
             "PLAN.md",
@@ -93,10 +93,15 @@ class SkillLayoutTests(unittest.TestCase):
         self.assertIn("references/components.md", skill)
         self.assertIn("assets/shared/premium-themes.css", skill)
         self.assertIn("assets/templates/components", references)
-        self.assertIn("assets/decks", readme)
+        self.assertIn("assets/decks/", readme)
+        self.assertIn("generated output", readme)
         self.assertIn("assets/shared", readme)
         self.assertNotIn("reference/runtime.md", skill)
         self.assertNotIn("reference/", skill)
+
+    def test_generated_decks_are_ignored(self) -> None:
+        gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
+        self.assertIn("assets/decks/", gitignore)
 
 
 if __name__ == "__main__":

@@ -38,6 +38,8 @@ Themes come from `html[data-theme="..."]` selectors in
 Use lowercase hyphenated slugs. For unspecified themes, use the first theme
 returned by `list-themes.py` unless the topic clearly calls for another
 discovered theme. For 8+ slides, use the generated slide spec as the contract.
+`assets/decks/` is generated output and ignored by git; commit a finished deck
+only when the user explicitly asks.
 
 ## Runtime Contract
 

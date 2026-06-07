@@ -46,11 +46,10 @@ Validate it:
 ./scripts/validate-deck.sh assets/decks/my-talk/my-talk-slides.html assets/decks/my-talk/my-talk-slide-spec.md
 ```
 
-Open the studio or an example deck:
+Open the studio:
 
 ```bash
 open assets/studio/index.html
-open assets/decks/rag-vector-graph/rag-vector-graph-slides.html
 ```
 
 ## Layout
@@ -60,7 +59,6 @@ premium-presentations/
 ├── SKILL.md
 ├── README.md
 ├── assets/
-│   ├── decks/
 │   ├── shared/
 │   ├── studio/
 │   └── templates/
@@ -68,10 +66,13 @@ premium-presentations/
 └── scripts/
 ```
 
-`assets/` contains bundled resources used by generated output: deck examples,
-runtime CSS/JS, theme visuals, templates, snippets, and the studio page.
-The key paths are `assets/decks/`, `assets/shared/`, `assets/studio/`, and
-`assets/templates/`.
+`assets/` contains bundled resources used by generated output: runtime CSS/JS,
+theme visuals, templates, snippets, and the studio page. The key committed
+paths are `assets/shared/`, `assets/studio/`, and `assets/templates/`.
+
+`assets/decks/` is generated output from `scripts/new-deck.sh`. It is ignored
+by git and should stay out of the package unless a user explicitly asks to
+commit a finished deck.
 
 `references/` contains one-level agent guidance loaded only when needed:
 runtime details, design rules, component patterns, examples, theme notes, and
@@ -91,12 +92,10 @@ npm --prefix scripts run test:presenter
 git diff --check
 ```
 
-Validate all bundled example decks:
+Create and validate a smoke deck:
 
 ```bash
-for spec in assets/decks/*/*-slide-spec.md; do
-  slug=$(basename "$spec" -slide-spec.md)
-  html="$(dirname "$spec")/${slug}-slides.html"
-  ./scripts/validate-deck.sh "$html" "$spec"
-done
+./scripts/new-deck.sh editorial smoke-deck "Smoke Deck" 2
+./scripts/validate-deck.sh assets/decks/smoke-deck/smoke-deck-slides.html
+rm -rf assets/decks/smoke-deck
 ```
