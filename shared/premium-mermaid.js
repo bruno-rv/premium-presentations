@@ -138,16 +138,24 @@ function showMermaidError(node, err) {
     'Diagram could not be rendered.\n' + (err?.message || String(err));
 }
 
-/** @param {'editorial' | 'warm' | 'red'} [theme] */
+/** @param {'editorial' | 'warm' | 'red' | 'cupertino'} [theme] */
 export function getMermaidConfig(theme = deckTheme()) {
   const accent =
-    theme === 'editorial' ? '#364fc7' : theme === 'red' ? '#FF0230' : '#c2410c';
+    theme === 'editorial'
+      ? '#364fc7'
+      : theme === 'red'
+        ? '#FF0230'
+        : theme === 'cupertino'
+          ? '#0066cc'
+          : '#c2410c';
   const accentSoft =
     theme === 'editorial'
       ? '#a5d8ff'
       : theme === 'red'
         ? '#ffd0d3'
-        : '#ffc9c2';
+        : theme === 'cupertino'
+          ? '#cce4ff'
+          : '#ffc9c2';
 
   return {
     startOnLoad: false,

@@ -57,6 +57,7 @@ New decks must keep the shared runtime included by the templates:
 - `premium-annotations.js`: marker and laser tools.
 - `premium-timer.js`, `premium-presenter.js`, `premium-search.js`,
   `premium-clicker.js`, `premium-tts.js`, `premium-og-cover.js`.
+- `premium-journey.js`: opt-in runtime for `.journey-stage` SVG path slides.
 - `slide-engine.js`: scroll-snap navigation, counters, auto-hiding dot rail,
   presenter events, keyboard/touch navigation.
 

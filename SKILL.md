@@ -50,6 +50,8 @@ Keep generated decks on the shared runtime stack:
   `premium-annotations.js`, `premium-timer.js`, `premium-tts.js`,
   `premium-search.js`, `premium-clicker.js`, `premium-og-cover.js`,
   `premium-presenter.js`, `slide-engine.js`.
+- Journey SVG slides that use `.journey-stage` also include
+  `premium-journey.js`.
 - Red decks also include `premium-red-brand.css` and `premium-red-chrome.js`.
 
 Run `./scripts/validate-runtime-contract.py` after template, theme, bundler, or

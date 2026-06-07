@@ -37,5 +37,18 @@
         "src": "red-map.png"
       }
     ]
+  },
+  "cupertino": {
+    "visualIdentity": "premium white space, system typography, cinematic glass, action blue",
+    "assets": [
+      {
+        "role": "hero",
+        "src": "cupertino-hero.png"
+      },
+      {
+        "role": "map",
+        "src": "cupertino-map.png"
+      }
+    ]
   }
 }

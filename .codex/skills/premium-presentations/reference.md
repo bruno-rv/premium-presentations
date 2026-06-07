@@ -11,6 +11,7 @@
 | `premium-controller.js` | Shared deck state, navigation API, and presenter/clicker event bridge |
 | `premium-diagrams.css` | Diagram slide layout + Excalidraw-style canvas |
 | `premium-mermaid.js` | Mermaid `handDrawn` theme + auto-fit + clip detection + theme re-render |
+| `premium-journey.js` | Opt-in runtime for `.journey-stage` SVG path slides; bundled when journey markup is present |
 
 ### Diagram slides (required markup)
 
@@ -31,7 +32,7 @@ Decks link with `../../shared/…` from `decks/<slug>/`.
 template, theme, bundler, or shared runtime edit. It verifies discovered theme
 scaffold templates, preview templates, and generated deck HTML files carry the
 common CSS/JS stack, plus red brand modules where the active template/deck is
-red.
+red, plus `premium-journey.js` when a file contains `.journey-stage` markup.
 
 **Live theme switch:** `PremiumPresentations.setTheme('<theme>')` or UI control. The control panel discovers themes from loaded CSS. Dispatches `premium-theme-change` on `<html>`.
 

@@ -18,6 +18,7 @@ Portable patterns for [bruno-rv/premium-presentations.git](https://github.com/br
 | **FLOW** | Setup flow | 3–4 activation steps with arrows | `templates/components/setup-flow.snippet.html` |
 | **STAT** | Stats row | 3 KPIs with accent top bar | `templates/components/stats-row.snippet.html` |
 | **CHK** | Checklist grid | Closure / readiness (2 columns) | `templates/components/checklist.snippet.html` |
+| **WHY** | Why panel | Short takeaway / implication callout | CSS-only: `.why-panel` |
 
 ## Shared utilities (CSS only)
 
@@ -31,6 +32,30 @@ Portable patterns for [bruno-rv/premium-presentations.git](https://github.com/br
 | `flow-r`, `flow-cw` | Animated SVG connector strokes |
 | `pulse-glow`, `pulse-gold` (inline `animation:`) | Breathing card glow |
 | `tag-red`, `tag-gold`, `tag-orange`, `tag-cyan` | Extra tag colors |
+| `why-panel` | Bordered takeaway block with uppercase lead label and short body |
+
+## Compare modifiers
+
+Use semantic modifiers on `.compare-panel` instead of inline colors:
+
+| Modifier | Meaning | Accent |
+|----------|---------|--------|
+| `compare-panel--down` | Cost, constraint, legacy path, downside | red |
+| `compare-panel--up` | Better path, uplift, improvement | blue |
+| `compare-panel--vector` | Vector-search side of a comparison | blue |
+| `compare-panel--graph` | Graph side of a comparison | violet |
+
+## Why panel
+
+Use a `.why-panel` after the main visual when the audience needs one crisp
+interpretation or consequence.
+
+```html
+<div class="why-panel reveal">
+  <strong>Why it matters</strong>
+  <p>One sentence that turns the diagram into a decision.</p>
+</div>
+```
 
 ## Spec authoring
 
@@ -45,6 +70,8 @@ Example row:
 ## SVG guidance
 
 - Inline `<svg>` inside `.stage-card__visual`, `.journey-stage`, or compare panels.
+- Journey slides use `.journey-stage > svg` with `circle.journey-node` markers;
+  `premium-journey.js` builds the path and moving dots from those nodes.
 - Use `class="flow-r"` on dashed paths for motion.
 - Theme-aware strokes: `stroke="var(--accent)"`, `fill="var(--gold-dim)"`.
 - Keep `viewBox` fixed; let CSS scale width to 100%.

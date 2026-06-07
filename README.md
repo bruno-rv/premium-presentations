@@ -51,11 +51,12 @@ Optional `*.linked.html` sources (with `../../shared/` links) are for maintainer
 
 | File | Purpose |
 |------|---------|
-| `shared/premium-themes.css` | Editorial · Warm · Red tokens |
+| `shared/premium-themes.css` | Editorial · Warm · Red · Cupertino tokens |
 | `shared/premium-deck.css` | Slide layout, typography, tables |
 | `shared/premium-components.css` | Illustrative components (journey, compare, timeline, code window, bars) — see skill `components.md` |
 | `shared/premium-diagrams.css` | Diagram slides — centered Excalidraw-style canvas |
 | `shared/premium-mermaid.js` | Mermaid hand-drawn theme + theme-change re-render |
+| `shared/premium-journey.js` | Opt-in flowing path runtime for `.journey-stage` SVG slides |
 | `shared/premium-controls.js` | Theme switch + 3D background toggle |
 | `shared/premium-annotations.css` | Marker + laser styles (theme contrast) |
 | `shared/premium-annotations.js` | Marker + laser behavior |
@@ -67,7 +68,7 @@ Optional `*.linked.html` sources (with `../../shared/` links) are for maintainer
 
 ## Extras (Cluster A — Live + Cluster B — Distribution)
 
-Engine modules in `shared/premium-{timer,presenter,clicker,tts,search,og-cover}.js` + `shared/premium-extras.css`. Auto-bundled by `bundle-deck.py` when the template links them.
+Engine modules in `shared/premium-{timer,presenter,clicker,tts,search,og-cover}.js` + `shared/premium-extras.css`. Auto-bundled by `bundle-deck.py` when the template links them. `shared/premium-journey.js` is auto-bundled when a deck contains `.journey-stage` markup.
 
 | Shortcut | Feature |
 |----------|---------|

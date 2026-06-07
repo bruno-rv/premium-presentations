@@ -34,6 +34,7 @@ REQUIRED_JS = (
 
 RED_CSS = ("premium-red-brand.css",)
 RED_JS = ("premium-red-chrome.js",)
+JOURNEY_JS = ("premium-journey.js",)
 
 THEME_RE = re.compile(
     r"html\[data-theme=(?:\"([a-z0-9][a-z0-9-]*)\"|'([a-z0-9][a-z0-9-]*)'|([a-z0-9][a-z0-9-]*))\]"
@@ -105,10 +106,18 @@ def needs_red_runtime(path: Path, html: str) -> bool:
     )
 
 
+def needs_journey_runtime(html: str) -> bool:
+    return bool(re.search(r"\bclass\s*=\s*[\"'][^\"']*\bjourney-stage\b", html, re.I))
+
+
 def check_file(path: Path, errors: list[str]) -> None:
     html = path.read_text(encoding="utf-8")
     css_required = REQUIRED_CSS + (RED_CSS if needs_red_runtime(path, html) else ())
-    js_required = REQUIRED_JS + (RED_JS if needs_red_runtime(path, html) else ())
+    js_required = (
+        REQUIRED_JS
+        + (RED_JS if needs_red_runtime(path, html) else ())
+        + (JOURNEY_JS if needs_journey_runtime(html) else ())
+    )
 
     css_present = modules_present(html, "css", css_required)
     js_present = modules_present(html, "js", js_required)

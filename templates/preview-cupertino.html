@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="cupertino" data-parallax="off" data-theme-label-cupertino="Cupertino">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cupertino Theme Preview</title>
+<link rel="stylesheet" href="../shared/premium-themes.css">
+<link rel="stylesheet" href="../shared/premium-deck.css">
+<link rel="stylesheet" href="../shared/premium-components.css">
+<link rel="stylesheet" href="../shared/premium-diagrams.css">
+<link rel="stylesheet" href="../shared/premium-annotations.css">
+<link rel="stylesheet" href="../shared/premium-extras.css">
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; }
+  .slide__display,
+  .slide__heading { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; }
+  .slide__label,
+  .slide__subtitle { font-family: 'SF Mono', 'Cascadia Mono', ui-monospace, monospace; }
+</style>
+</head>
+<body>
+<div class="deck" id="deck">
+  <section class="slide slide--title" data-nav-title="Cupertino">
+    <p class="slide__subtitle reveal">Theme preview</p>
+    <h1 class="slide__display reveal">Cupertino system</h1>
+    <p class="slide__body reveal" style="margin-top:1rem;max-width:36rem">Premium white space, system typography, cinematic image staging, and a single blue action cue.</p>
+  </section>
+  <section class="slide slide--divider" data-nav-title="Precision">
+    <div class="slide__number reveal" aria-hidden="true">01</div>
+    <p class="slide__label reveal">Precision</p>
+    <h2 class="slide__heading reveal">Quiet chrome, strong read</h2>
+    <p class="slide__body reveal">The theme keeps slide content forward while the imagery provides depth and polish.</p>
+  </section>
+  <section class="slide" data-nav-title="Components">
+    <p class="slide__label reveal">Components</p>
+    <h2 class="slide__heading reveal">Flat surfaces with crisp hierarchy</h2>
+    <div class="kpi-row reveal">
+      <div class="kpi"><div class="kpi-val">SF</div><div class="kpi-lbl">System stack</div></div>
+      <div class="kpi"><div class="kpi-val">#0066cc</div><div class="kpi-lbl">Action blue</div></div>
+      <div class="kpi"><div class="kpi-val">0</div><div class="kpi-lbl">Grain overlay</div></div>
+    </div>
+  </section>
+</div>
+<script src="../shared/premium-controller.js" defer></script>
+<script src="../shared/premium-controls.js" defer></script>
+<script src="../shared/premium-annotations.js" defer></script>
+<script src="../shared/premium-timer.js" defer></script>
+<script src="../shared/premium-tts.js" defer></script>
+<script src="../shared/premium-search.js" defer></script>
+<script src="../shared/premium-clicker.js" defer></script>
+<script src="../shared/premium-og-cover.js" defer></script>
+<script src="../shared/premium-presenter.js" defer></script>
+<script src="../shared/slide-engine.js" defer></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    new SlideEngine();
+  });
+</script>
+</body>
+</html>

@@ -38,7 +38,7 @@ test('theme preference is scoped by deck path, not restored globally', async () 
   const dom = new JSDOM(
     `<!doctype html><html data-theme="warm" data-parallax="off"><head></head><body><section class="slide slide--title"></section><script>${controlsScript}</script></body></html>`,
     {
-      url: 'http://localhost/decks/warm-talk/warm-talk-slides.html',
+      url: 'http://localhost/decks/vector-databases/vector-databases-slides.html',
       runScripts: 'dangerously',
       pretendToBeVisual: true,
       beforeParse(window) {
@@ -56,7 +56,7 @@ test('theme preference is scoped by deck path, not restored globally', async () 
   dom.window.PremiumPresentations.setTheme('editorial');
 
   assert.equal(
-    dom.window.localStorage.getItem('premium-theme:/decks/warm-talk/warm-talk-slides.html'),
+    dom.window.localStorage.getItem('premium-theme:/decks/vector-databases/vector-databases-slides.html'),
     'editorial',
   );
   assert.equal(dom.window.localStorage.getItem('premium-theme'), 'red');
@@ -100,9 +100,11 @@ test('theme font stacks avoid reported overused families and keep warm hierarchy
     'templates/premium-base.html',
     'templates/red-base.html',
     'templates/warm-signal-base.html',
+    'templates/cupertino-base.html',
     'templates/preview-editorial.html',
     'templates/preview-warm.html',
     'templates/preview-red.html',
+    'templates/preview-cupertino.html',
     'shared/premium-themes.css',
     'shared/premium-controls.js',
     'shared/premium-components.css',
