@@ -4,14 +4,6 @@
 .idea/
 .vscode/
 node_modules/
-.impeccable/
-.agents/skills/
-.claude/skills/*
-!.claude/skills/premium-presentations/
-.claude/skills/premium-presentations/assets/decks/
-.codex/skills/
-.codex/storage/
-.cursor/skills/
 __pycache__/
 *.pyc
 .env

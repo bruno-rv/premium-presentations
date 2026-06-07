@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{THEME}}" data-parallax="off" data-theme-label-cupertino="Cupertino">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{TITLE}}</title>
+<link rel="stylesheet" href="{{SHARED}}premium-themes.css">
+<link rel="stylesheet" href="{{SHARED}}premium-deck.css">
+<link rel="stylesheet" href="{{SHARED}}premium-components.css">
+<link rel="stylesheet" href="{{SHARED}}premium-diagrams.css">
+<link rel="stylesheet" href="{{SHARED}}premium-annotations.css">
+<link rel="stylesheet" href="{{SHARED}}premium-extras.css">
+<meta property="og:type" content="article">
+<meta property="og:title" content="{{TITLE}}">
+<meta property="og:description" content="Premium Presentations deck">
+<meta property="og:image" content="og-cover.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{TITLE}}">
+</head>
+<body>
+<div class="deck" id="deck">
+
+<!-- SLIDE 1 - TITLE -->
+<section class="slide slide--title" data-nav-title="{{TITLE}}">
+  <p class="slide__subtitle reveal">Cupertino</p>
+  <h1 class="slide__display reveal">{{TITLE}}<br><span class="accent">clear by design</span></h1>
+  <p class="slide__body reveal" style="margin-top:1rem;max-width:36rem">Premium white space, system typography, cinematic imagery, and one restrained blue action color.</p>
+</section>
+
+<!-- SLIDE 2 - ACT DIVIDER -->
+<section class="slide slide--divider" data-nav-title="Act 1">
+  <div class="slide__number reveal" aria-hidden="true">01</div>
+  <p class="slide__label reveal">Act 1</p>
+  <h2 class="slide__heading reveal">Section title</h2>
+  <p class="slide__body reveal">Use quiet surfaces, precise hierarchy, and a single dominant idea.</p>
+</section>
+
+<!-- SLIDE 3 - CONTENT -->
+<section class="slide" data-nav-title="First idea">
+  <p class="slide__label reveal">Section</p>
+  <h2 class="slide__heading reveal">First content slide</h2>
+  <p class="slide__body reveal">Replace slides and add more sections. Use shared components and run validation when done.</p>
+</section>
+
+</div>
+<script src="{{SHARED}}premium-controller.js" defer></script>
+<script src="{{SHARED}}premium-controls.js" defer></script>
+<script src="{{SHARED}}premium-annotations.js" defer></script>
+<script src="{{SHARED}}premium-timer.js" defer></script>
+<script src="{{SHARED}}premium-tts.js" defer></script>
+<script src="{{SHARED}}premium-search.js" defer></script>
+<script src="{{SHARED}}premium-clicker.js" defer></script>
+<script src="{{SHARED}}premium-og-cover.js" defer></script>
+<script src="{{SHARED}}premium-presenter.js" defer></script>
+<script src="{{SHARED}}slide-engine.js" defer></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    new SlideEngine();
+  });
+</script>
+</body>
+</html>

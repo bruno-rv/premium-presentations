@@ -1,176 +1,125 @@
 # Premium Presentations
 
-Project-local Claude skill for generating, editing, validating, and bundling
-premium HTML slide decks.
+HTML slide decks with live theme switching, optional 3D parallax background, and shared SlideEngine.
 
 Repository: [bruno-rv/premium-presentations.git](https://github.com/bruno-rv/premium-presentations.git)
 
-## Current Shape
-
-This repository is intentionally small at the root. The actual skill lives in
-one project-skill directory:
-
-```text
-.claude/skills/premium-presentations/
-```
-
-Root files are only repository-level material:
-
-| Path | Purpose |
-|------|---------|
-| `.claude/skills/premium-presentations/` | Canonical Claude project skill |
-| `README.md` | Repository orientation |
-| `LICENSE` | License |
-| `.gitignore` | Local cache and vendor-mirror ignores |
-
-There are no root-level `scripts/`, `references/`, `assets/`, `templates/`,
-`shared/`, or `decks/` folders. Those are all bundled inside the skill.
-
-## Skill Contents
-
-| Path | Purpose |
-|------|---------|
-| `SKILL.md` | Skill metadata and compact operating instructions |
-| `references/` | Progressive-disclosure guidance for design, runtime, themes, examples, and components |
-| `scripts/` | Deterministic scaffold, bundle, validation, OG cover, and smoke-test tooling |
-| `assets/shared/` | Runtime CSS, JavaScript, theme visuals, red mark, and slide engine |
-| `assets/templates/` | Base templates, theme previews, diagram snippet, and component snippets |
-| `assets/decks/` | Generated deck outputs created locally by `new-deck.sh`; not committed |
-| `assets/studio/` | Local gallery for theme previews |
-
-## Generation Fidelity
-
-Yes: the skill is capable of generating new presentations with the same
-features, design language, themes, and runtime behavior as the existing decks in
-this repo.
-
-It does this by using the same source of truth as the existing presentations:
-
-- `assets/shared/premium-themes.css` for discovered themes
-- `assets/shared/*.css` and `assets/shared/*.js` for runtime behavior
-- `assets/templates/*.html` for base deck structure
-- `assets/templates/components/*.snippet.html` for reusable visual patterns
-- `references/*.md` for progressive guidance when more detail is needed
-
-What "same" means here:
-
-| Capability | Status |
-|------------|--------|
-| Same themes | Yes. Themes are discovered dynamically from `premium-themes.css`; current themes are `editorial`, `warm`, and `red`. |
-| Same visual system | Yes. New decks use the bundled templates, component snippets, typography, spacing, controls, and theme visuals. |
-| Same runtime features | Yes. New decks use the shared SlideEngine, presenter mode, timer, search, clicker, TTS, annotations, Mermaid handling, and export controls. |
-| Same validation | Yes. Decks are checked by the bundled validators and runtime-contract tests. |
-| Same exact content | Only when the user provides the source deck, slide spec, or exact content brief. The skill preserves the framework; it does not infer missing subject matter perfectly from nothing. |
-| Byte-identical HTML | Not guaranteed for new decks. The expected guarantee is feature and design parity, not byte-for-byte cloning. |
-
-## Example Decks
-
-Complete example decks are intentionally not committed in this repository. The
-skill keeps reusable examples in `references/examples.md`, component snippets in
-`assets/templates/components/`, and theme previews in `assets/templates/`.
-
-`new-deck.sh` creates local outputs under `assets/decks/<slug>/` when a user
-generates a deck. Those generated decks can be validated, bundled, opened, and
-deleted independently of the shipped skill package.
-
-## Runtime Features
-
-Generated decks keep the Premium Presentations runtime stack:
-
-- Theme switching
-- 3D/parallax background toggle
-- Marker, laser, clear, and hidden controls panel
-- Scroll-snap SlideEngine navigation
-- Presenter popup with notes
-- Speaker timer
-- Search and slide jump
-- Clicker/WebHID support with keyboard fallback
-- TTS read-aloud
-- Export/PDF and OG cover support
-- Mermaid diagrams with theme-aware rendering and diagram-fit validation
-- Red theme chrome and red brand assets when using the red theme
-
-## Quick Start
-
-Run commands from the skill directory:
+## Quick start
 
 ```bash
-cd .claude/skills/premium-presentations
+# Scaffold (spec auto-created when slides ≥ 8)
+./scripts/new-deck.sh warm rag-vector-graph "My Title" 15
 
-./scripts/list-themes.py
-./scripts/new-deck.sh warm my-talk "My Title" 12
-./scripts/validate-deck.sh assets/decks/my-talk/my-talk-slides.html
+# Validate structure
+./scripts/validate-deck.sh decks/rag-vector-graph/rag-vector-graph-slides.html decks/rag-vector-graph/rag-vector-graph-slide-spec.md
 
-open assets/studio/index.html
-open assets/decks/my-talk/my-talk-slides.html
+# Open
+open app/index.html
+open decks/rag-vector-graph/rag-vector-graph-slides.html
 ```
 
-Serve locally if Mermaid or browser security restrictions affect `file://`:
+Serve locally if Mermaid fails on `file://`:
 
 ```bash
 python3 -m http.server 8765
-# http://localhost:8765/assets/decks/my-talk/my-talk-slides.html
+# http://localhost:8765/decks/rag-vector-graph/rag-vector-graph-slides.html
 ```
 
-## Create Or Edit A Deck
+## Scripts
 
-Use the skill as the source of truth:
+| Script | Purpose |
+|--------|---------|
+| `new-deck.sh` | Scaffold deck → **standalone** `*-slides.html` + optional spec |
+| `bundle-deck.sh` | Inline `shared/` CSS/JS into one HTML file |
+| `bundle-all-decks.sh` | Re-bundle decks that still link to `../../shared/` |
+| `validate-deck.sh` | Lint deck + **diagram layout rules** (structure, fit JS, anti-clip CSS) |
 
-1. Start from `scripts/new-deck.sh`.
-2. Pick a theme returned by `scripts/list-themes.py`.
-3. Edit the generated HTML under `assets/decks/<slug>/`.
-4. Use `references/design.md`, `references/runtime.md`, and
-   `references/components.md` only when the task needs that detail.
-5. Reuse snippets from `assets/templates/components/`.
-6. Validate before treating the deck as ready.
+## Standalone decks (one file per presentation)
 
-For decks with 8 or more requested slides, `new-deck.sh` also creates a slide
-spec. The initial scaffold validates structurally, but the spec validation is
-expected to pass only after the deck has been authored to the planned slide
-count.
-
-## Validation
-
-Run from `.claude/skills/premium-presentations/`:
+Each deck is a **single HTML file** (all engine CSS/JS inlined). Open it directly or email it — no `shared/` folder required on the machine that presents it.
 
 ```bash
-./scripts/validate-runtime-contract.py
-npm --prefix scripts test
-npm --prefix scripts run test:presenter
+./scripts/new-deck.sh warm my-talk "My Title" 12   # writes standalone decks/my-talk/my-talk-slides.html
+./scripts/bundle-deck.sh decks/my-talk/my-talk-slides.linked.html --in-place  # after editing shared/
 ```
 
-Validate a specific deck:
+Optional `*.linked.html` sources (with `../../shared/` links) are for maintainers who edit the framework and re-bundle. Slide **content** lives in the standalone `*-slides.html`.
+
+**External deps (CDN):** Google Fonts, and Mermaid on diagram decks.
+
+## Shared runtime (source for bundler)
+
+| File | Purpose |
+|------|---------|
+| `shared/premium-themes.css` | Editorial · Warm · Red · Cupertino tokens |
+| `shared/premium-deck.css` | Slide layout, typography, tables |
+| `shared/premium-components.css` | Illustrative components (journey, compare, timeline, code window, bars) — see skill `components.md` |
+| `shared/premium-diagrams.css` | Diagram slides — centered Excalidraw-style canvas |
+| `shared/premium-mermaid.js` | Mermaid hand-drawn theme + theme-change re-render |
+| `shared/premium-journey.js` | Opt-in flowing path runtime for `.journey-stage` SVG slides |
+| `shared/premium-controls.js` | Theme switch + 3D background toggle |
+| `shared/premium-annotations.css` | Marker + laser styles (theme contrast) |
+| `shared/premium-annotations.js` | Marker + laser behavior |
+| `shared/slide-engine.js` | Navigation |
+
+**Controls (left edge, hover to expand):** Theme · **Marker** · **Clear** · **Laser** · **3D background**.
+
+**Shortcuts:** `M` marker · `L` laser · `C` clear · `H` hide/show tools (opens pinned) · `3` 3D parallax.
+
+## Extras (Cluster A — Live + Cluster B — Distribution)
+
+Engine modules in `shared/premium-{timer,presenter,clicker,tts,search,og-cover}.js` + `shared/premium-extras.css`. Auto-bundled by `bundle-deck.py` when the template links them. `shared/premium-journey.js` is auto-bundled when a deck contains `.journey-stage` markup.
+
+| Shortcut | Feature |
+|----------|---------|
+| `B` / `.` | Blackout / curtain |
+| `⇧T` | Speaker timer (start/pause) |
+| `⇧P` | Presenter view (popup with notes + peek + timer) |
+| `⇧C` | Clicker / WebHID bind (keyboard fallback always active) |
+| `⇧R` | TTS read-aloud |
+| `⇧E` | Export PDF (print-CSS) |
+| `⌘K` / `/` | Search / jump-to-slide |
+| `?embedded=1` | Embed mode (hides chrome, postMessage API) |
+
+**Extras scripts:**
+- `./scripts/og-cover.sh <deck.html>` — render slide 1 as 1200×630 PNG for OG/Twitter unfurl.
+
+**Notes per slide:** add `<aside class="notes">…</aside>` inside any `<section class="slide">`; the presenter view will display it.
+
+## Skill
+
+This repository is also a root-level skill: it contains `SKILL.md`,
+`agents/openai.yaml`, `reference/`, `scripts/`, `templates/`, and `shared/`.
+Copy or clone the whole `premium-presentations/` folder into a Claude, Cursor,
+or Codex skills directory to deploy it as one self-contained skill.
+
+Platform-specific copies are also checked in under
+`.cursor/skills/premium-presentations/`, `.codex/skills/premium-presentations/`,
+and `.claude/skills/premium-presentations/`. They are mirrored convenience
+packages; the root folder is the primary skill package.
+
+### Skill structure
+
+The root skill follows
+[Claude skill authoring best practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices):
+
+| Path | Purpose |
+|------|---------|
+| `SKILL.md` | Concise entry point and trigger metadata |
+| `reference/` | One-level, progressively loaded guidance files |
+| `scripts/` | Deterministic scaffolding, bundling, and validation |
+| `templates/` | Deck and component source templates |
+| `shared/` | Runtime CSS, JavaScript, and theme assets |
+| `decks/` | Complete example decks and generated artifacts |
+
+Long reference files include a `Contents` section so an agent can preview scope
+before loading details. Avoid adding new nested reference directories unless a
+domain grows large enough to justify a separate directly linked file. Keep new
+agent-facing docs under `reference/`; reserve `docs/` for project history and
+planning artifacts that should not be loaded by default.
+
+Repository reference: [bruno-rv/premium-presentations.git](https://github.com/bruno-rv/premium-presentations.git). Red theme: [themes-red.md](.cursor/skills/premium-presentations/themes-red.md).
 
 ```bash
-./scripts/validate-deck.sh assets/decks/<slug>/<slug>-slides.html
+./scripts/new-deck.sh red my-show "Show Review" 12
 ```
-
-After shared runtime or template changes, re-bundle any local generated decks
-you need to keep current and rerun the runtime contract:
-
-```bash
-python3 scripts/bundle_deck.py assets/decks/<slug>/<slug>-slides.html --in-place --force
-./scripts/validate-runtime-contract.py
-```
-
-## Packaging
-
-For Claude Code, this repo already contains the project skill at:
-
-```text
-.claude/skills/premium-presentations/SKILL.md
-```
-
-For Claude.ai upload, zip the skill directory itself, not the repository root:
-
-```text
-premium-presentations.zip
-└── premium-presentations/
-    ├── SKILL.md
-    ├── scripts/
-    ├── references/
-    └── assets/
-```
-
-The folder name must stay `premium-presentations`, matching the `name` field in
-`SKILL.md`.

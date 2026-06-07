@@ -1,0 +1,54 @@
+{
+  "editorial": {
+    "visualIdentity": "dark editorial, blue accent, gold secondary",
+    "assets": [
+      {
+        "role": "hero",
+        "src": "editorial-hero.png"
+      },
+      {
+        "role": "map",
+        "src": "editorial-map.png"
+      }
+    ]
+  },
+  "warm": {
+    "visualIdentity": "warm signal, terracotta, soft gold, muted sage",
+    "assets": [
+      {
+        "role": "hero",
+        "src": "warm-hero.png"
+      },
+      {
+        "role": "map",
+        "src": "warm-map.png"
+      }
+    ]
+  },
+  "red": {
+    "visualIdentity": "white ground, broadcast red, silver, geometric",
+    "assets": [
+      {
+        "role": "hero",
+        "src": "red-hero.png"
+      },
+      {
+        "role": "map",
+        "src": "red-map.png"
+      }
+    ]
+  },
+  "cupertino": {
+    "visualIdentity": "premium white space, system typography, cinematic glass, action blue",
+    "assets": [
+      {
+        "role": "hero",
+        "src": "cupertino-hero.png"
+      },
+      {
+        "role": "map",
+        "src": "cupertino-map.png"
+      }
+    ]
+  }
+}
