@@ -2,7 +2,7 @@
   "name": "premium-presentations",
   "version": "1.0.0",
   "private": true,
-  "description": "Premium Presentations framework + decks (no build step).",
+  "description": "Premium Presentations framework + deck generator (no build step).",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bruno-rv/premium-presentations.git"

@@ -8,6 +8,7 @@ node_modules/
 .agents/skills/
 .claude/skills/*
 !.claude/skills/premium-presentations/
+.claude/skills/premium-presentations/assets/decks/
 .codex/skills/
 .codex/storage/
 .cursor/skills/

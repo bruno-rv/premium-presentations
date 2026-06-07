@@ -35,8 +35,8 @@ There are no root-level `scripts/`, `references/`, `assets/`, `templates/`,
 | `scripts/` | Deterministic scaffold, bundle, validation, OG cover, and smoke-test tooling |
 | `assets/shared/` | Runtime CSS, JavaScript, theme visuals, red mark, and slide engine |
 | `assets/templates/` | Base templates, theme previews, diagram snippet, and component snippets |
-| `assets/decks/` | Existing complete deck examples and generated deck outputs |
-| `assets/studio/` | Local gallery for previews and example decks |
+| `assets/decks/` | Generated deck outputs created locally by `new-deck.sh`; not committed |
+| `assets/studio/` | Local gallery for theme previews |
 
 ## Generation Fidelity
 
@@ -50,7 +50,6 @@ It does this by using the same source of truth as the existing presentations:
 - `assets/shared/*.css` and `assets/shared/*.js` for runtime behavior
 - `assets/templates/*.html` for base deck structure
 - `assets/templates/components/*.snippet.html` for reusable visual patterns
-- `assets/decks/*` as examples and regression corpus
 - `references/*.md` for progressive guidance when more detail is needed
 
 What "same" means here:
@@ -64,23 +63,15 @@ What "same" means here:
 | Same exact content | Only when the user provides the source deck, slide spec, or exact content brief. The skill preserves the framework; it does not infer missing subject matter perfectly from nothing. |
 | Byte-identical HTML | Not guaranteed for new decks. The expected guarantee is feature and design parity, not byte-for-byte cloning. |
 
-## Existing Decks
+## Example Decks
 
-The bundled examples live under:
+Complete example decks are intentionally not committed in this repository. The
+skill keeps reusable examples in `references/examples.md`, component snippets in
+`assets/templates/components/`, and theme previews in `assets/templates/`.
 
-```text
-.claude/skills/premium-presentations/assets/decks/
-```
-
-Current examples:
-
-- `graph-databases`
-- `rag-vector-graph`
-- `red-smoke`
-- `vector-databases`
-- `vector-vs-graph`
-
-These decks are useful as examples, design references, and validation fixtures.
+`new-deck.sh` creates local outputs under `assets/decks/<slug>/` when a user
+generates a deck. Those generated decks can be validated, bundled, opened, and
+deleted independently of the shipped skill package.
 
 ## Runtime Features
 
@@ -154,8 +145,8 @@ Validate a specific deck:
 ./scripts/validate-deck.sh assets/decks/<slug>/<slug>-slides.html
 ```
 
-After shared runtime or template changes, re-bundle affected decks and rerun the
-runtime contract:
+After shared runtime or template changes, re-bundle any local generated decks
+you need to keep current and rerun the runtime contract:
 
 ```bash
 python3 scripts/bundle_deck.py assets/decks/<slug>/<slug>-slides.html --in-place --force
