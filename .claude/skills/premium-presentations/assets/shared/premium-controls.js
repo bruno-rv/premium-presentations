@@ -224,17 +224,17 @@
   function themeVisualBase() {
     const configured = document.documentElement.dataset.themeVisualBase;
     if (configured) return configured.replace(/\/?$/, '/');
-    if (SCRIPT_SRC) return new URL('assets/chatgpt-theme-visuals/', SCRIPT_SRC).href;
+    if (SCRIPT_SRC) return new URL('assets/theme-visuals/', SCRIPT_SRC).href;
 
     const path = location.pathname;
-    if (path.includes('/decks/')) return '../../shared/assets/chatgpt-theme-visuals/';
+    if (path.includes('/decks/')) return '../../shared/assets/theme-visuals/';
     if (path.includes('/assets/studio/')) {
-      return '../shared/assets/chatgpt-theme-visuals/';
+      return '../shared/assets/theme-visuals/';
     }
     if (path.includes('/templates/')) {
-      return '../shared/assets/chatgpt-theme-visuals/';
+      return '../shared/assets/theme-visuals/';
     }
-    return 'assets/shared/assets/chatgpt-theme-visuals/';
+    return 'assets/shared/assets/theme-visuals/';
   }
 
   function themeVisualSrc(theme, role) {

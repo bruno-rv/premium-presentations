@@ -47,7 +47,7 @@ red.
 
 **Live theme switch:** `PremiumPresentations.setTheme('<theme>')` or UI control. The control panel discovers themes from loaded CSS. Dispatches `premium-theme-change` on `<html>`.
 
-**Theme visuals:** `.slide--title` receives a `hero` visual; `.slide--divider` receives a `map` visual. Default assets follow `assets/shared/assets/chatgpt-theme-visuals/<theme>-<role>.png`. Override with `data-theme-visual-<theme>-<role>` or `window.PremiumThemeVisuals`; disable per slide with `data-theme-visual="off"`.
+**Theme visuals:** `.slide--title` receives a `hero` visual; `.slide--divider` receives a `map` visual. Default assets follow `assets/shared/assets/theme-visuals/<theme>-<role>.png`. Override with `data-theme-visual-<theme>-<role>` or `window.PremiumThemeVisuals`; disable per slide with `data-theme-visual="off"`.
 
 **3D background:** `PremiumPresentations.setParallax(true)` or UI button / **`3`**; sets `data-parallax="on"`. Disabled when `prefers-reduced-motion`.
 
@@ -59,7 +59,7 @@ To add a theme:
 
 1. Add `html[data-theme="<theme>"]` tokens in `assets/shared/premium-themes.css`.
 2. Optionally add `assets/templates/<theme>-base.html` for theme-specific chrome.
-3. Optionally add visuals in `assets/shared/assets/chatgpt-theme-visuals/` using
+3. Optionally add visuals in `assets/shared/assets/theme-visuals/` using
    `<theme>-hero.png` and `<theme>-map.png`.
 4. Load custom webfonts through template `<link>` tags or
    `data-theme-fonts-<theme>="https://..."` on `<html>`.
