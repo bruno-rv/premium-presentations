@@ -13,3 +13,4 @@ assets/decks/
 .claude/
 .codex/
 .cursor/
+.playwright-mcp/
