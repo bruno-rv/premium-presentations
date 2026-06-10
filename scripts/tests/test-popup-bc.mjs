@@ -3,95 +3,22 @@
 // (no localStorage, no window.opener). Complements test-popup-storage.mjs
 // which tests the localStorage transport.
 
-import { JSDOM } from 'jsdom';
-import { readFileSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { installWindowRouterBC, loadScript, makeWindow as makeBaseWindow } from './_helpers.mjs';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const SHARED = join(__dirname, '..', 'assets', 'shared');
-
-// Polyfill BroadcastChannel as a cross-window router. Each window gets its
-// own BroadcastChannel constructor; messages on the same name are delivered
-// to all OTHER windows' listeners.
+// Window-scoped BroadcastChannel router shared by all windows in this test.
 const windows = [];
-function installBroadcastChannel(win) {
-  win.BroadcastChannel = class {
-    constructor(name) {
-      this.name = name;
-      this._listeners = new Set();
-      this._win = win;
-      win.__bcs = win.__bcs || new Map();
-      if (!win.__bcs.has(name)) win.__bcs.set(name, new Set());
-      win.__bcs.get(name).add(this);
-    }
-    postMessage(data) {
-      for (const other of windows) {
-        if (other === this._win) continue;
-        const otherBcs = other.__bcs && other.__bcs.get(this.name);
-        if (!otherBcs) continue;
-        for (const bc of otherBcs) {
-          for (const l of bc._listeners) {
-            try { l({ data }); } catch (e) { console.error('BC listener threw:', e); }
-          }
-        }
-      }
-    }
-    addEventListener(type, listener) {
-      if (type === 'message') this._listeners.add(listener);
-    }
-    removeEventListener(type, listener) {
-      if (type === 'message') this._listeners.delete(listener);
-    }
-    close() {
-      this._win.__bcs.get(this.name).delete(this);
-    }
-  };
-}
-
-function makeWindow({ url, withSlides = true, focused = true } = {}) {
-  const html = `<!doctype html><html><head></head><body>
-    <div id="deck">
-      ${withSlides ? `
-      <section class="slide" id="slide-1"><h1 class="slide__display">One</h1><aside class="notes">Talk about one.</aside></section>
-      <section class="slide" id="slide-2"><h1 class="slide__display">Two</h1></section>
-      ` : ''}
-    </div>
-  </body></html>`;
-  const dom = new JSDOM(html, {
-    url, runScripts: 'outside-only', pretendToBeVisual: true,
-  });
-  if (!dom.window.crypto || !dom.window.crypto.randomUUID) {
-    dom.window.crypto = dom.window.crypto || {};
-    dom.window.crypto.randomUUID = () => 'sess-' + Math.random().toString(36).slice(2, 10);
-  }
-  Object.defineProperty(dom.window.document, 'hasFocus', { value: () => focused, configurable: true });
-  installBroadcastChannel(dom.window);
-  const ioInstances = [];
-  dom.window.IntersectionObserver = class {
-    constructor(cb) { this.cb = cb; ioInstances.push(this); }
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  };
-  dom.window.HTMLElement.prototype.scrollIntoView = function () {
-    for (const io of ioInstances) try { io.cb([{ target: this, isIntersecting: true }]); } catch (_) {}
-  };
-  dom.window.requestAnimationFrame = (cb) => setTimeout(cb, 0);
+function makeWindow(options) {
+  const dom = makeBaseWindow(options);
+  installWindowRouterBC(dom.window, windows);
   windows.push(dom.window);
   return dom;
-}
-
-function loadScript(dom, path) {
-  dom.window.eval(readFileSync(join(SHARED, path), 'utf8'));
 }
 
 console.log('Test: BroadcastChannel transport only');
 const deck = makeWindow({ url: 'http://localhost/deck.html', focused: true });
 loadScript(deck, 'premium-controller.js');
 loadScript(deck, 'premium-timer.js');
-const slideEngineJs = readFileSync(join(SHARED, 'slide-engine.js'), 'utf8');
-deck.window.eval(slideEngineJs);
+loadScript(deck, 'slide-engine.js');
 deck.window.eval('new SlideEngine();');
 
 const popup = makeWindow({

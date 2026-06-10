@@ -13,29 +13,15 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import os
 import re
 import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-SHARED = ROOT / "assets" / "shared"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-JS_ORDER = (
-    "premium-controller.js",
-    "premium-controls.js",
-    "premium-annotations.js",
-    "premium-red-chrome.js",
-    "premium-journey.js",
-    "premium-timer.js",
-    "premium-tts.js",
-    "premium-search.js",
-    "premium-clicker.js",
-    "premium-og-cover.js",
-    "premium-presenter.js",
-    "slide-engine.js",
-)
+from _common import JS_BUNDLE_ORDER as JS_ORDER
+from _common import ROOT, SHARED
 
 
 def read_text(path: Path) -> str:
@@ -307,7 +293,7 @@ def bundle_html(html: str, html_path: Path) -> str:
 
     marker = (
         "<!-- Premium Presentations — standalone bundle. "
-        "Engine: assets/shared via ./scripts/bundle-deck.py -->\n"
+        "Engine: assets/shared via ./scripts/bundle_deck.py -->\n"
     )
     if "standalone bundle" not in html:
         html = re.sub(r"(<!DOCTYPE html>\s*)", r"\1" + marker, html, count=1, flags=re.I)
@@ -361,10 +347,8 @@ def main() -> int:
         return 0
 
     if re.search(r"<pre\s+class=[\"']mermaid[\"']", bundled, re.I):
-        env = {**os.environ, "VALIDATE_HTML": str(out_path), "VALIDATE_SPEC": ""}
         result = subprocess.run(
-            [sys.executable, str(ROOT / "scripts" / "validate_deck.py")],
-            env=env,
+            [sys.executable, str(ROOT / "scripts" / "validate_deck.py"), str(out_path)],
             capture_output=True,
             text=True,
         )

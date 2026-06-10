@@ -7,58 +7,26 @@
 // 6. timer config precedence: localStorage override > meta > default.
 // 7. session restore beats override and meta.
 
-import { JSDOM, ResourceLoader } from 'jsdom';
-import { readFileSync, readdirSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+import { SHARED, installGlobalFakeBC, loadScript, makeWindow } from './_helpers.mjs';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const SHARED = join(__dirname, '..', 'assets', 'shared');
+installGlobalFakeBC();
 
-// Minimal BroadcastChannel shim backed by a per-process map.
-class FakeBC {
-  constructor(name) { this.name = name; FakeBC.channels.set(name, FakeBC.channels.get(name) || []); FakeBC.channels.get(name).push(this); this.listeners = []; }
-  postMessage(data) { const peers = FakeBC.channels.get(this.name) || []; for (const p of peers) { if (p === this) continue; for (const l of p.listeners) try { l({ data }); } catch (e) {} } }
-  addEventListener(_, l) { this.listeners.push(l); }
-  close() {}
-}
-FakeBC.channels = new Map();
-globalThis.BroadcastChannel = FakeBC;
-
-function loadScript(dom, path) {
-  const js = readFileSync(join(SHARED, path), 'utf8');
-  dom.window.eval(js);
-}
-
-function makeDeckWindow({ url, withSlides = true } = {}) {
-  const dom = new JSDOM(`<!doctype html><html><head></head><body>
-    <div id="deck">
-      ${withSlides ? `
+const THREE_SLIDES = `
       <section class="slide" id="slide-1"><h1 class="slide__display">One</h1><aside class="notes">Talk about one.</aside></section>
       <section class="slide" id="slide-2"><h1 class="slide__display">Two</h1></section>
       <section class="slide" id="slide-3"><h1 class="slide__display">Three</h1><aside class="notes">Closing thoughts.</aside></section>
-      ` : ''}
-    </div>
-  </body></html>`, { url, runScripts: 'outside-only', pretendToBeVisual: true });
-  // jsdom does not implement crypto.randomUUID; provide one.
-  if (!dom.window.crypto || !dom.window.crypto.randomUUID) {
-    dom.window.crypto = dom.window.crypto || {};
-    dom.window.crypto.randomUUID = () => 'sess-' + Math.random().toString(36).slice(2, 10);
-  }
-  // JSDOM doesn't always ship hasFocus / visibility; provide stable stubs.
-  Object.defineProperty(dom.window.document, 'hasFocus', { value: () => true, configurable: true });
-  return dom;
+`;
+
+function makeDeckWindow({ url, withSlides = true } = {}) {
+  return makeWindow({ url, withSlides, slides: THREE_SLIDES });
 }
 
 function fireReadyStateLoaded(dom) {
   // JSDOM is in 'complete' by default; fire DOMContentLoaded so modules initialize.
-  if (dom.window.document.readyState !== 'complete') {
-    const e = new dom.window.Event('DOMContentLoaded');
-    dom.window.document.dispatchEvent(e);
-  } else {
-    const e = new dom.window.Event('DOMContentLoaded');
-    dom.window.document.dispatchEvent(e);
-  }
+  const e = new dom.window.Event('DOMContentLoaded');
+  dom.window.document.dispatchEvent(e);
 }
 
 // ── Test 1: controller state machine ─────────────────────────────────────
@@ -162,14 +130,9 @@ function fireReadyStateLoaded(dom) {
 {
   console.log('Test 5: SlideEngine runs on popup window too (no early-return)');
   const popup = makeDeckWindow({ url: 'http://localhost/deck.html?presenter=1&session=sess-zz' });
-  // JSDOM has no IntersectionObserver; stub it.
-  popup.window.IntersectionObserver = class { constructor() {} observe() {} unobserve() {} disconnect() {} };
-  // scrollIntoView on a non-attached node is a no-op in JSDOM; mock it.
-  popup.window.HTMLElement.prototype.scrollIntoView = function () {};
   loadScript(popup, 'premium-controller.js');
   fireReadyStateLoaded(popup);
-  const slideEngineJs = readFileSync(join(SHARED, 'slide-engine.js'), 'utf8');
-  popup.window.eval(slideEngineJs);
+  loadScript(popup, 'slide-engine.js');
   popup.window.eval('new SlideEngine();');
   if (!popup.window.PremiumDeckControls) throw new Error('PremiumDeckControls missing in popup');
   const titles = popup.window.PremiumDeckControls.getTitles();
@@ -240,26 +203,6 @@ function fireReadyStateLoaded(dom) {
 {
   console.log('Test 9: deck shortcuts survive stale popup focus state');
   const deck = makeDeckWindow({ url: 'http://localhost/deck.html' });
-  deck.window.matchMedia = deck.window.matchMedia || (() => ({
-    matches: false,
-    addEventListener: () => {},
-    removeEventListener: () => {},
-  }));
-  deck.window.requestAnimationFrame = deck.window.requestAnimationFrame || ((cb) => setTimeout(cb, 0));
-  deck.window.cancelAnimationFrame = deck.window.cancelAnimationFrame || ((id) => clearTimeout(id));
-
-  const ioInstances = [];
-  deck.window.IntersectionObserver = class {
-    constructor(cb) { this.cb = cb; ioInstances.push(this); }
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  };
-  deck.window.HTMLElement.prototype.scrollIntoView = function () {
-    for (const io of ioInstances) {
-      try { io.cb([{ target: this, isIntersecting: true }]); } catch (_) {}
-    }
-  };
 
   loadScript(deck, 'premium-controller.js');
   fireReadyStateLoaded(deck);
@@ -267,11 +210,11 @@ function fireReadyStateLoaded(dom) {
   const style = deck.window.document.createElement('style');
   style.textContent =
     readFileSync(join(SHARED, 'premium-themes.css'), 'utf8') + '\n' +
+    readFileSync(join(SHARED, 'premium-deck.css'), 'utf8') + '\n' +
     readFileSync(join(SHARED, 'premium-extras.css'), 'utf8');
   deck.window.document.head.appendChild(style);
   loadScript(deck, 'premium-controls.js');
-  const slideEngineJs = readFileSync(join(SHARED, 'slide-engine.js'), 'utf8');
-  deck.window.eval(slideEngineJs);
+  loadScript(deck, 'slide-engine.js');
   deck.window.eval('new SlideEngine();');
 
   deck.window.document.documentElement.dataset.presenterDisplay = 'on';

@@ -4,7 +4,13 @@
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from _common import discover_themes
+from _common import find_repo_shared as _find_repo_shared
 
 CLIP_TOLERANCE_PX = 6
 OVERLAP_RATIO_WARN = 0.12
@@ -73,18 +79,7 @@ OVERLAP_SELECTORS = (
 
 
 def find_repo_shared(start: Path) -> Path | None:
-    p = start.resolve().parent
-    for _ in range(8):
-        asset_shared = p / "assets" / "shared"
-        if (asset_shared / "premium-components.css").is_file():
-            return asset_shared
-        shared = p / "shared"
-        if (shared / "premium-components.css").is_file():
-            return shared
-        if p.parent == p:
-            break
-        p = p.parent
-    return None
+    return _find_repo_shared(start, sentinel="premium-components.css")
 
 
 def validate_shared_divider_css(shared_dir: Path) -> tuple[list[str], list[str]]:
@@ -154,7 +149,7 @@ def _playwright_check(html_path: Path) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
     url = html_path.resolve().as_uri()
-    themes = ["editorial", "warm", "red"]
+    themes = discover_themes()
 
     overlap_js = """
     (selectors) => {

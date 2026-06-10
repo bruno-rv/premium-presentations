@@ -7,38 +7,18 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-ROOT = Path(__file__).resolve().parent.parent
-
-REQUIRED_CSS = (
-    "premium-themes.css",
-    "premium-deck.css",
-    "premium-components.css",
-    "premium-diagrams.css",
-    "premium-annotations.css",
-    "premium-extras.css",
+from _common import (
+    JOURNEY_JS,
+    RED_CSS,
+    RED_JS,
+    REQUIRED_CSS,
+    REQUIRED_JS,
+    ROOT,
+    discover_themes,
 )
 
-REQUIRED_JS = (
-    "premium-controller.js",
-    "premium-controls.js",
-    "premium-annotations.js",
-    "premium-timer.js",
-    "premium-tts.js",
-    "premium-search.js",
-    "premium-clicker.js",
-    "premium-og-cover.js",
-    "premium-presenter.js",
-    "slide-engine.js",
-)
-
-RED_CSS = ("premium-red-brand.css",)
-RED_JS = ("premium-red-chrome.js",)
-JOURNEY_JS = ("premium-journey.js",)
-
-THEME_RE = re.compile(
-    r"html\[data-theme=(?:\"([a-z0-9][a-z0-9-]*)\"|'([a-z0-9][a-z0-9-]*)'|([a-z0-9][a-z0-9-]*))\]"
-)
 LINK_RE = re.compile(r"<link\b[^>]*>", re.I)
 SCRIPT_RE = re.compile(r"<script\b[^>]*>", re.I)
 HREF_RE = re.compile(r"\bhref=[\"']([^\"']+)[\"']", re.I)
@@ -47,16 +27,6 @@ SRC_RE = re.compile(r"\bsrc=[\"']([^\"']+)[\"']", re.I)
 
 def rel(path: Path) -> str:
     return str(path.relative_to(ROOT))
-
-
-def discover_themes() -> list[str]:
-    css = (ROOT / "assets" / "shared" / "premium-themes.css").read_text(encoding="utf-8")
-    themes: list[str] = []
-    for match in THEME_RE.finditer(css):
-        theme = next(group for group in match.groups() if group)
-        if theme not in themes:
-            themes.append(theme)
-    return themes
 
 
 def marker_present(html: str, name: str) -> bool:

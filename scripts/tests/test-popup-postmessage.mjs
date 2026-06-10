@@ -3,58 +3,16 @@
 // BroadcastChannel/localStorage delivery is unavailable. The deck must retain
 // MessageEvent.source so it can send slidechange/timer updates back.
 
-import { JSDOM } from 'jsdom';
-import { readFileSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { loadScript, makeWindow as makeBaseWindow } from './_helpers.mjs';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const SHARED = join(__dirname, '..', 'assets', 'shared');
-
-function loadScript(dom, path) {
-  dom.window.eval(readFileSync(join(SHARED, path), 'utf8'));
-}
-
-function makeWindow({ url, withSlides = true, focused = true, animationFrames = true } = {}) {
-  const html = `<!doctype html><html><head></head><body>
-    <div id="deck">
-      ${withSlides ? `
+const TWO_SLIDES_WITH_NOTES = `
       <section class="slide" id="slide-1"><h1 class="slide__display">One</h1><aside class="notes">Talk about one.</aside></section>
       <section class="slide" id="slide-2"><h1 class="slide__display">Two</h1><aside class="notes">Talk about two.</aside></section>
-      ` : ''}
-    </div>
-  </body></html>`;
-  const dom = new JSDOM(html, {
-    url,
-    runScripts: 'outside-only',
-    pretendToBeVisual: true,
-  });
-  if (!dom.window.crypto || !dom.window.crypto.randomUUID) {
-    dom.window.crypto = dom.window.crypto || {};
-    dom.window.crypto.randomUUID = () => 'sess-' + Math.random().toString(36).slice(2, 10);
-  }
-  Object.defineProperty(dom.window.document, 'hasFocus', { value: () => focused, configurable: true });
-  dom.window.BroadcastChannel = undefined;
-  dom.window.matchMedia = dom.window.matchMedia || (() => ({
-    matches: false,
-    addEventListener: () => {},
-    removeEventListener: () => {},
-  }));
-  const ioInstances = [];
-  dom.window.IntersectionObserver = class {
-    constructor(cb) { this.cb = cb; ioInstances.push(this); }
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  };
-  dom.window.HTMLElement.prototype.scrollIntoView = function () {
-    for (const io of ioInstances) {
-      try { io.cb([{ target: this, isIntersecting: true }]); } catch (_) {}
-    }
-  };
-  dom.window.requestAnimationFrame = animationFrames ? ((cb) => setTimeout(cb, 0)) : (() => 0);
-  dom.window.cancelAnimationFrame = (id) => clearTimeout(id);
-  return dom;
+`;
+
+function makeWindow(options) {
+  // No BroadcastChannel — simulate the file:// opaque-origin restriction.
+  return makeBaseWindow({ slides: TWO_SLIDES_WITH_NOTES, bc: 'none', ...options });
 }
 
 function connectDirectPostMessage(deck, popup) {
@@ -86,7 +44,7 @@ loadScript(deck, 'premium-controller.js');
 await new Promise((r) => setTimeout(r, 0));
 loadScript(deck, 'premium-timer.js');
 loadScript(deck, 'premium-controls.js');
-deck.window.eval(readFileSync(join(SHARED, 'slide-engine.js'), 'utf8'));
+loadScript(deck, 'slide-engine.js');
 deck.window.eval('new SlideEngine();');
 loadScript(deck, 'premium-presenter.js');
 

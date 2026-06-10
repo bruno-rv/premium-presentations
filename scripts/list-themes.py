@@ -5,24 +5,12 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
+import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-ROOT = Path(__file__).resolve().parent.parent
-THEME_RE = re.compile(
-    r"html\[data-theme=(?:\"([a-z0-9][a-z0-9-]*)\"|'([a-z0-9][a-z0-9-]*)'|([a-z0-9][a-z0-9-]*))\]"
-)
-
-
-def discover_themes(css_path: Path) -> list[str]:
-    css = css_path.read_text(encoding="utf-8")
-    themes: list[str] = []
-    for match in THEME_RE.finditer(css):
-        theme = next(group for group in match.groups() if group)
-        if theme not in themes:
-            themes.append(theme)
-    return themes
+from _common import ROOT, discover_themes
 
 
 def main() -> int:

@@ -7,8 +7,8 @@ import unittest
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parent.parent
-VALIDATOR_PATH = ROOT / "scripts" / "validate-runtime-contract.py"
+ROOT = Path(__file__).resolve().parent.parent.parent
+VALIDATOR_PATH = ROOT / "scripts" / "validate_runtime_contract.py"
 
 
 def load_validator():

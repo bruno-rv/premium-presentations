@@ -4,7 +4,7 @@ import { readFileSync } from 'fs';
 
 const bundle = process.argv[2];
 if (!bundle) {
-  console.error('Usage: node scripts/verify_bundle.mjs assets/decks/<slug>/<slug>-slides.html');
+  console.error('Usage: node scripts/tests/verify_bundle.mjs assets/decks/<slug>/<slug>-slides.html');
   process.exit(2);
 }
 const html = readFileSync(bundle, 'utf8');

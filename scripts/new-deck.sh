@@ -69,9 +69,7 @@ sed \
   "$TEMPLATE" > "$SLIDES_FILE"
 
 python3 "$ROOT/scripts/bundle_deck.py" "$SLIDES_FILE" --in-place
-export VALIDATE_HTML="$SLIDES_FILE"
-export VALIDATE_SPEC=""
-python3 "$ROOT/scripts/validate_deck.py" || exit 1
+python3 "$ROOT/scripts/validate_deck.py" "$SLIDES_FILE" || exit 1
 
 if [[ "$COUNT" -ge 8 ]]; then
   SPEC_TEMPLATE="$ROOT/references/slide-spec-template.md"
@@ -80,41 +78,7 @@ if [[ "$COUNT" -ge 8 ]]; then
     exit 1
   fi
   cp "$SPEC_TEMPLATE" "$SPEC_FILE"
-
-  python3 - "$SPEC_FILE" "$SLUG" "$TITLE" "$COUNT" <<'PY'
-import sys, re
-path, slug, title, count = sys.argv[1:5]
-count = int(count)
-text = open(path, encoding="utf-8").read()
-text = text.replace("{CODE}", slug.upper().replace("-", " "))
-text = text.replace("{code}", slug)
-text = text.replace("{Full title}", title)
-text = text.replace("{N}", str(max(15, count // 2)))
-
-rows = []
-for i in range(1, count + 1):
-    if i == 1:
-        t, typ, pat = "Title", "Title", "slide--title"
-    elif i == 2:
-        t, typ, pat = "Hook", "Hook Quote", "slide--quote"
-    elif i == count:
-        t, typ, pat = "Closing", "Closing Quote", "slide--quote"
-    elif i in (4, 8, 12) and count >= 12:
-        t, typ, pat = f"Act break {i}", "Divider", "DIV+ divider-act"
-    else:
-        t, typ, pat = f"Slide {i}", "Content", "slide / diagram / table"
-    rows.append(f"| {i} | {typ} | {t} | TBD | {pat} | TBD |")
-
-table = "| # | Type | Title | Key Content | Visual Pattern | Why Panel |\n|---|------|-------|-------------|----------------|----------|\n" + "\n".join(rows)
-text = re.sub(
-    r"\| # \| Type \| Title \| Key Content \| Visual Pattern \| Why Panel \|\n\|---\|.*?\n(\| 1 \|.*?\n)?",
-    table + "\n",
-    text,
-    count=1,
-    flags=re.DOTALL,
-)
-open(path, "w", encoding="utf-8").write(text)
-PY
+  python3 "$ROOT/scripts/spec_generator.py" "$SPEC_FILE" "$SLUG" "$TITLE" "$COUNT"
 
   echo "Created spec ($COUNT slides): $SPEC_FILE"
 else
@@ -126,12 +90,12 @@ echo "Deck scaffolded (Premium Presentations):"
 echo "  Directory: $DECK_DIR"
 echo "  Slides:    $SLIDES_FILE (standalone single file)"
 echo "  Theme:     $FRAMEWORK (switch live in deck controls)"
-echo "  Re-bundle: ./scripts/bundle-deck.sh \"$SLIDES_FILE\" --in-place  (after editing assets/shared/)"
+echo "  Re-bundle: python3 scripts/bundle_deck.py \"$SLIDES_FILE\" --in-place  (after editing assets/shared/)"
 echo "  Target:    $COUNT slides"
 echo ""
 if [[ -f "$SPEC_FILE" ]]; then
-  echo "Validate: ./scripts/validate-deck.sh \"$SLIDES_FILE\" \"$SPEC_FILE\""
+  echo "Validate: python3 scripts/validate_deck.py \"$SLIDES_FILE\" \"$SPEC_FILE\""
 else
-  echo "Validate: ./scripts/validate-deck.sh \"$SLIDES_FILE\""
+  echo "Validate: python3 scripts/validate_deck.py \"$SLIDES_FILE\""
 fi
 echo "Open:     open \"$SLIDES_FILE\""

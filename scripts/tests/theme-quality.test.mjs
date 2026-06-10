@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { JSDOM } from 'jsdom';
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 function read(path) {
   return readFileSync(resolve(root, path), 'utf8');
@@ -32,6 +32,16 @@ test('studio gallery links only to preview-safe HTML', () => {
       `${absPath} should not expose raw scaffold placeholders from the studio gallery`,
     );
   }
+});
+
+test('theme visuals use the generic asset path', () => {
+  const controlsScript = read('assets/shared/premium-controls.js');
+  const manifest = JSON.parse(read('assets/shared/assets/theme-visuals/manifest.json'));
+  const deprecatedPath = ['chatgpt', 'theme-visuals'].join('-');
+
+  assert.match(controlsScript, /assets\/theme-visuals\//);
+  assert.doesNotMatch(controlsScript, new RegExp(deprecatedPath));
+  assert.ok(manifest.editorial.assets.some((asset) => asset.src === 'editorial-hero.webp'));
 });
 
 test('theme preference is scoped by deck path, not restored globally', async () => {
@@ -100,7 +110,8 @@ test('theme font stacks avoid reported overused families and keep warm hierarchy
     'assets/studio/index.html',
     'assets/templates/premium-base.html',
     'assets/templates/red-base.html',
-    'assets/templates/warm-signal-base.html',
+    'assets/templates/warm-base.html',
+    'assets/templates/editorial-base.html',
     'assets/templates/cupertino-base.html',
     'assets/templates/preview-editorial.html',
     'assets/templates/preview-warm.html',

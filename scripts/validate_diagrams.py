@@ -4,7 +4,12 @@
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from _common import find_repo_shared as _find_repo_shared
 
 # Legacy rules that caused clipped diagrams in production
 CLIP_HEIGHT_PATTERNS = (
@@ -34,18 +39,7 @@ REQUIRED_MERMAID_JS_MARKERS = (
 
 
 def find_repo_shared(start: Path) -> Path | None:
-    p = start.resolve().parent
-    for _ in range(8):
-        asset_shared = p / "assets" / "shared"
-        if (asset_shared / "premium-diagrams.css").is_file():
-            return asset_shared
-        shared = p / "shared"
-        if (shared / "premium-diagrams.css").is_file():
-            return shared
-        if p.parent == p:
-            break
-        p = p.parent
-    return None
+    return _find_repo_shared(start, sentinel="premium-diagrams.css")
 
 
 def augment_bundle_for_diagrams(html: str, bundle: str, html_path: Path) -> str:
@@ -118,7 +112,7 @@ def validate_inline_scripts(html: str) -> tuple[list[str], list[str]]:
             continue
         if re.search(r"</script>", body, re.I):
             errors.append(
-                "Inline <script> contains literal </script> — breaks controls/shortcuts; re-bundle with bundle-deck.py"
+                "Inline <script> contains literal </script> — breaks controls/shortcuts; re-bundle with bundle_deck.py"
             )
             break
     return errors, warnings

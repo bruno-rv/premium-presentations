@@ -1,69 +1,12 @@
 // Test that timer controls in the popup drive the deck's PremiumTimer.
 // Reproduces: popup loads, user clicks Start, deck's timer should start.
 
-import { JSDOM } from 'jsdom';
-import { readFileSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { FakeBC, installGlobalFakeBC, loadScript, makeWindow as makeBaseWindow } from './_helpers.mjs';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const SHARED = join(__dirname, '..', 'assets', 'shared');
+installGlobalFakeBC();
 
-class FakeBC {
-  constructor(name) {
-    this.name = name;
-    FakeBC.channels.set(name, FakeBC.channels.get(name) || []);
-    FakeBC.channels.get(name).push(this);
-    this.listeners = [];
-  }
-  postMessage(data) {
-    const peers = FakeBC.channels.get(this.name) || [];
-    for (const p of peers) {
-      if (p === this) continue;
-      for (const l of p.listeners) try { l({ data }); } catch (e) { console.error('BC handler err', e); }
-    }
-  }
-  addEventListener(_, l) { this.listeners.push(l); }
-  close() {}
-}
-FakeBC.channels = new Map();
-globalThis.BroadcastChannel = FakeBC;
-
-function makeWindow({ url, withSlides = true, focused = true } = {}) {
-  const html = `<!doctype html><html><head></head><body>
-    <div id="deck">
-      ${withSlides ? `
-      <section class="slide" id="slide-1"><h1 class="slide__display">One</h1></section>
-      <section class="slide" id="slide-2"><h1 class="slide__display">Two</h1></section>
-      ` : ''}
-    </div>
-  </body></html>`;
-  const dom = new JSDOM(html, {
-    url, runScripts: 'outside-only', pretendToBeVisual: true,
-  });
-  if (!dom.window.crypto || !dom.window.crypto.randomUUID) {
-    dom.window.crypto = dom.window.crypto || {};
-    dom.window.crypto.randomUUID = () => 'sess-' + Math.random().toString(36).slice(2, 10);
-  }
-  Object.defineProperty(dom.window.document, 'hasFocus', { value: () => focused, configurable: true });
-  const ioInstances = [];
-  dom.window.IntersectionObserver = class {
-    constructor(cb) { this.cb = cb; ioInstances.push(this); }
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  };
-  dom.window.HTMLElement.prototype.scrollIntoView = function () {
-    for (const io of ioInstances) try { io.cb([{ target: this, isIntersecting: true }]); } catch (_) {}
-  };
-  dom.window.requestAnimationFrame = (cb) => setTimeout(cb, 0);
-  dom.window.BroadcastChannel = FakeBC;
-  dom.window.matchMedia = dom.window.matchMedia || (() => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }));
-  return dom;
-}
-
-function loadScript(dom, path) {
-  dom.window.eval(readFileSync(join(SHARED, path), 'utf8'));
+function makeWindow(options) {
+  return makeBaseWindow({ bc: FakeBC, ...options });
 }
 
 console.log('Test: popup Start button → deck timer starts');
@@ -71,8 +14,7 @@ const deck = makeWindow({ url: 'http://localhost/deck.html', focused: false });
 loadScript(deck, 'premium-controller.js');
 await new Promise((r) => setTimeout(r, 0));
 loadScript(deck, 'premium-timer.js');
-const slideEngineJs = readFileSync(join(SHARED, 'slide-engine.js'), 'utf8');
-deck.window.eval(slideEngineJs);
+loadScript(deck, 'slide-engine.js');
 deck.window.eval('new SlideEngine();');
 loadScript(deck, 'premium-presenter.js');
 

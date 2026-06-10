@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import os
 import re
 import sys
 from pathlib import Path
@@ -154,8 +153,8 @@ def validate(html_path: Path, spec_path: str = "") -> int:
 
 
 def main() -> int:
-    html = os.environ.get("VALIDATE_HTML") or (sys.argv[1] if len(sys.argv) > 1 else "")
-    spec = os.environ.get("VALIDATE_SPEC", "") or (sys.argv[2] if len(sys.argv) > 2 else "")
+    html = sys.argv[1] if len(sys.argv) > 1 else ""
+    spec = sys.argv[2] if len(sys.argv) > 2 else ""
     if not html or not Path(html).is_file():
         print("Usage: validate_deck.py <deck.html> [slide-spec.md]", file=sys.stderr)
         return 1

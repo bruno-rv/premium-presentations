@@ -10,9 +10,10 @@
   "homepage": "https://github.com/bruno-rv/premium-presentations",
   "type": "module",
   "scripts": {
-    "test": "node --test theme-quality.test.mjs",
-    "test:presenter": "node presenter-smoke.mjs",
-    "test:theme": "node --test theme-quality.test.mjs"
+    "test": "node --test tests/theme-quality.test.mjs",
+    "test:presenter": "node tests/presenter-smoke.mjs",
+    "test:popup": "node tests/test-popup-bc.mjs && node tests/test-popup-e2e.mjs && node tests/test-popup-postmessage.mjs && node tests/test-popup-storage.mjs && node tests/test-popup-timer.mjs",
+    "test:bundle": "node tests/verify_bundle.mjs"
   },
   "devDependencies": {
     "jsdom": "^25.0.0"

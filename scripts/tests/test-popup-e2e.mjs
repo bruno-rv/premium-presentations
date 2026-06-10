@@ -3,43 +3,11 @@
 // delivers a jump control to the deck; (3) deck applies the jump and re-broadcasts
 // snapshot; (4) popup notes panel updates.
 
-import { JSDOM } from 'jsdom';
-import { readFileSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { FakeBC, installGlobalFakeBC, loadScript, makeWindow as makeBaseWindow } from './_helpers.mjs';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const SHARED = join(__dirname, '..', 'assets', 'shared');
+installGlobalFakeBC();
 
-// Real BroadcastChannel backed by a per-process map (cross-DOM).
-class FakeBC {
-  constructor(name) {
-    this.name = name;
-    FakeBC.channels.set(name, FakeBC.channels.get(name) || []);
-    FakeBC.channels.get(name).push(this);
-    this.listeners = [];
-  }
-  postMessage(data) {
-    const peers = FakeBC.channels.get(this.name) || [];
-    for (const p of peers) {
-      if (p === this) continue;
-      for (const l of p.listeners) try { l({ data }); } catch (e) { console.error('BC handler err', e); }
-    }
-  }
-  addEventListener(_, l) { this.listeners.push(l); }
-  close() {}
-}
-FakeBC.channels = new Map();
-globalThis.BroadcastChannel = FakeBC;
-
-function loadScript(dom, path) {
-  dom.window.eval(readFileSync(join(SHARED, path), 'utf8'));
-}
-
-function makeWindow({ url, withSlides = true, focused = true } = {}) {
-  const html = `<!doctype html><html><head></head><body>
-    <div id="deck">
-      ${withSlides ? `
+const FOUR_SLIDES = `
       <section class="slide" id="slide-1"><h1 class="slide__display">One</h1><aside class="notes">Talk about one.</aside></section>
       <section class="slide" id="slide-2"><h1 class="slide__display">Two</h1><aside class="notes">Talk about two.</aside></section>
       <section class="slide" id="slide-3"><h1 class="slide__display">Three</h1><aside class="notes">Talk about three.</aside></section>
@@ -47,40 +15,11 @@ function makeWindow({ url, withSlides = true, focused = true } = {}) {
         <p>First sentence about four. Second sentence with detail. Third sentence that should be cut off.</p>
         <ul><li>Bullet one</li><li>Bullet two</li><li>Bullet three</li></ul>
       </div></section>
-      ` : ''}
-    </div>
-  </body></html>`;
-  const dom = new JSDOM(html, {
-    url, runScripts: 'outside-only', pretendToBeVisual: true,
-  });
-  if (!dom.window.crypto || !dom.window.crypto.randomUUID) {
-    dom.window.crypto = dom.window.crypto || {};
-    dom.window.crypto.randomUUID = () => 'sess-' + Math.random().toString(36).slice(2, 10);
-  }
-  Object.defineProperty(dom.window.document, 'hasFocus', { value: () => focused, configurable: true });
-  // JSDOM stubs. IntersectionObserver needs a working `observe()` callback
-  // path so SlideEngine's scroll → current update works in tests. We give
-  // it a minimal implementation that fires the registered callback with the
-  // element as `entry.target` so `slides.indexOf(e.target)` resolves.
-  const ioInstances = [];
-  dom.window.IntersectionObserver = class {
-    constructor(cb) { this.cb = cb; ioInstances.push(this); }
-    observe(el) { /* no-op; test fires explicitly via __simulateScroll */ }
-    unobserve() {}
-    disconnect() {}
-  };
-  dom.window.HTMLElement.prototype.scrollIntoView = function () {
-    // Fire the registered IntersectionObserver callback synchronously so
-    // SlideEngine's `this.current = slides.indexOf(e.target)` updates. This
-    // mirrors the real browser behavior triggered by the actual scroll.
-    for (const io of ioInstances) {
-      try { io.cb([{ target: this, isIntersecting: true }]); } catch (_) {}
-    }
-  };
-  dom.window.requestAnimationFrame = (cb) => setTimeout(cb, 0);
+`;
+
+function makeWindow(options) {
   // BroadcastChannel must be visible on the window, not just globalThis.
-  dom.window.BroadcastChannel = FakeBC;
-  return dom;
+  return makeBaseWindow({ slides: FOUR_SLIDES, bc: FakeBC, ...options });
 }
 
 function fireLoaded(dom) {
@@ -97,8 +36,7 @@ const deck = makeWindow({ url: 'http://localhost/deck.html', focused: true });
 loadScript(deck, 'premium-controller.js');
 await fireLoaded(deck);
 // Now load SlideEngine
-const slideEngineJs = readFileSync(join(SHARED, 'slide-engine.js'), 'utf8');
-deck.window.eval(slideEngineJs);
+loadScript(deck, 'slide-engine.js');
 deck.window.eval('new SlideEngine();');
 const D = deck.window.PremiumDeckControls;
 if (!D) throw new Error('deck PremiumDeckControls missing');
@@ -134,7 +72,7 @@ if (!titles[0]) throw new Error('first item empty title');
 items[1].click();
 await new Promise((r) => setTimeout(r, 100));
 
-// Deck should now be on slide index 1 (JSDOM's stubbed IntersectionObserver
+// Deck should now be on slide index 1 (the stubbed IntersectionObserver
 // fires the callback synchronously on scrollIntoView, so this.current
 // updates the same way it would in a real browser).
 const state = D.getState();
