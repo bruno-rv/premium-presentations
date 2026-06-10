@@ -4,17 +4,17 @@
 
 - Re-bundling
 - Mermaid diagrams
-- Title, quote, content, stat, divider, timeline, and table patterns
+- Title, quote, content, stat, divider, and diagram patterns
 - Speaker notes
 - Validation commands
 
-Decks are **one standalone `.html` file** (engine inlined via `bundle-deck.sh`). Scaffold with `new-deck.sh`, then edit slides in place.
+Decks are **one standalone `.html` file** (engine inlined via `scripts/bundle_deck.py`). Scaffold with `new-deck.sh`, then edit slides in place.
 
 ## Re-bundle after changing `assets/shared/`
 
 ```bash
-./scripts/bundle-deck.sh assets/decks/my-talk/my-talk-slides.linked.html -o assets/decks/my-talk/my-talk-slides.html
-# or --in-place on a file that still has ../../shared/ links
+python3 scripts/bundle_deck.py assets/decks/my-talk/my-talk-slides.html --in-place --force
+# or -o <output.html> on a file that still has ../../shared/ links
 ```
 
 ## Mermaid diagram slide (content only — engine is already in the file)
@@ -75,6 +75,9 @@ Minimal copy-paste patterns below. Layout CSS: `assets/shared/premium-deck.css`.
 
 ## Stat row
 
+For the full canonical snippet, use
+`assets/templates/components/stats-row.snippet.html`.
+
 ```html
 <div class="stats-row reveal">
   <div class="stat-card">
@@ -121,4 +124,25 @@ flowchart LR
     </div>
   </div>
 </section>
+```
+
+## Speaker notes
+
+Add an `<aside class="notes">` inside any slide. Notes are hidden from the
+audience and surface in the presenter popup (and its no-notes summary
+fallback uses the slide's lead + bullets).
+
+```html
+<section class="slide">
+  <h2 class="slide__heading reveal">Slide title</h2>
+  <p class="slide__body reveal">Visible content.</p>
+  <aside class="notes">What to actually say about this slide.</aside>
+</section>
+```
+
+## Validation commands
+
+```bash
+python3 scripts/validate_deck.py assets/decks/<slug>/<slug>-slides.html assets/decks/<slug>/<slug>-slide-spec.md
+./scripts/validate_runtime_contract.py
 ```

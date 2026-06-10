@@ -1,12 +1,13 @@
 ---
 name: premium-presentations
 description: >-
-  Generate, edit, validate, and bundle complete Premium Presentations HTML slide
-  decks from this self-contained repository skill. Use when creating or
+  Generates, edits, validates, and bundles complete Premium Presentations HTML
+  slide decks from this self-contained repository skill. Use when creating or
   modifying presentations, slide decks, talks, lectures, workshops, pitches,
   browser-rendered HTML decks, presenter-mode decks, themed decks, Mermaid
-  diagram decks, or reusable presentation templates with the bundled scripts,
-  themes, runtime, assets, and validators.
+  diagram decks, or reusable presentation templates, and when bundling decks,
+  adding speaker timers, annotations, OG covers, or validating deck output
+  with the bundled scripts, themes, runtime, assets, and validators.
 ---
 
 # Premium Presentations
@@ -32,7 +33,7 @@ Themes come from `html[data-theme="..."]` selectors in
 
 ```bash
 ./scripts/new-deck.sh <theme> <slug> "<title>" <slide_count>
-./scripts/validate-deck.sh assets/decks/<slug>/<slug>-slides.html assets/decks/<slug>/<slug>-slide-spec.md
+python3 scripts/validate_deck.py assets/decks/<slug>/<slug>-slides.html assets/decks/<slug>/<slug>-slide-spec.md
 ```
 
 Use lowercase hyphenated slugs. For unspecified themes, use the first theme
@@ -43,25 +44,22 @@ only when the user explicitly asks.
 
 ## Runtime Contract
 
-Keep generated decks on the shared runtime stack:
+Generated decks must carry the shared CSS/JS runtime stack — the full module
+table lives in `references/runtime.md`. Conditional additions:
 
-- CSS: `premium-themes.css`, `premium-deck.css`, `premium-components.css`,
-  `premium-diagrams.css`, `premium-annotations.css`, `premium-extras.css`.
-- JS: `premium-controller.js`, `premium-controls.js`,
-  `premium-annotations.js`, `premium-timer.js`, `premium-tts.js`,
-  `premium-search.js`, `premium-clicker.js`, `premium-og-cover.js`,
-  `premium-presenter.js`, `slide-engine.js`.
 - Journey SVG slides that use `.journey-stage` also include
   `premium-journey.js`.
+- Mermaid diagram slides also include `premium-mermaid.js` and
+  `premium-diagrams.css` handling.
 - Red decks also include `premium-red-brand.css` and `premium-red-chrome.js`.
 
-Run `./scripts/validate-runtime-contract.py` after template, theme, bundler, or
-shared runtime edits.
+Run `./scripts/validate_runtime_contract.py` after template, theme, bundler,
+or shared runtime edits.
 
 ## Reference Files
 
-- `references/runtime.md`: runtime modules, extension points, theme visuals,
-  Mermaid, presenter/chrome behavior.
+- `references/runtime.md`: runtime module table, extension points, theme
+  visuals, Mermaid, presenter/chrome behavior.
 - `references/design.md`: audience, style, anti-patterns, and deck design
   principles.
 - `references/components.md`: reusable visual components and snippet IDs.
@@ -77,18 +75,19 @@ Load only the reference needed for the current task.
 - Start from `scripts/new-deck.sh`; do not create a parallel scaffold.
 - Use `assets/templates/` and `assets/shared/` as the source of truth.
 - Use `assets/templates/components/` snippets for advanced visual blocks.
-- Keep one dominant idea per slide.
-- Keep branding generic unless the user explicitly requests brand chrome.
-- Do not add closing footer-note rows, "NEXT:" citations, or lesson-pill rows.
 - Use the provided runtime controls instead of ad hoc controls.
+- Follow `references/design.md` for slide design principles (one dominant
+  idea per slide, generic branding unless requested, no closing footer-note
+  rows, "NEXT:" citations, or lesson-pill rows).
 
 ## Validate
 
-Before completion, run the checks that match the change:
+These commands verify generated deck output (skill-package CI checks live in
+`README.md`). Before completion, run the checks that match the change:
 
 ```bash
-./scripts/validate-runtime-contract.py
-./scripts/validate-deck.sh assets/decks/<slug>/<slug>-slides.html assets/decks/<slug>/<slug>-slide-spec.md
+./scripts/validate_runtime_contract.py
+python3 scripts/validate_deck.py assets/decks/<slug>/<slug>-slides.html assets/decks/<slug>/<slug>-slide-spec.md
 git diff --check
 ```
 
@@ -96,7 +95,7 @@ For shared runtime or template edits, re-bundle affected generated HTML files:
 
 ```bash
 python3 scripts/bundle_deck.py assets/decks/<slug>/<slug>-slides.html --in-place --force
-./scripts/validate-runtime-contract.py
+./scripts/validate_runtime_contract.py
 ```
 
 When changing browser behavior, run a browser smoke test for navigation, theme

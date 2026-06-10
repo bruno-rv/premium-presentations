@@ -1,28 +1,51 @@
-# Premium Presentations — Reference
+# Premium Presentations — Runtime Reference
 
 ## Contents
 
-- Shared runtime
+- Shared runtime module table
 - Diagram slides
 - Theme discovery, visuals, and chrome
 - Theme extension pattern
 - Mermaid and theme changes
 - SlideEngine
 - File naming
-- Anti-patterns
 
 ## Shared runtime (`assets/shared/`)
 
+Every generated deck carries the core modules. Conditional modules are listed
+at the bottom of each table.
+
+### CSS
+
 | File | Role |
 |------|------|
-| `premium-themes.css` | `html[data-theme="..."]` CSS variables; source of truth for discovered themes |
-| `premium-deck.css` | Slide layout, typography, tables, KPIs |
-| `premium-components.css` | Creative blocks: shimmer, compare-split, timeline, glass/code, journey SVG, bars, setup-flow — see [components.md](components.md) |
-| `premium-controls.js` | Theme `<select>`, theme visual injection, 3D background, curtain, timer/PDF controls |
-| `premium-controller.js` | Shared deck state, navigation API, and presenter/clicker event bridge |
-| `premium-diagrams.css` | Diagram slide layout + Excalidraw-style canvas |
-| `premium-mermaid.js` | Mermaid `handDrawn` theme + auto-fit + clip detection + theme re-render |
-| `premium-journey.js` | Opt-in runtime for `.journey-stage` SVG path slides; bundled when journey markup is present |
+| `premium-themes.css` | `html[data-theme="..."]` CSS variables only; source of truth for discovered themes |
+| `premium-deck.css` | Deck structure, slide typography, tables, KPIs, scroll chrome, controls panel, 3D parallax background |
+| `premium-components.css` | Creative slide blocks: shimmer, compare-split, timeline, glass/code, journey SVG, bars, setup-flow, divider — see [components.md](components.md) |
+| `premium-diagrams.css` | Diagram slide layout, Excalidraw-style canvas, zoom/pan viewport, Mermaid error panel |
+| `premium-annotations.css` | Marker tool and laser pointer styles |
+| `premium-extras.css` | Runtime chrome beyond layout: curtain, PDF export, embed mode, speaker timer pill, presenter popup UI, clicker status toast |
+| `premium-red-brand.css` | Red theme only: brand bar and red mark classes |
+
+### JS
+
+| File | Role |
+|------|------|
+| `slide-engine.js` | `SlideEngine` — scroll-snap navigation and the `window.PremiumDeckControls` API; progress bar, dots (labels from heading/blockquote/cite/`data-nav-title`), counter, hints, keyboard/touch, `IntersectionObserver` for `.visible`/`.reveal`; dots auto-hide after 5s |
+| `premium-controller.js` | Two-window focus-ownership state machine (`deck`/`popup`/`none`) exposed as `window.PremiumController`; presenter/clicker windows coordinate through it |
+| `premium-controls.js` | Theme `<select>` + live switching, theme visual injection, 3D background, curtain, controls panel DOM, non-nav keyboard shortcuts |
+| `premium-annotations.js` | Marker tool + laser pointer |
+| `premium-timer.js` | Speaker countdown timer, pace tracking, alerts |
+| `premium-tts.js` | SpeechSynthesis read-aloud |
+| `premium-search.js` | Cmd+K fuzzy slide search |
+| `premium-clicker.js` | WebHID clicker support + Shift+C keyboard binding |
+| `premium-og-cover.js` | PNG slide export for OG covers |
+| `premium-presenter.js` | Presenter popup lifecycle, BroadcastChannel/postMessage/localStorage bridge, presenter UI DOM |
+| `premium-mermaid.js` | Conditional (Mermaid markup): CDN load, `handDrawn` theme, auto-fit, clip detection, zoom/pan, theme re-render |
+| `premium-journey.js` | Conditional (`.journey-stage` markup): SVG path journey animation |
+| `premium-red-chrome.js` | Conditional (red decks): brand bar + hero mark injection |
+
+Linked decks use `../../shared/…` from `assets/decks/<slug>/`.
 
 ### Diagram slides (required markup)
 
@@ -33,13 +56,10 @@ Use `assets/templates/diagram-slide.snippet.html`. Validator enforces:
 - No `max-height: 52vh|62vh` on `.mermaid-wrap` (clips content)
 - Runtime: `fitMermaidDiagrams`, `bindMermaidFit`, `bindDiagramZoom`, `reportDiagramFit`
 - **Diagram zoom:** scroll/pinch on canvas, drag to pan when zoomed, toolbar **+ / − / %**, double-click reset; **`+` `−` `0`** on diagram slides
-| `slide-engine.js` | `SlideEngine` — scroll-snap nav; dot labels from heading, blockquote, cite, `data-nav-title`, etc.; auto-hide after 5s (click dot rail to show again; hover still peeks) |
-
-Linked decks use `../../shared/…` from `assets/decks/<slug>/`.
 
 **Theme discovery:** run `./scripts/list-themes.py`, or inspect `html[data-theme="..."]` selectors in `assets/shared/premium-themes.css`. Do not hardcode the current theme names in generators or skill instructions.
 
-**Runtime contract:** run `./scripts/validate-runtime-contract.py` after any
+**Runtime contract:** run `./scripts/validate_runtime_contract.py` after any
 template, theme, bundler, or shared runtime edit. It verifies discovered theme
 scaffold templates, preview templates, and generated deck HTML files carry the
 common CSS/JS stack, plus red brand modules where the active template/deck is
@@ -47,7 +67,7 @@ red, plus `premium-journey.js` when a file contains `.journey-stage` markup.
 
 **Live theme switch:** `PremiumPresentations.setTheme('<theme>')` or UI control. The control panel discovers themes from loaded CSS. Dispatches `premium-theme-change` on `<html>`.
 
-**Theme visuals:** `.slide--title` receives a `hero` visual; `.slide--divider` receives a `map` visual. Default assets follow `assets/shared/assets/chatgpt-theme-visuals/<theme>-<role>.png`. Override with `data-theme-visual-<theme>-<role>` or `window.PremiumThemeVisuals`; disable per slide with `data-theme-visual="off"`.
+**Theme visuals:** `.slide--title` receives a `hero` visual; `.slide--divider` receives a `map` visual. Default assets follow `assets/shared/assets/theme-visuals/<theme>-<role>.webp`. Override with `data-theme-visual-<theme>-<role>` or `window.PremiumThemeVisuals`; disable per slide with `data-theme-visual="off"`.
 
 **3D background:** `PremiumPresentations.setParallax(true)` or UI button / **`3`**; sets `data-parallax="on"`. Disabled when `prefers-reduced-motion`.
 
@@ -58,9 +78,10 @@ red, plus `premium-journey.js` when a file contains `.journey-stage` markup.
 To add a theme:
 
 1. Add `html[data-theme="<theme>"]` tokens in `assets/shared/premium-themes.css`.
-2. Optionally add `assets/templates/<theme>-base.html` for theme-specific chrome.
-3. Optionally add visuals in `assets/shared/assets/chatgpt-theme-visuals/` using
-   `<theme>-hero.png` and `<theme>-map.png`.
+2. Optionally add `assets/templates/<theme>-base.html` for theme-specific chrome
+   (themes without one fall back to `assets/templates/premium-base.html`).
+3. Optionally add visuals in `assets/shared/assets/theme-visuals/` using
+   `<theme>-hero.webp` and `<theme>-map.webp`.
 4. Load custom webfonts through template `<link>` tags or
    `data-theme-fonts-<theme>="https://..."` on `<html>`.
 5. Optionally add a focused `themes-<theme>.md` reference if the theme has
@@ -117,12 +138,5 @@ document.addEventListener('DOMContentLoaded', () => new SlideEngine());
 | HTML | `{slug}-slides.html` |
 | Spec (8+ slides) | `{slug}-slide-spec.md` |
 
----
-
-## Anti-patterns
-
-- Reveal.js / Slidev
-- Multiple ideas per slide
-- Missing `prefers-reduced-motion` (in `premium-deck.css`)
-- Course-specific branding unless explicitly requested
-- Fragment stepping libraries (use `.reveal` stagger only)
+For deck anti-patterns (framework choices, branding, motion), see
+[design.md](design.md).

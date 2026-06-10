@@ -28,6 +28,13 @@ Editorial, technical, high-polish.
 - Nested card grids.
 - Low-contrast muted text.
 - AI-default palettes that make unrelated decks feel interchangeable.
+- Reveal.js / Slidev or other external slide frameworks — use the bundled
+  SlideEngine runtime.
+- Fragment stepping libraries — use `.reveal` stagger only.
+- Multiple ideas per slide.
+- Missing `prefers-reduced-motion` support (provided by `premium-deck.css`).
+- Course-specific branding unless explicitly requested.
+- Closing footer-note rows, "NEXT:" citations, or lesson-pill rows.
 
 ## Principles
 

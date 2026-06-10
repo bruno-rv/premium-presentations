@@ -84,22 +84,10 @@ Example row:
 | Branded journey / neon nodes / metaphor | Custom SVG (P14, P9) |
 | Tabular metrics | `stats-row`, `bar-chart`, or `data-table` |
 
-## Source lessons (frm-ai-data-engineer)
-
-| Pattern | Reference lesson |
-|---------|------------------|
-| P14 Journey | AL-0 |
-| Timeline | AL-2 |
-| Chaos vs order / circular flow | AL-5 |
-| P9 Topology | AL-7 |
-| Stage cards | AL-3 |
-| Setup flow + checklist | AL-11 |
-| Glass + code | AL-5, AL-11 |
-
 ## Link in deck HTML
 
 ```html
 <link rel="stylesheet" href="../../shared/premium-components.css">
 ```
 
-Generated decks inline this automatically when the link is present in the source `.linked.html` under `assets/decks/`.
+`scripts/bundle_deck.py` inlines this automatically when the link is present in a deck under `assets/decks/`.

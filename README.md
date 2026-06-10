@@ -43,7 +43,7 @@ assets/decks/my-talk/my-talk-slides.html
 Validate it:
 
 ```bash
-./scripts/validate-deck.sh assets/decks/my-talk/my-talk-slides.html assets/decks/my-talk/my-talk-slide-spec.md
+python3 scripts/validate_deck.py assets/decks/my-talk/my-talk-slides.html assets/decks/my-talk/my-talk-slide-spec.md
 ```
 
 Open the studio:
@@ -78,17 +78,21 @@ commit a finished deck.
 runtime details, design rules, component patterns, examples, theme notes, and
 the slide-spec template.
 
-`scripts/` contains deterministic tooling for scaffolding, bundling, testing,
-and validation.
+`scripts/` contains deterministic tooling for scaffolding, bundling, and
+validation. Its test suite lives in `scripts/tests/`.
 
 ## Validate The Skill
 
+These commands test the skill package itself (deck-output validation lives in
+`SKILL.md`):
+
 ```bash
-python3 scripts/test_skill_layout.py
-python3 scripts/test_runtime_contract.py
-python3 scripts/validate-runtime-contract.py
-node --test scripts/theme-quality.test.mjs
+python3 scripts/tests/test_skill_layout.py
+python3 scripts/tests/test_runtime_contract.py
+python3 scripts/validate_runtime_contract.py
+npm --prefix scripts test
 npm --prefix scripts run test:presenter
+npm --prefix scripts run test:popup
 git diff --check
 ```
 
@@ -96,6 +100,6 @@ Create and validate a smoke deck:
 
 ```bash
 ./scripts/new-deck.sh editorial smoke-deck "Smoke Deck" 2
-./scripts/validate-deck.sh assets/decks/smoke-deck/smoke-deck-slides.html
+python3 scripts/validate_deck.py assets/decks/smoke-deck/smoke-deck-slides.html
 rm -rf assets/decks/smoke-deck
 ```

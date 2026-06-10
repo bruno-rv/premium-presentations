@@ -6,7 +6,7 @@
 <title>{{TITLE}}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Alegreya:wght@400;600;700&family=Alegreya+Sans:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{SHARED}}premium-themes.css">
 <link rel="stylesheet" href="{{SHARED}}premium-deck.css">
 <link rel="stylesheet" href="{{SHARED}}premium-components.css">
@@ -24,18 +24,18 @@
 <body>
 <div class="deck" id="deck">
 
-<!-- SLIDE 1 - TITLE -->
-<section class="slide slide--title" data-nav-title="{{TITLE}}">
+<!-- SLIDE 1 — TITLE -->
+<section class="slide slide--title">
   <p class="slide__subtitle reveal">Subtitle / track</p>
-  <h1 class="slide__display reveal">{{TITLE}}</h1>
+  <h1 class="slide__display reveal">Presentation<br><span class="accent">title</span></h1>
   <p class="slide__body reveal" style="margin-top:1rem">One-line context.</p>
 </section>
 
-<!-- SLIDE 2 - CONTENT -->
-<section class="slide" data-nav-title="First idea">
+<!-- SLIDE 2 — CONTENT -->
+<section class="slide">
   <p class="slide__label reveal">Section</p>
   <h2 class="slide__heading reveal">First content slide</h2>
-  <p class="slide__body reveal">Replace slides and add more sections. Use shared components and run validation when done.</p>
+  <p class="slide__body reveal">Replace slides and add more sections. Run python3 scripts/validate_deck.py when done.</p>
 </section>
 
 </div>

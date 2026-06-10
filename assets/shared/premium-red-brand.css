@@ -88,16 +88,3 @@ html[data-theme="red"] .slide {
 html[data-theme="red"] .deck-progress {
   z-index: 101;
 }
-
-.mermaid-error {
-  margin: 0;
-  padding: 1rem 1.25rem;
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  line-height: 1.5;
-  color: var(--red);
-  background: var(--red-dim);
-  border: 1px solid color-mix(in srgb, var(--red) 40%, transparent);
-  border-radius: 6px;
-  white-space: pre-wrap;
-}

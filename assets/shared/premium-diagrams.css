@@ -233,3 +233,17 @@ html[data-theme="red"] {
     box-shadow: none;
   }
 }
+
+/* Mermaid render-failure panel (created by premium-mermaid.js) */
+.mermaid-error {
+  margin: 0;
+  padding: 1rem 1.25rem;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--red, #dc2626);
+  background: var(--red-dim, rgba(220, 38, 38, 0.12));
+  border: 1px solid color-mix(in srgb, var(--red, #dc2626) 40%, transparent);
+  border-radius: 6px;
+  white-space: pre-wrap;
+}
