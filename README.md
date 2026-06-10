@@ -15,7 +15,7 @@ This repository is the skill package. `SKILL.md` is the agent entry point;
 
 ![Content slide](docs/screenshot-slide.png)
 
-**Presenter view** — Dual-pane popup with current/next slide preview, expanded speaker notes, and 30-min timer:
+**Presenter view** — Dual-pane popup with current/next slide preview, expanded speaker notes, and a configurable countdown timer (set any duration from the tool panel, or define a default in deck settings):
 
 ![Presenter view](docs/screenshot-presenter.png)
 
