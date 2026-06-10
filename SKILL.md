@@ -54,6 +54,9 @@ table lives in `references/runtime.md`. Conditional additions:
   `premium-diagrams.css` handling.
 - Red decks also include `premium-red-brand.css` and `premium-red-chrome.js`.
 
+Runtime 3D modes (`off/ambient/tilt/depth`) cycle with the `3` key; author a
+deck default with `data-3d="<mode>"` on `<html>` — see `references/runtime.md`.
+
 Run `./scripts/validate_runtime_contract.py` after template, theme, bundler,
 or shared runtime edits.
 

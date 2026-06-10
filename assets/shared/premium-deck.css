@@ -43,6 +43,21 @@ body::after {
 }
 .slide.visible { opacity: 1; transform: none; }
 
+/* 3D frame: JS-injected wrapper around slide content (chrome stays a direct
+   child of .slide). Real box in ALL modes — mirrors the slide's inner flex
+   layout so the off-mode render is unchanged. Tilt/depth transforms live on
+   this frame, never on .slide (the scroll-snap / IntersectionObserver target). */
+.slide-3d-frame {
+  display: flex;
+  flex-direction: column;
+  align-items: inherit;
+  justify-content: inherit;
+  gap: inherit;
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .reveal {
   opacity: 0;
   transform: translateY(18px);
@@ -643,7 +658,32 @@ html[data-parallax="on"] .premium-bg-3d { opacity: 1; }
   .premium-controls-shell { transform: translateY(-50%) scale(0.92); transform-origin: left center; }
 }
 
+/* Transient 3D-mode toast (key 3 / Shift+3, or the controls select). */
+.premium-3d-toast {
+  position: fixed;
+  left: 50%;
+  bottom: clamp(24px, 6vh, 56px);
+  transform: translateX(-50%) translateY(8px);
+  padding: 8px 18px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border-bright, var(--border));
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 95;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.premium-3d-toast.is-visible {
+  opacity: 1;
+  transform: translateX(-50%);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .premium-bg-3d { display: none !important; }
   html[data-parallax="on"] .premium-bg-3d { opacity: 0; }
+  .premium-3d-toast { transition: none; transform: translateX(-50%); }
 }

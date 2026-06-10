@@ -71,9 +71,23 @@ plus `premium-flow.js` when a file contains `.live-flow` markup.
 
 **Theme visuals:** `.slide--title` receives a `hero` visual; `.slide--divider` receives a `map` visual. Default assets follow `assets/shared/assets/theme-visuals/<theme>-<role>.webp`. Override with `data-theme-visual-<theme>-<role>` or `window.PremiumThemeVisuals`; disable per slide with `data-theme-visual="off"`.
 
-**3D background:** `PremiumPresentations.setParallax(true)` or UI button / **`3`**; sets `data-parallax="on"`. Disabled when `prefers-reduced-motion`.
+**3D modes:** **`3`** cycles `off → ambient → tilt → depth` (`Shift+3` backward; handled
+via `e.code === 'Digit3'`, layout-safe). `data-3d="<mode>"` on `<html>` is the source
+of truth; the controls panel has a `3D` select (`#premium-3d`) and a transient toast
+names the mode on every change. Modes: `ambient` = cursor parallax on the background
+canvas (the old `data-parallax="on"`); `tilt` = cursor-tracked tilt of the active
+slide's `.slide-3d-frame` (JS-injected wrapper — the scroll-snap `.slide` is never
+transformed); `depth` = auto-elevated `translateZ` tiers on the component vocabulary
+inside a slide perspective, opt out per element with `data-flat`. Resolution order:
+stored pref (scoped key `premium-3d:<path>`) → author `data-3d` → legacy author
+`data-parallax="on"` (→ `ambient`) → `off`. The old unscoped localStorage parallax
+key is intentionally ignored. API: `PremiumPresentations.set3dMode('<mode>')`,
+`cycle3d(dir)`, `get3dMode()`; compat wrappers `setParallax(bool)` / `toggleParallax()`
+map to `ambient`/`off` (presenter `parallax.toggle` keeps working). `data-parallax`
+stays mirrored (`on` when mode ≠ `off`). All modes flatten under
+`prefers-reduced-motion` and in print/PDF.
 
-**Panel:** **`H`** hide/show; unhide pins panel open (`is-open`). **`3`** toggles parallax.
+**Panel:** **`H`** hide/show; unhide pins panel open (`is-open`). **`3`** cycles 3D mode.
 
 ## Theme Extension Pattern
 

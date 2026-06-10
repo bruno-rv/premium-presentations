@@ -1203,3 +1203,108 @@
     transform: none;
   }
 }
+
+/* ============================================================
+   3D MODES (html[data-3d]) — must stay at the END of this file
+   so depth tiers compose over earlier component rules. JS
+   (premium-controls.js) writes --tilt-x/--tilt-y on the active
+   .slide-3d-frame; CSS owns every transform.
+   ============================================================ */
+
+/* --- tilt: cursor-tracked tilt of the active slide's frame --- */
+html[data-3d="tilt"] .slide.visible .slide-3d-frame {
+  transform: perspective(1200px) rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg)) translateZ(0);
+  will-change: transform;
+}
+/* JS easing already smooths motion — narrow the slide transition to opacity
+   so the CSS transform transition doesn't double-smooth (lag) the tilt. */
+html[data-3d="tilt"] .slide {
+  transition: opacity 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* --- depth: auto-elevated component tiers inside a slide perspective --- */
+html[data-3d="depth"] .slide { perspective: 1400px; }
+html[data-3d="depth"] .slide.visible .slide-3d-frame {
+  transform: rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg));
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+html[data-3d="depth"] .slide {
+  transition: opacity 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Intermediate containers must preserve 3D or nested tiers flatten to
+   nothing (translateZ only renders when the ancestor chain up to the
+   perspective element is preserve-3d). Targeted list — a blanket
+   `.slide-3d-frame *` rule would break overflow/stacking elsewhere. */
+html[data-3d="depth"] .content-grid,
+html[data-3d="depth"] .split,
+html[data-3d="depth"] .stats-row,
+html[data-3d="depth"] .kpi-row,
+html[data-3d="depth"] .compare-split,
+html[data-3d="depth"] .timeline-grid,
+html[data-3d="depth"] .checklist-grid,
+html[data-3d="depth"] .setup-flow,
+html[data-3d="depth"] .pipeline-vertical,
+html[data-3d="depth"] .live-flow,
+html[data-3d="depth"] .live-flow__row {
+  transform-style: preserve-3d;
+}
+
+/* Component tiers — hero components float highest. Hover lift is replaced
+   by the tier transform under depth (composed below where hover exists). */
+html[data-3d="depth"] .stage-card,
+html[data-3d="depth"] .glass-card,
+html[data-3d="depth"] .code-window,
+html[data-3d="depth"] .compare-panel,
+html[data-3d="depth"] .terminal-window { transform: translateZ(48px); }
+
+html[data-3d="depth"] .stat-card,
+html[data-3d="depth"] .tl-col,
+html[data-3d="depth"] .setup-step,
+html[data-3d="depth"] .flow-node,
+html[data-3d="depth"] .pipeline-stage,
+html[data-3d="depth"] .checklist-item,
+html[data-3d="depth"] .kpi { transform: translateZ(32px); }
+
+html[data-3d="depth"] .why-panel,
+html[data-3d="depth"] .aside-card,
+html[data-3d="depth"] .table-scroll { transform: translateZ(24px); }
+
+html[data-3d="depth"] .slide__label,
+html[data-3d="depth"] .slide__subtitle { transform: translateZ(8px); }
+
+/* Composed hover states — keep the lift, add the tier. */
+html[data-3d="depth"] .glass-card:hover { transform: translateZ(48px) translateY(-3px); }
+html[data-3d="depth"] .setup-step:hover { transform: translateZ(32px) translateY(-3px); }
+
+/* Per-element opt-out. */
+html[data-3d="depth"] [data-flat],
+html[data-3d="depth"] [data-flat] * { transform: none !important; }
+
+/* Reduced motion: every 3D mode renders flat and static. */
+@media (prefers-reduced-motion: reduce) {
+  html[data-3d] .slide-3d-frame,
+  html[data-3d] .slide.visible .slide-3d-frame,
+  html[data-3d="depth"] .stage-card,
+  html[data-3d="depth"] .glass-card,
+  html[data-3d="depth"] .code-window,
+  html[data-3d="depth"] .compare-panel,
+  html[data-3d="depth"] .terminal-window,
+  html[data-3d="depth"] .stat-card,
+  html[data-3d="depth"] .tl-col,
+  html[data-3d="depth"] .setup-step,
+  html[data-3d="depth"] .flow-node,
+  html[data-3d="depth"] .pipeline-stage,
+  html[data-3d="depth"] .checklist-item,
+  html[data-3d="depth"] .kpi,
+  html[data-3d="depth"] .why-panel,
+  html[data-3d="depth"] .aside-card,
+  html[data-3d="depth"] .table-scroll,
+  html[data-3d="depth"] .slide__label,
+  html[data-3d="depth"] .slide__subtitle {
+    transform: none !important;
+    will-change: auto;
+  }
+  html[data-3d="depth"] .slide { perspective: none; }
+}

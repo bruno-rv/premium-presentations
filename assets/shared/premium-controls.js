@@ -1,13 +1,21 @@
 /**
- * Premium Presentations — theme switch + optional 3D parallax background.
- * Usage: <html data-theme="warm" data-parallax="off">
+ * Premium Presentations — theme switch + runtime 3D modes (off/ambient/tilt/depth).
+ * Usage: <html data-theme="warm" data-3d="off">
  *   <link rel="stylesheet" href=".../premium-themes.css">
  *   <script src=".../premium-controls.js" defer><\/script>
+ * Press 3 / Shift+3 to cycle 3D modes. Author default via data-3d="<mode>";
+ * legacy data-parallax="on" maps to ambient. The old unscoped localStorage
+ * parallax key is intentionally ignored (never migrated).
  */
 (function () {
   const STORAGE_THEME = 'premium-theme';
-  const STORAGE_PARALLAX = 'premium-parallax';
+  const STORAGE_3D = 'premium-3d';
   const STORAGE_CONTROLS_HIDDEN = 'premium-controls-hidden';
+  const MODES_3D = ['off', 'ambient', 'tilt', 'depth'];
+  // Slide chrome that must stay a direct child of .slide (containing block
+  // and direct-child CSS rules depend on it) — never moved into the 3D frame.
+  const FRAME_CHROME_SELECTOR =
+    '.theme-visual, .slide__glow, .slide__number, .geo-particle, .notes, .slide-3d-frame';
   const SCRIPT_SRC = document.currentScript && document.currentScript.src
     ? document.currentScript.src
     : '';
@@ -58,18 +66,89 @@
     setControlsHidden(!isControlsHidden());
   }
 
-  function isParallaxOn() {
-    return document.documentElement.dataset.parallax === 'on';
+  function mode3dStorageKey() {
+    return document.documentElement.dataset.mode3dStorageKey || scopedStorageKey(STORAGE_3D);
   }
 
-  function syncParallaxButton() {
-    const btn = document.getElementById('premium-parallax-toggle');
-    if (btn) btn.setAttribute('aria-pressed', isParallaxOn() ? 'true' : 'false');
+  function normalize3dMode(value) {
+    return MODES_3D.includes(value) ? value : 'off';
+  }
+
+  function get3dMode() {
+    return normalize3dMode(document.documentElement.getAttribute('data-3d'));
+  }
+
+  function mode3dLabel(mode) {
+    return mode.charAt(0).toUpperCase() + mode.slice(1);
+  }
+
+  function refresh3dSelect(select) {
+    select = select || document.getElementById('premium-3d');
+    if (!select) return;
+    if (!select.options.length) {
+      MODES_3D.forEach((mode) => {
+        const opt = document.createElement('option');
+        opt.value = mode;
+        opt.textContent = mode3dLabel(mode);
+        select.appendChild(opt);
+      });
+    }
+    select.value = get3dMode();
+  }
+
+  let toastTimer = 0;
+
+  function show3dToast(mode) {
+    let toast = document.getElementById('premium-3d-toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'premium-3d-toast';
+      toast.className = 'premium-3d-toast';
+      toast.setAttribute('role', 'status');
+      toast.setAttribute('aria-live', 'polite');
+      document.body.appendChild(toast);
+    }
+    toast.textContent = '3D: ' + mode.toUpperCase();
+    toast.classList.add('is-visible');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('is-visible'), 1200);
+  }
+
+  function apply3dMode(mode, opts) {
+    mode = normalize3dMode(mode);
+    const root = document.documentElement;
+    root.setAttribute('data-3d', mode);
+    // Mirror the legacy attribute for CSS/decks that key off data-parallax.
+    root.dataset.parallax = mode === 'off' ? 'off' : 'on';
+    if (!opts || opts.persist !== false) {
+      try { localStorage.setItem(mode3dStorageKey(), mode); } catch (_) {}
+    }
+    refresh3dSelect();
+    syncMotion();
+    root.dispatchEvent(new CustomEvent('premium-3d-change', { detail: { mode } }));
+  }
+
+  function set3dMode(mode) {
+    apply3dMode(mode);
+    show3dToast(get3dMode());
+  }
+
+  function cycle3d(dir) {
+    dir = dir === -1 ? -1 : 1;
+    const idx = MODES_3D.indexOf(get3dMode());
+    set3dMode(MODES_3D[(idx + dir + MODES_3D.length) % MODES_3D.length]);
+  }
+
+  // Compatibility wrappers — presenter popup and external callers use these.
+  function setParallax(on) {
+    set3dMode(on ? 'ambient' : 'off');
   }
 
   function toggleParallax() {
-    setParallax(!isParallaxOn());
-    syncParallaxButton();
+    const mode = get3dMode();
+    if (mode === 'off') set3dMode('ambient');
+    else if (mode === 'ambient') set3dMode('off');
+    else set3dMode('off');
   }
 
   function isTypingTarget(el) {
@@ -99,9 +178,10 @@
         toggleControlsHidden();
         return;
       }
-      if (key === '3') {
+      // e.code, not e.key: Shift+3 produces layout-specific characters ('#', etc.).
+      if (e.code === 'Digit3') {
         e.preventDefault();
-        toggleParallax();
+        cycle3d(e.shiftKey ? -1 : 1);
         return;
       }
       if (key === 'b' || key === '.') {
@@ -342,16 +422,15 @@
     select.addEventListener('change', () => setTheme(select.value));
     themeGroup.appendChild(select);
 
-    const parallaxGroup = document.createElement('div');
-    parallaxGroup.className = 'premium-controls__group';
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.id = 'premium-parallax-toggle';
-    btn.innerHTML = '3D<span class="premium-kbd">3</span>';
-    btn.title = '3D parallax background (3)';
-    btn.setAttribute('aria-pressed', root.dataset.parallax === 'on' ? 'true' : 'false');
-    btn.addEventListener('click', toggleParallax);
-    parallaxGroup.appendChild(btn);
+    const mode3dGroup = document.createElement('div');
+    mode3dGroup.className = 'premium-controls__group';
+    mode3dGroup.innerHTML = '<label for="premium-3d">3D</label>';
+    const mode3dSelect = document.createElement('select');
+    mode3dSelect.id = 'premium-3d';
+    mode3dSelect.title = '3D mode (3 / Shift+3)';
+    refresh3dSelect(mode3dSelect);
+    mode3dSelect.addEventListener('change', () => set3dMode(mode3dSelect.value));
+    mode3dGroup.appendChild(mode3dSelect);
 
     const curtainGroup = document.createElement('div');
     curtainGroup.className = 'premium-controls__group';
@@ -477,10 +556,10 @@
 
     const hint = document.createElement('p');
     hint.className = 'premium-controls__hint';
-    hint.textContent = 'M marker · L laser · C clear · H hide · T theme · 3 parallax';
+    hint.textContent = 'M marker · L laser · C clear · H hide · T theme · 3 3D mode';
 
     panel.appendChild(themeGroup);
-    panel.appendChild(parallaxGroup);
+    panel.appendChild(mode3dGroup);
     panel.appendChild(hint);
 
     shell.appendChild(tab);
@@ -525,50 +604,101 @@
     if (link.href !== href) link.href = href;
   }
 
-  function setParallax(on) {
-    document.documentElement.dataset.parallax = on ? 'on' : 'off';
-    try { localStorage.setItem(STORAGE_PARALLAX, on ? 'on' : 'off'); } catch (_) {}
-    if (on) bindParallax();
-    else unbindParallax();
-    syncParallaxButton();
-  }
-
-  let parallaxBound = false;
+  // ---------- 3D motion engine ----------
+  // One eased cursor state drives the ambient canvas, tilt vars, and depth
+  // parallax. JS writes custom properties; CSS owns the transforms.
+  let motionBound = false;
+  let settling = false;
   let raf = 0;
   let targetX = 0;
   let targetY = 0;
   let currentX = 0;
   let currentY = 0;
+  let activeFrame = null;
+  let lifecycleBound = false;
 
-  function bindParallax() {
-    if (parallaxBound || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    parallaxBound = true;
-    document.addEventListener('mousemove', onMove, { passive: true });
-    tick();
+  // Guarded: environments without matchMedia (JSDOM) must not kill the module.
+  function safeMatchMedia(query) {
+    try {
+      if (typeof window.matchMedia === 'function') return window.matchMedia(query);
+    } catch (_) {}
+    return { matches: false, addEventListener: function () {}, removeEventListener: function () {} };
+  }
+  const reducedMotionQuery = safeMatchMedia('(prefers-reduced-motion: reduce)');
+  const finePointerQuery = safeMatchMedia('(any-hover: hover) and (any-pointer: fine)');
+
+  function motionAllowed() {
+    return get3dMode() !== 'off' &&
+      !reducedMotionQuery.matches &&
+      finePointerQuery.matches &&
+      !document.hidden;
   }
 
-  function unbindParallax() {
-    parallaxBound = false;
-    document.removeEventListener('mousemove', onMove);
+  function syncMotion() {
+    if (motionAllowed()) bindMotion();
+    else unbindMotion();
+  }
+
+  function bindMotion() {
+    settling = false;
+    if (motionBound) return;
+    motionBound = true;
+    document.addEventListener('pointermove', onMove, { passive: true });
+    if (!raf) tick();
+  }
+
+  function unbindMotion() {
+    motionBound = false;
+    settling = false;
+    document.removeEventListener('pointermove', onMove);
     if (raf) cancelAnimationFrame(raf);
     raf = 0;
+    targetX = targetY = currentX = currentY = 0;
     const canvas = document.querySelector('.premium-bg-3d__canvas');
     if (canvas) canvas.style.transform = '';
+    clearFrameVars(activeFrame);
+  }
+
+  // Ease back to neutral, then stop the loop (pointer left / window blurred).
+  function settleMotion() {
+    if (!motionBound) return;
+    targetX = 0;
+    targetY = 0;
+    settling = true;
+  }
+
+  function clearFrameVars(frame) {
+    if (!frame) return;
+    frame.style.removeProperty('--tilt-x');
+    frame.style.removeProperty('--tilt-y');
+  }
+
+  function retargetFrame() {
+    const next = document.querySelector('.slide.visible .slide-3d-frame');
+    if (next === activeFrame) return;
+    clearFrameVars(activeFrame);
+    activeFrame = next;
   }
 
   function onMove(e) {
-    const nx = (e.clientX / window.innerWidth - 0.5) * 2;
-    const ny = (e.clientY / window.innerHeight - 0.5) * 2;
-    targetX = nx;
-    targetY = ny;
+    targetX = (e.clientX / window.innerWidth - 0.5) * 2;
+    targetY = (e.clientY / window.innerHeight - 0.5) * 2;
+    settling = false;
+    // The settle path stops the loop but keeps this listener attached so the
+    // pointer returning revives motion without re-binding.
+    if (!raf && motionAllowed()) {
+      motionBound = true;
+      tick();
+    }
   }
 
   function tick() {
-    if (!parallaxBound) return;
+    if (!motionBound) { raf = 0; return; }
     currentX += (targetX - currentX) * 0.08;
     currentY += (targetY - currentY) * 0.08;
+    const mode = get3dMode();
     const canvas = document.querySelector('.premium-bg-3d__canvas');
-    if (canvas && document.documentElement.dataset.parallax === 'on') {
+    if (canvas && mode !== 'off') {
       const rotY = currentX * 6;
       const rotX = -currentY * 5;
       const tx = currentX * 18;
@@ -576,7 +706,58 @@
       canvas.style.transform =
         'perspective(1200px) rotateX(' + rotX + 'deg) rotateY(' + rotY + 'deg) translate3d(' + tx + 'px,' + ty + 'px,0)';
     }
+    if (mode === 'tilt' || mode === 'depth') {
+      retargetFrame();
+      if (activeFrame) {
+        // ≤4° — small angles limit text rasterization blur.
+        activeFrame.style.setProperty('--tilt-x', (-currentY * 4).toFixed(3) + 'deg');
+        activeFrame.style.setProperty('--tilt-y', (currentX * 4).toFixed(3) + 'deg');
+      }
+    }
+    if (settling && Math.abs(currentX) < 0.001 && Math.abs(currentY) < 0.001) {
+      motionBound = false;
+      settling = false;
+      raf = 0;
+      return;
+    }
     raf = requestAnimationFrame(tick);
+  }
+
+  function bindMotionLifecycle() {
+    if (lifecycleBound) return;
+    lifecycleBound = true;
+    document.addEventListener('pointerleave', settleMotion);
+    window.addEventListener('blur', settleMotion);
+    document.addEventListener('visibilitychange', syncMotion);
+    window.addEventListener('premium:slidechange', retargetFrame);
+    try {
+      reducedMotionQuery.addEventListener('change', syncMotion);
+      finePointerQuery.addEventListener('change', syncMotion);
+    } catch (_) {
+      // Older Safari: addListener fallback.
+      try {
+        reducedMotionQuery.addListener(syncMotion);
+        finePointerQuery.addListener(syncMotion);
+      } catch (_e) {}
+    }
+  }
+
+  // Wrap each slide's content children in a .slide-3d-frame so tilt/depth
+  // transforms never touch the scroll-snap / IntersectionObserver target.
+  // Chrome (theme visuals, glow, numbers, particles, notes) stays a direct
+  // child of .slide — its containing block and the direct-child CSS rules
+  // in premium-deck.css are unaffected.
+  function mount3dFrames() {
+    document.querySelectorAll('.slide').forEach((slide) => {
+      if (slide.querySelector(':scope > .slide-3d-frame')) return;
+      const frame = document.createElement('div');
+      frame.className = 'slide-3d-frame';
+      const content = Array.from(slide.children).filter(
+        (child) => !child.matches(FRAME_CHROME_SELECTOR)
+      );
+      content.forEach((child) => frame.appendChild(child));
+      slide.appendChild(frame);
+    });
   }
 
   function restorePreferences() {
@@ -585,14 +766,29 @@
     try {
       const t = normalizeTheme(localStorage.getItem(themeStorageKey()) || '');
       if (t && (themes.includes(t) || isThemeName(t))) root.dataset.theme = t;
-      const p = localStorage.getItem(STORAGE_PARALLAX);
-      if (p === 'on' || p === 'off') root.dataset.parallax = p;
     } catch (_) {}
     root.dataset.theme = normalizeTheme(root.dataset.theme || themes[0]);
     if (!isThemeName(root.dataset.theme)) root.dataset.theme = themes[0] || 'warm';
-    if (!root.dataset.parallax) root.dataset.parallax = 'off';
     syncFonts(root.dataset.theme);
-    if (root.dataset.parallax === 'on') bindParallax();
+
+    // 3D mode resolution: stored (scoped) → author data-3d → legacy
+    // data-parallax="on" attr → off. The old unscoped localStorage parallax
+    // key is intentionally NOT read (re-globalizing it across decks is worse
+    // than asking the user to press 3 once).
+    let stored = null;
+    try { stored = localStorage.getItem(mode3dStorageKey()); } catch (_) {}
+    let mode;
+    if (stored !== null && MODES_3D.includes(stored)) {
+      mode = stored;
+    } else if (MODES_3D.includes(root.getAttribute('data-3d'))) {
+      mode = root.getAttribute('data-3d');
+    } else if (root.dataset.parallax === 'on') {
+      mode = 'ambient';
+    } else {
+      mode = 'off';
+    }
+    apply3dMode(mode, { persist: false });
+
     const hidden = localStorage.getItem(STORAGE_CONTROLS_HIDDEN);
     if (hidden === 'on') setControlsHidden(true);
     else if (hidden === 'off') setControlsHidden(false);
@@ -625,13 +821,15 @@
 
   function init() {
     mountBackground();
+    mount3dFrames();
     mountControls();
     bindControlShortcuts();
+    bindMotionLifecycle();
     restorePreferences();
     mountThemeVisuals();
     const sel = document.getElementById('premium-theme');
     if (sel) refreshThemeSelect(sel);
-    syncParallaxButton();
+    refresh3dSelect();
   }
 
   // ?print-pdf query auto-activates print mode. Add the class as early as
@@ -656,6 +854,10 @@
   window.PremiumPresentations = {
     setTheme,
     cycleTheme,
+    set3dMode,
+    cycle3d,
+    get3dMode,
+    MODES_3D: MODES_3D.slice(),
     setParallax,
     toggleParallax,
     setControlsHidden,

@@ -65,9 +65,30 @@ body.print-pdf .premium-presenter-overlay,
 body.print-pdf .premium-tts-cursor {
   display: none !important;
 }
+body.print-pdf .premium-3d-toast {
+  display: none !important;
+}
+/* 3D modes flatten for export — frame descendants only (slide chrome like the
+   corner number's translateY(-50%) lives OUTSIDE .slide-3d-frame and keeps
+   its positioning transform). */
+body.print-pdf .slide-3d-frame,
+body.print-pdf .slide-3d-frame * {
+  transform: none !important;
+}
+body.print-pdf .premium-bg-3d__canvas {
+  transform: none !important;
+}
 @media print {
   @page { size: 1280px 720px; margin: 0; }
   html, body { background: #000 !important; }
+  /* Flatten 3D even when body.print-pdf is absent (raw Cmd+P). */
+  html[data-3d] .slide-3d-frame,
+  html[data-3d] .slide-3d-frame *,
+  html[data-3d] .premium-bg-3d__canvas {
+    transform: none !important;
+  }
+  html[data-3d="depth"] .slide { perspective: none !important; }
+  html[data-3d] .premium-3d-toast { display: none !important; }
 }
 
 /* Embed mode — active when ?embedded=1 or inside iframe */

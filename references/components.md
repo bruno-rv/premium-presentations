@@ -78,6 +78,11 @@ not yet used on the previous two slides.
 - **Emphasis:** `pulse-glow` family sparingly — max one pulsing element per slide.
 - **Diagram motion:** `flow-r`/`flow-cw` strokes on SVG paths; FLOW+ arrow shimmer.
 - **Titles:** `shimmer-text--live` opt-in, divider/title slides only.
+- **3D depth tiers:** under `data-3d="depth"` the runtime auto-elevates the
+  component vocabulary (stage-card, glass-card/code-window, compare panels,
+  terminal-window at 48px; stat cards, timeline cols, setup steps, flow nodes,
+  pipeline stages, checklist items, KPIs at 32px; why-panel, aside-card,
+  tables at 24px; labels at 8px). Opt out per element with `data-flat`.
 - All of the above are disabled automatically under `prefers-reduced-motion`.
 
 ## Compare modifiers

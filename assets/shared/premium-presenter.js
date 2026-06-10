@@ -262,6 +262,11 @@
     else if (a === 'controls.toggleHidden' && window.PremiumPresentations) window.PremiumPresentations.toggleControlsHidden();
     else if (a === 'theme.cycle' && window.PremiumPresentations) window.PremiumPresentations.cycleTheme();
     else if (a === 'parallax.toggle' && window.PremiumPresentations) window.PremiumPresentations.toggleParallax();
+    else if (a === 'mode3d.cycle' && window.PremiumPresentations && window.PremiumPresentations.cycle3d) {
+      window.PremiumPresentations.cycle3d(msg.dir === -1 ? -1 : 1);
+    } else if (a === 'mode3d.set' && window.PremiumPresentations && window.PremiumPresentations.set3dMode) {
+      window.PremiumPresentations.set3dMode(msg.value);
+    }
     else if (a === 'timer.toggle' && window.PremiumTimer) {
       if (window.PremiumTimer.getState().running) window.PremiumTimer.pause();
       else window.PremiumTimer.start();
@@ -502,7 +507,12 @@
         e.preventDefault(); sendControl('prev'); return;
       }
       if (key === 'h') { e.preventDefault(); sendControl('controls.toggleHidden'); return; }
-      if (key === '3') { e.preventDefault(); sendControl('parallax.toggle'); return; }
+      // e.code, not e.key: Shift+3 produces layout-specific characters.
+      if (e.code === 'Digit3') {
+        e.preventDefault();
+        sendControl('mode3d.cycle', { dir: e.shiftKey ? -1 : 1 });
+        return;
+      }
       if (key === 't' && e.shiftKey) { e.preventDefault(); sendControl('timer.toggle'); return; }
       if (key === 't') { e.preventDefault(); sendControl('theme.cycle'); return; }
       if (key === 'b' || key === '.') { e.preventDefault(); sendControl('curtain'); return; }
