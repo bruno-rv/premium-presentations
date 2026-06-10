@@ -5,6 +5,20 @@ Claude skill for generating polished, browser-rendered HTML presentation decks.
 This repository is the skill package. `SKILL.md` is the agent entry point;
 `README.md` is only human-facing orientation.
 
+## Preview
+
+**Title slide** — Editorial dark theme with ambient 3D visual, slide rail, and tool panel:
+
+![Title slide](docs/screenshot-title.png)
+
+**Content slide** — Cupertino light theme with pipeline step layout:
+
+![Content slide](docs/screenshot-slide.png)
+
+**Presenter view** — Dual-pane popup with current/next slide preview, expanded speaker notes, and 30-min timer:
+
+![Presenter view](docs/screenshot-presenter.png)
+
 ## Install
 
 Clone or copy this folder into your Claude skills directory:
@@ -62,6 +76,7 @@ premium-presentations/
 │   ├── shared/
 │   ├── studio/
 │   └── templates/
+├── docs/
 ├── references/
 └── scripts/
 ```
