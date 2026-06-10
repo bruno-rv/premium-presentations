@@ -4,11 +4,11 @@
     "assets": [
       {
         "role": "hero",
-        "src": "editorial-hero.png"
+        "src": "editorial-hero.webp"
       },
       {
         "role": "map",
-        "src": "editorial-map.png"
+        "src": "editorial-map.webp"
       }
     ]
   },
@@ -17,11 +17,11 @@
     "assets": [
       {
         "role": "hero",
-        "src": "warm-hero.png"
+        "src": "warm-hero.webp"
       },
       {
         "role": "map",
-        "src": "warm-map.png"
+        "src": "warm-map.webp"
       }
     ]
   },
@@ -30,11 +30,11 @@
     "assets": [
       {
         "role": "hero",
-        "src": "red-hero.png"
+        "src": "red-hero.webp"
       },
       {
         "role": "map",
-        "src": "red-map.png"
+        "src": "red-map.webp"
       }
     ]
   },
@@ -43,11 +43,11 @@
     "assets": [
       {
         "role": "hero",
-        "src": "cupertino-hero.png"
+        "src": "cupertino-hero.webp"
       },
       {
         "role": "map",
-        "src": "cupertino-map.png"
+        "src": "cupertino-map.webp"
       }
     ]
   }

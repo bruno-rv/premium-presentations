@@ -224,14 +224,14 @@
   function themeVisualBase() {
     const configured = document.documentElement.dataset.themeVisualBase;
     if (configured) return configured.replace(/\/?$/, '/');
-    if (SCRIPT_SRC) return new URL('assets/chatgpt-theme-visuals/', SCRIPT_SRC).href;
+    if (SCRIPT_SRC) return new URL('assets/theme-visuals/', SCRIPT_SRC).href;
 
     const path = location.pathname;
-    if (path.includes('/decks/')) return '../../shared/assets/chatgpt-theme-visuals/';
+    if (path.includes('/decks/')) return '../../shared/assets/theme-visuals/';
     if (path.includes('/studio/') || path.includes('/templates/')) {
-      return '../shared/assets/chatgpt-theme-visuals/';
+      return '../shared/assets/theme-visuals/';
     }
-    return 'shared/assets/chatgpt-theme-visuals/';
+    return 'shared/assets/theme-visuals/';
   }
 
   function themeVisualSrc(theme, role) {
@@ -243,7 +243,7 @@
     const fromGlobal = window.PremiumThemeVisuals &&
       window.PremiumThemeVisuals[normalized] &&
       (window.PremiumThemeVisuals[normalized][role] || window.PremiumThemeVisuals[normalized].hero);
-    const file = fromAttr || fromGlobal || (normalized + '-' + role + '.png');
+    const file = fromAttr || fromGlobal || (normalized + '-' + role + '.webp');
     if (/^(?:https?:|file:|\/|\.\/|\.\.\/)/.test(file)) return file;
     return themeVisualBase() + file;
   }
