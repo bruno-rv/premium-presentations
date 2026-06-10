@@ -49,6 +49,7 @@ table lives in `references/runtime.md`. Conditional additions:
 
 - Journey SVG slides that use `.journey-stage` also include
   `premium-journey.js`.
+- Live-flow slides that use `.live-flow` also include `premium-flow.js`.
 - Mermaid diagram slides also include `premium-mermaid.js` and
   `premium-diagrams.css` handling.
 - Red decks also include `premium-red-brand.css` and `premium-red-chrome.js`.
@@ -75,6 +76,8 @@ Load only the reference needed for the current task.
 - Start from `scripts/new-deck.sh`; do not create a parallel scaffold.
 - Use `assets/templates/` and `assets/shared/` as the source of truth.
 - Use `assets/templates/components/` snippets for advanced visual blocks.
+- Route every content slide through the content-type → component table in
+  `references/components.md`; bare heading + paragraph slides are not allowed.
 - Use the provided runtime controls instead of ad hoc controls.
 - Follow `references/design.md` for slide design principles (one dominant
   idea per slide, generic branding unless requested, no closing footer-note

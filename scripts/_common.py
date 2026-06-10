@@ -41,10 +41,11 @@ REQUIRED_JS = (
 RED_CSS = ("premium-red-brand.css",)
 RED_JS = ("premium-red-chrome.js",)
 JOURNEY_JS = ("premium-journey.js",)
+FLOW_JS = ("premium-flow.js",)
 
 # Inlining order used by bundle_deck.py: conditional modules slot in after
 # premium-annotations.js so they initialize before timer/presenter chrome.
-JS_BUNDLE_ORDER = REQUIRED_JS[:3] + RED_JS + JOURNEY_JS + REQUIRED_JS[3:]
+JS_BUNDLE_ORDER = REQUIRED_JS[:3] + RED_JS + JOURNEY_JS + FLOW_JS + REQUIRED_JS[3:]
 
 THEME_RE = re.compile(
     r"html\[data-theme=(?:\"([a-z0-9][a-z0-9-]*)\"|'([a-z0-9][a-z0-9-]*)'|([a-z0-9][a-z0-9-]*))\]"

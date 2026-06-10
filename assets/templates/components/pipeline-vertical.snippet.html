@@ -1,0 +1,37 @@
+<!-- Vertical pipeline timeline: dot + connector line per stage (CSS only) -->
+<section class="slide">
+  <p class="slide__label reveal">Process</p>
+  <h2 class="slide__heading reveal">From raw file to insight</h2>
+  <div class="pipeline-vertical reveal">
+    <div class="pipeline-stage">
+      <div class="pipeline-connector">
+        <div class="pipeline-dot"></div>
+        <div class="pipeline-line"></div>
+      </div>
+      <div class="pipeline-stage__body">
+        <h3>Ingest</h3>
+        <p>Land raw files exactly as received — no transformation, full lineage.</p>
+      </div>
+    </div>
+    <div class="pipeline-stage">
+      <div class="pipeline-connector">
+        <div class="pipeline-dot pipeline-dot--gold"></div>
+        <div class="pipeline-line"></div>
+      </div>
+      <div class="pipeline-stage__body">
+        <h3>Refine</h3>
+        <p>Deduplicate, validate, and enrich into queryable silver tables.</p>
+      </div>
+    </div>
+    <div class="pipeline-stage">
+      <div class="pipeline-connector">
+        <div class="pipeline-dot pipeline-dot--green"></div>
+        <div class="pipeline-line"></div>
+      </div>
+      <div class="pipeline-stage__body">
+        <h3>Serve</h3>
+        <p>Aggregate business metrics ready for dashboards and AI workloads.</p>
+      </div>
+    </div>
+  </div>
+</section>

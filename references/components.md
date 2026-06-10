@@ -2,7 +2,7 @@
 
 Portable patterns for Premium Presentations decks. Use with `assets/shared/premium-components.css` linked after `premium-deck.css`.
 
-**When generating decks:** pick 2–4 “hero” visual slides per act (journey, compare, timeline, stage card) — not every slide needs a custom component.
+**When generating decks (hard rule):** every content slide names a component from the routing table below — bare heading + paragraph slides are not allowed (title, quote, and divider slides are exempt). Give 2–4 hero slides per act the heavier components (FLOW+, P14, P9, STG); anchor the remaining content slides with lighter patterns (STAT, kpi-row, content-grid + aside-card, PIPE, why-panel, data-table).
 
 ## Quick reference
 
@@ -19,20 +19,66 @@ Portable patterns for Premium Presentations decks. Use with `assets/shared/premi
 | **STAT** | Stats row | 3 KPIs with accent top bar | `assets/templates/components/stats-row.snippet.html` |
 | **CHK** | Checklist grid | Closure / readiness (2 columns) | `assets/templates/components/checklist.snippet.html` |
 | **WHY** | Why panel | Short takeaway / implication callout | CSS-only: `.why-panel` |
+| **FLOW+** | Live flow | Animated architecture / data-flow with phase spotlight (requires `premium-flow.js`) | `assets/templates/components/live-flow.snippet.html` |
+| **PIPE** | Pipeline vertical | Sequential stages / medallion layers, 3–6 steps top-down | `assets/templates/components/pipeline-vertical.snippet.html` |
+| **TERM** | Terminal window | CLI demos, commands, logs | `assets/templates/components/terminal-window.snippet.html` |
+| **RAIL** | Accent rail | Left-edge gradient rail on text-leaning content slides | CSS-only: `slide--rail` modifier |
+
+## Routing: content type → component
+
+Pick the slide's visual from its content type. When two fit, prefer the one
+not yet used on the previous two slides.
+
+| Content type | Component |
+|--------------|-----------|
+| Architecture / "how it works" / request-response path | **FLOW+** live flow (Mermaid `slide--diagram` if >8 nodes) |
+| Sequential process, top-down narrative | **PIPE** pipeline-vertical |
+| 3–4 activation steps, horizontal | **FLOW** setup-flow |
+| A vs B, tradeoff, era shift | **P9** compare split |
+| Metrics / KPIs | **STAT** stats row or `kpi-row` (+ **BAR** for proportions) |
+| History, eras, milestones | **TL** timeline grid |
+| Deep-dive concept (copy + diagram) | **STG** stage card |
+| Config, spec, code preview | **GL** glass + code |
+| CLI session, commands, logs | **TERM** terminal window |
+| Roadmap / curriculum / phases | **P14** journey path |
+| Readiness, closure checklist | **CHK** checklist grid |
+| Data / comparison matrix | `data-table` in `table-scroll` |
+| Text-leaning slide with aside | `content-grid` + `aside-card`, add **RAIL** |
+| Single takeaway / implication | **WHY** why panel (appended after the main visual) |
+
+## Layout primitives (`premium-deck.css`)
+
+| Class | Effect |
+|-------|--------|
+| `slide--content` + `content-grid` | 2-column text + aside layout |
+| `aside-card` | Bordered aside card with mono header + `→` list |
+| `slide--split` + `split` | Equal 2-panel split; `panel` for each side |
+| `kpi-row` / `kpi` / `kpi-val` / `kpi-lbl` | Lightweight 3-up KPI grid (lighter than STAT) |
+| `table-scroll` + `data-table` | Scrollable themed data table |
+| `why-panel` | Bordered takeaway block with uppercase lead label and short body |
 
 ## Shared utilities (CSS only)
 
 | Class | Effect |
 |-------|--------|
-| `shimmer-text`, `shimmer-gold` | Animated gradient titles |
+| `shimmer-text`, `shimmer-gold` | Gradient titles (static by default; add `shimmer-text--live` to animate) |
 | `gradient-text`, `gradient-gold` | Static gradient text |
 | `slide__glow`, `slide__glow--gold` | Radial background halo |
-| `geo-particle`, `geo-particle--1`… | Floating accent dots |
+| `geo-particle` + `geo-particle--1/2/3` | Floating accent dots (positioned variants) |
 | `content-center-wrap` | Vertically center slide body |
 | `flow-r`, `flow-cw` | Animated SVG connector strokes |
-| `pulse-glow`, `pulse-gold` (inline `animation:`) | Breathing card glow |
+| `pulse-glow`, `pulse-gold`, `pulse-green` (inline `animation:`) | Breathing card glow |
+| `stage-card--pulse` | Pulsing border glow on a stage card |
 | `tag-red`, `tag-gold`, `tag-orange`, `tag-cyan` | Extra tag colors |
-| `why-panel` | Bordered takeaway block with uppercase lead label and short body |
+
+## Animation guidance
+
+- **Entrance:** `.reveal` stagger on slide children — the only stepping mechanism.
+- **Ambient:** `geo-particle` dots and `slide__glow` halos on title/divider slides only.
+- **Emphasis:** `pulse-glow` family sparingly — max one pulsing element per slide.
+- **Diagram motion:** `flow-r`/`flow-cw` strokes on SVG paths; FLOW+ arrow shimmer.
+- **Titles:** `shimmer-text--live` opt-in, divider/title slides only.
+- All of the above are disabled automatically under `prefers-reduced-motion`.
 
 ## Compare modifiers
 
@@ -44,6 +90,16 @@ Use semantic modifiers on `.compare-panel` instead of inline colors:
 | `compare-panel--up` | Better path, uplift, improvement | blue |
 | `compare-panel--vector` | Vector-search side of a comparison | blue |
 | `compare-panel--graph` | Graph side of a comparison | violet |
+
+## Live flow (FLOW+)
+
+`.live-flow` container holding `.flow-node` (`__icon`, `__title`, `__sub`) and
+`.flow-arrow` (`__line` > `__shimmer`, `__label`) children plus an optional
+`.live-flow__banner`. `premium-flow.js` reads `data-flow-phases` (JSON array of
+phase objects) and `data-flow-interval` (ms) and cycles `.is-active` across
+nodes/arrows — glow on the active node, traveling shimmer on the active arrow.
+The bundler inlines `premium-flow.js` automatically when `.live-flow` is
+present. Start from the snippet; keep 3–6 nodes.
 
 ## Why panel
 

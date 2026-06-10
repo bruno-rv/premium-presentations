@@ -118,6 +118,10 @@ def wants_premium_journey(html: str) -> bool:
     return "premium-journey.js" in html or "journey-stage" in html
 
 
+def wants_premium_flow(html: str) -> bool:
+    return "premium-flow.js" in html or "live-flow" in html
+
+
 def build_mermaid_module() -> str:
     mermaid_path = SHARED / "premium-mermaid.js"
     if not mermaid_path.is_file():
@@ -129,6 +133,9 @@ def build_mermaid_module() -> str:
 document.addEventListener('DOMContentLoaded', function () {
   if (typeof initPremiumJourney === 'function') {
     try { initPremiumJourney(); } catch (e) { console.error('[PremiumJourney] init failed', e); }
+  }
+  if (typeof initPremiumFlow === 'function') {
+    try { initPremiumFlow(); } catch (e) { console.error('[PremiumFlow] init failed', e); }
   }
   initPremiumMermaid()
     .then(function () { try { new SlideEngine(); } catch (e) { console.error('[SlideEngine] init failed', e); } })
@@ -260,7 +267,13 @@ def bundle_html(html: str, html_path: Path) -> str:
     if wants_premium_journey(html):
         journey_path = SHARED / "premium-journey.js"
         if journey_path.is_file() and journey_path not in seen_paths:
+            seen_paths.add(journey_path)
             script_paths.append(journey_path)
+    if wants_premium_flow(html):
+        flow_path = SHARED / "premium-flow.js"
+        if flow_path.is_file() and flow_path not in seen_paths:
+            seen_paths.add(flow_path)
+            script_paths.append(flow_path)
     inline_js = build_classic_scripts(script_paths) if script_paths else ""
 
     footer_parts: list[str] = []
@@ -278,6 +291,10 @@ def bundle_html(html: str, html_path: Path) -> str:
         if wants_premium_journey(html):
             boot += "  if (typeof initPremiumJourney === 'function') {\n"
             boot += "    try { initPremiumJourney(); } catch (e) { console.error('[PremiumJourney] init failed', e); }\n"
+            boot += "  }\n"
+        if wants_premium_flow(html):
+            boot += "  if (typeof initPremiumFlow === 'function') {\n"
+            boot += "    try { initPremiumFlow(); } catch (e) { console.error('[PremiumFlow] init failed', e); }\n"
             boot += "  }\n"
         boot += "  try { new SlideEngine(); } catch (e) { console.error('[SlideEngine] init failed', e); }\n"
         boot += "});\n"

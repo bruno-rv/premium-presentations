@@ -44,9 +44,14 @@
 |---|------|-------|-------------|----------------|-----------|
 | 1 | Title | … | … | slide--title | N/A |
 | 2 | Hook Quote | … | … | slide--quote | N/A |
-| 3 | Content | … | … | P9 compare-paradigm \| P14 journey \| TL timeline \| STG stage-card \| GL glass-code \| BAR bar-chart | "{Why this matters}" |
+| 3 | Content | … | … | FLOW+ live-flow \| PIPE pipeline-vertical \| P9 compare-paradigm \| P14 journey \| TL timeline \| STG stage-card \| GL glass-code \| TERM terminal \| BAR bar-chart \| FLOW setup-flow \| STAT stats-row \| CHK checklist \| kpi-row \| content-grid+aside-card \| data-table | "{Why this matters}" |
 | … | … | … | … | … | … |
 | N | Closing Quote | … | … | slide--quote | N/A |
+
+**Visual Pattern rule:** every Content row names one concrete pattern from the
+routing table in [components.md](components.md) — never leave it generic and
+never plan a bare heading + paragraph slide. Vary patterns: ≥5 distinct ones
+in a 12+ slide deck, no pattern on more than 2 consecutive slides.
 
 ---
 
@@ -64,7 +69,7 @@
 
 ### Signature visual (HERO slide)
 
-{Pick from [components.md](components.md): P14 journey-path, P9 compare-paradigm, DIV+ act divider, TL timeline, STG stage-card, GL glass-code-window, BAR bar-chart, FLOW setup-flow. Copy markup from `assets/templates/components/*.snippet.html`.}
+{Pick from [components.md](components.md): FLOW+ live-flow, P14 journey-path, P9 compare-paradigm, DIV+ act divider, TL timeline, STG stage-card, GL glass-code-window, PIPE pipeline-vertical, TERM terminal-window, BAR bar-chart, FLOW setup-flow. Copy markup from `assets/templates/components/*.snippet.html`.}
 
 ### Tone
 

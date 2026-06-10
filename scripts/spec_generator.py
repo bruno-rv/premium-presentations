@@ -19,8 +19,30 @@ TABLE_HEADER = (
     "|---|------|-------|-------------|----------------|----------|"
 )
 
+# Concrete component IDs rotated through content slides so every slot ships
+# with a committed visual pattern instead of a non-committal placeholder.
+CONTENT_PATTERNS = (
+    "STG stage-card",
+    "P9 compare-paradigm",
+    "FLOW+ live-flow",
+    "STAT stats-row + WHY",
+    "TL timeline",
+    "PIPE pipeline-vertical",
+    "slide--diagram (Mermaid)",
+    "GL glass-code",
+    "BAR bar-chart",
+    "CHK checklist",
+)
+PATTERN_NOTE = "(suggested — swap to fit content, never bare)"
 
-def slide_row(i: int, count: int) -> str:
+
+def is_content_slide(i: int, count: int) -> bool:
+    if i in (1, 2, count):
+        return False
+    return not (i in (4, 8, 12) and count >= 12)
+
+
+def slide_row(i: int, count: int, content_ordinal: int = 0) -> str:
     if i == 1:
         title, typ, pattern = "Title", "Title", "slide--title"
     elif i == 2:
@@ -30,8 +52,20 @@ def slide_row(i: int, count: int) -> str:
     elif i in (4, 8, 12) and count >= 12:
         title, typ, pattern = f"Act break {i}", "Divider", "DIV+ divider-act"
     else:
-        title, typ, pattern = f"Slide {i}", "Content", "slide / diagram / table"
+        suggestion = CONTENT_PATTERNS[content_ordinal % len(CONTENT_PATTERNS)]
+        title, typ = f"Slide {i}", "Content"
+        pattern = f"{suggestion} {PATTERN_NOTE}"
     return f"| {i} | {typ} | {title} | TBD | {pattern} | TBD |"
+
+
+def slide_rows(count: int) -> list[str]:
+    rows: list[str] = []
+    content_ordinal = 0
+    for i in range(1, count + 1):
+        rows.append(slide_row(i, count, content_ordinal))
+        if is_content_slide(i, count):
+            content_ordinal += 1
+    return rows
 
 
 def generate_spec(text: str, slug: str, title: str, count: int) -> str:
@@ -40,15 +74,14 @@ def generate_spec(text: str, slug: str, title: str, count: int) -> str:
     text = text.replace("{Full title}", title)
     text = text.replace("{N}", str(max(15, count // 2)))
 
-    table = TABLE_HEADER + "\n" + "\n".join(
-        slide_row(i, count) for i in range(1, count + 1)
-    )
+    table = TABLE_HEADER + "\n" + "\n".join(slide_rows(count))
     return re.sub(
-        r"\| # \| Type \| Title \| Key Content \| Visual Pattern \| Why Panel \|\n\|---\|.*?\n(\| 1 \|.*?\n)?",
-        table + "\n",
+        r"\| # \| Type \| Title \| Key Content \| Visual Pattern \| Why Panel \|\n"
+        r"\|---\|[^\n]*\n"
+        r"(?:\|[^\n]*\n)*",
+        table.replace("\\", "\\\\") + "\n",
         text,
         count=1,
-        flags=re.DOTALL,
     )
 
 

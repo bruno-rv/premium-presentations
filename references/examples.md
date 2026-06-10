@@ -4,7 +4,7 @@
 
 - Re-bundling
 - Mermaid diagrams
-- Title, quote, content, stat, divider, and diagram patterns
+- Title, quote, content, stat, divider, diagram, live-flow, pipeline, and terminal patterns
 - Speaker notes
 - Validation commands
 
@@ -124,6 +124,69 @@ flowchart LR
     </div>
   </div>
 </section>
+```
+
+## Live flow (FLOW+, animated architecture)
+
+Full snippet: `assets/templates/components/live-flow.snippet.html`. Requires
+`premium-flow.js` (the bundler inlines it when `.live-flow` is present).
+
+```html
+<div class="live-flow reveal"
+     data-flow-interval="1500"
+     data-flow-phases='[{"label":"Ingest","nodes":["n-src"],"arrows":[]},{"label":"Transform","nodes":["n-etl"],"arrows":["a-1"]}]'>
+  <div class="live-flow__banner" data-flow-banner>Ingest</div>
+  <div class="live-flow__row">
+    <div class="flow-node" id="n-src">
+      <div class="flow-node__icon">📡</div>
+      <div class="flow-node__title">Source</div>
+      <div class="flow-node__sub">raw events</div>
+    </div>
+    <div class="flow-arrow" id="a-1">
+      <div class="flow-arrow__line"><div class="flow-arrow__shimmer"></div></div>
+      <div class="flow-arrow__label">stream →</div>
+    </div>
+    <div class="flow-node" id="n-etl">
+      <div class="flow-node__icon">⚙️</div>
+      <div class="flow-node__title">Transform</div>
+      <div class="flow-node__sub">clean + enrich</div>
+    </div>
+  </div>
+</div>
+```
+
+## Pipeline vertical (PIPE)
+
+```html
+<div class="pipeline-vertical reveal">
+  <div class="pipeline-stage">
+    <div class="pipeline-connector">
+      <div class="pipeline-dot pipeline-dot--gold"></div>
+      <div class="pipeline-line"></div>
+    </div>
+    <div class="pipeline-stage__body">
+      <h3>Bronze</h3>
+      <p>Raw landing, schema on read.</p>
+    </div>
+  </div>
+  <!-- repeat 3–6 stages; omit .pipeline-line on the last -->
+</div>
+```
+
+## Terminal window (TERM)
+
+```html
+<div class="terminal-window reveal">
+  <div class="terminal-window__bar">
+    <span class="terminal-window__dot terminal-window__dot--r"></span>
+    <span class="terminal-window__dot terminal-window__dot--y"></span>
+    <span class="terminal-window__dot terminal-window__dot--g"></span>
+    <span class="terminal-window__title">deploy.sh</span>
+  </div>
+  <pre class="terminal-window__body"><span class="term-prompt">$</span> ./scripts/new-deck.sh editorial my-talk "My Talk" 14
+<span class="term-ok">✓ deck scaffolded</span>
+<span class="term-dim"># next: edit slides in place</span></pre>
+</div>
 ```
 
 ## Speaker notes

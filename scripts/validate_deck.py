@@ -16,6 +16,96 @@ from validate_diagrams import (
 )
 from validate_layout import validate_deck_layout
 
+# Class tokens that count as a visual anchor on a content slide. Mirrors the
+# component vocabulary in references/components.md.
+COMPONENT_MARKERS = (
+    "journey-stage",
+    "compare-split",
+    "timeline-grid",
+    "stage-card",
+    "glass-card",
+    "code-window",
+    "bar-chart",
+    "setup-flow",
+    "stats-row",
+    "checklist-grid",
+    "why-panel",
+    "live-flow",
+    "pipeline-vertical",
+    "terminal-window",
+    "content-grid",
+    "split",
+    "kpi-row",
+    "aside-card",
+    "data-table",
+    "mermaid",
+)
+
+# Slide-type modifiers that are exempt from the bare-slide rule.
+EXEMPT_SLIDE_TYPES = ("slide--title", "slide--quote", "slide--divider", "slide--diagram")
+
+SLIDE_OPEN_RE = re.compile(
+    r'<section\s+[^>]*class=["\'][^"\']*\bslide\b[^"\']*["\'][^>]*>', re.I
+)
+CLASS_ATTR_RE = re.compile(r'class=["\']([^"\']+)["\']', re.I)
+
+
+def _class_tokens(chunk: str) -> set[str]:
+    tokens: set[str] = set()
+    for value in CLASS_ATTR_RE.findall(chunk):
+        tokens.update(value.split())
+    return tokens
+
+
+def validate_deck_variety(text: str) -> tuple[list[str], int]:
+    """Density/variety lint: bare slides, monotone runs, low pattern variety.
+
+    Returns (messages, distinct_pattern_count).
+    """
+    messages: list[str] = []
+    opens = list(SLIDE_OPEN_RE.finditer(text))
+    if not opens:
+        return messages, 0
+
+    deck_markers: set[str] = set()
+    bare: list[int] = []
+    for idx, match in enumerate(opens):
+        end = opens[idx + 1].start() if idx + 1 < len(opens) else len(text)
+        chunk = text[match.start():end]
+        tokens = _class_tokens(chunk)
+        markers = {m for m in COMPONENT_MARKERS if m in tokens}
+        deck_markers.update(markers)
+        slide_tokens = _class_tokens(match.group(0))
+        if any(t in slide_tokens for t in EXEMPT_SLIDE_TYPES):
+            continue
+        has_raw_visual = re.search(r"<svg\b|<table\b|<pre\b", chunk, re.I)
+        if not markers and not has_raw_visual:
+            bare.append(idx + 1)
+            messages.append(
+                f"bare slide {idx + 1}: heading+text only — add a visual anchor "
+                "(see references/components.md)"
+            )
+
+    # Runs of >2 consecutive bare slides read as a wall of boxes.
+    run: list[int] = []
+    for n in bare + [-1]:
+        if run and n != run[-1] + 1:
+            if len(run) > 2:
+                messages.append(
+                    f"slides {run[0]}–{run[-1]}: {len(run)} consecutive bare slides — "
+                    "vary layouts (journey, compare, flow, pipeline, diagram)"
+                )
+            run = []
+        run.append(n)
+
+    if len(opens) >= 8 and len(deck_markers) < 4:
+        messages.append(
+            f"low visual variety: {len(deck_markers)} distinct component pattern(s) "
+            f"across {len(opens)} slides (target ≥4)"
+        )
+
+    return messages, len(deck_markers)
+
 
 def load_bundle(html_path: Path, text: str) -> str:
     bundle = text
@@ -34,7 +124,7 @@ def load_bundle(html_path: Path, text: str) -> str:
     return augment_bundle_for_diagrams(text, bundle, html_path)
 
 
-def validate(html_path: Path, spec_path: str = "") -> int:
+def validate(html_path: Path, spec_path: str = "", strict_variety: bool = False) -> int:
     text = html_path.read_text(encoding="utf-8", errors="replace")
     bundle = load_bundle(html_path, text)
     errors: list[str] = []
@@ -108,6 +198,12 @@ def validate(html_path: Path, spec_path: str = "") -> int:
     errors.extend(l_errs)
     warnings.extend(l_warns)
 
+    v_msgs, distinct_patterns = validate_deck_variety(text)
+    if strict_variety:
+        errors.extend(v_msgs)
+    else:
+        warnings.extend(v_msgs)
+
     if standalone and "PremiumPresentations" not in bundle:
         errors.append(
             "Standalone deck missing PremiumPresentations — controls script likely truncated; re-bundle"
@@ -135,6 +231,7 @@ def validate(html_path: Path, spec_path: str = "") -> int:
 
     print(f"Validating: {html_path}")
     print(f"  Slides found: {slides}")
+    print(f"  Visual patterns: {distinct_patterns} distinct")
     if mermaid_count:
         print(f"  Mermaid diagrams: {mermaid_count}")
     if expected is not None:
@@ -153,12 +250,17 @@ def validate(html_path: Path, spec_path: str = "") -> int:
 
 
 def main() -> int:
-    html = sys.argv[1] if len(sys.argv) > 1 else ""
-    spec = sys.argv[2] if len(sys.argv) > 2 else ""
+    args = [a for a in sys.argv[1:] if a != "--strict-variety"]
+    strict_variety = "--strict-variety" in sys.argv[1:]
+    html = args[0] if args else ""
+    spec = args[1] if len(args) > 1 else ""
     if not html or not Path(html).is_file():
-        print("Usage: validate_deck.py <deck.html> [slide-spec.md]", file=sys.stderr)
+        print(
+            "Usage: validate_deck.py <deck.html> [slide-spec.md] [--strict-variety]",
+            file=sys.stderr,
+        )
         return 1
-    return validate(Path(html), spec)
+    return validate(Path(html), spec, strict_variety=strict_variety)
 
 
 if __name__ == "__main__":

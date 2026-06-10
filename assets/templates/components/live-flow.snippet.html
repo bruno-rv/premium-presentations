@@ -1,0 +1,47 @@
+<!-- Animated live flow: phase spotlight cycles nodes + shimmer arrows (requires premium-flow.js) -->
+<section class="slide">
+  <p class="slide__label reveal">Pipeline</p>
+  <h2 class="slide__heading reveal">Data in motion</h2>
+  <div class="live-flow reveal" data-flow-interval="1800"
+       data-flow-phases='[
+         {"label":"INGEST — raw events land in bronze","nodes":["lf-src","lf-bronze"],"arrows":["lf-a1"]},
+         {"label":"REFINE — dedupe and enrich to silver","color":"var(--gold)","nodes":["lf-bronze","lf-silver"],"arrows":["lf-a2"]},
+         {"label":"SERVE — business metrics in gold","color":"var(--green)","nodes":["lf-silver","lf-gold"],"arrows":["lf-a3"]}
+       ]'>
+    <div class="live-flow__banner" data-flow-banner>INGEST</div>
+    <div class="live-flow__row">
+      <div class="flow-node" id="lf-src">
+        <div class="flow-node__icon" aria-hidden="true">📡</div>
+        <div class="flow-node__title">Source</div>
+        <div class="flow-node__sub">raw events</div>
+      </div>
+      <div class="flow-arrow" id="lf-a1" aria-hidden="true">
+        <span class="flow-arrow__line"><span class="flow-arrow__shimmer"></span></span>
+        <span class="flow-arrow__label">events →</span>
+      </div>
+      <div class="flow-node" id="lf-bronze">
+        <div class="flow-node__icon" aria-hidden="true">📥</div>
+        <div class="flow-node__title">Bronze</div>
+        <div class="flow-node__sub">raw / no transform</div>
+      </div>
+      <div class="flow-arrow" id="lf-a2" aria-hidden="true">
+        <span class="flow-arrow__line"><span class="flow-arrow__shimmer"></span></span>
+        <span class="flow-arrow__label">cleansed →</span>
+      </div>
+      <div class="flow-node" id="lf-silver">
+        <div class="flow-node__icon" aria-hidden="true">🪄</div>
+        <div class="flow-node__title">Silver</div>
+        <div class="flow-node__sub">dedupe / enrich</div>
+      </div>
+      <div class="flow-arrow" id="lf-a3" aria-hidden="true">
+        <span class="flow-arrow__line"><span class="flow-arrow__shimmer"></span></span>
+        <span class="flow-arrow__label">aggregated →</span>
+      </div>
+      <div class="flow-node" id="lf-gold">
+        <div class="flow-node__icon" aria-hidden="true">📊</div>
+        <div class="flow-node__title">Gold</div>
+        <div class="flow-node__sub">business metrics</div>
+      </div>
+    </div>
+  </div>
+</section>

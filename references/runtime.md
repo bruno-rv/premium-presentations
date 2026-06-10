@@ -43,6 +43,7 @@ at the bottom of each table.
 | `premium-presenter.js` | Presenter popup lifecycle, BroadcastChannel/postMessage/localStorage bridge, presenter UI DOM |
 | `premium-mermaid.js` | Conditional (Mermaid markup): CDN load, `handDrawn` theme, auto-fit, clip detection, zoom/pan, theme re-render |
 | `premium-journey.js` | Conditional (`.journey-stage` markup): SVG path journey animation |
+| `premium-flow.js` | Conditional (`.live-flow` markup): phase spotlight cycling over `.flow-node`/`.flow-arrow` ids from `data-flow-phases` JSON, shimmer arrow animation, banner label; pauses off-screen, static under reduced motion |
 | `premium-red-chrome.js` | Conditional (red decks): brand bar + hero mark injection |
 
 Linked decks use `../../shared/…` from `assets/decks/<slug>/`.
@@ -63,7 +64,8 @@ Use `assets/templates/diagram-slide.snippet.html`. Validator enforces:
 template, theme, bundler, or shared runtime edit. It verifies discovered theme
 scaffold templates, preview templates, and generated deck HTML files carry the
 common CSS/JS stack, plus red brand modules where the active template/deck is
-red, plus `premium-journey.js` when a file contains `.journey-stage` markup.
+red, plus `premium-journey.js` when a file contains `.journey-stage` markup,
+plus `premium-flow.js` when a file contains `.live-flow` markup.
 
 **Live theme switch:** `PremiumPresentations.setTheme('<theme>')` or UI control. The control panel discovers themes from loaded CSS. Dispatches `premium-theme-change` on `<html>`.
 

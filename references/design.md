@@ -32,9 +32,22 @@ Editorial, technical, high-polish.
   SlideEngine runtime.
 - Fragment stepping libraries — use `.reveal` stagger only.
 - Multiple ideas per slide.
+- Bare heading + paragraph slides (title/quote/divider exempt).
+- Sparse single-component slides — one-sentence preamble floating over one
+  stats block reads as an empty box.
 - Missing `prefers-reduced-motion` support (provided by `premium-deck.css`).
 - Course-specific branding unless explicitly requested.
 - Closing footer-note rows, "NEXT:" citations, or lesson-pill rows.
+
+## Density
+
+- Every content slide has a visual anchor from the routing table in
+  [components.md](components.md) — never a heading plus one paragraph in
+  empty space.
+- Per-slide limits: content 5–6 bullets max; stats/dashboard 3–6 KPIs;
+  table ≤8 rows; flow/pipeline 3–6 nodes.
+- Variety: a 12+ slide deck uses ≥5 distinct visual patterns, and no
+  pattern repeats on more than 2 consecutive slides.
 
 ## Principles
 
