@@ -85,6 +85,13 @@ Load only the reference needed for the current task.
 - Follow `references/design.md` for slide design principles (one dominant
   idea per slide, generic branding unless requested, no closing footer-note
   rows, "NEXT:" citations, or lesson-pill rows).
+- **Speaker notes (mandatory):** for every `<section class="slide …">`,
+  render the spec's Speaker Notes field as an `<aside class="notes">` element
+  placed as the **last child** inside the section — after all visible content.
+  Notes are hidden from the audience (CSS `display: none` is applied by the
+  runtime on `.slide aside.notes`). The presenter popup reads them via
+  `aside.notes` selectors in `slide-engine.js`. See `references/examples.md`
+  for the exact markup pattern.
 
 ## Validate
 

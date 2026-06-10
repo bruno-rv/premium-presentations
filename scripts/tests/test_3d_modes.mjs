@@ -199,8 +199,17 @@ console.log('Test: CSS contract');
   assert(!!frameBlock && /display:\s*flex/.test(frameBlock[0]) && !/display:\s*contents/.test(frameBlock[0]), 'frame is a real flex box in all modes (no display: contents)');
 
   assert(/body\.print-pdf \.slide-3d-frame/.test(extras), 'print-pdf flatten present');
+  assert(/print-color-adjust:\s*exact/.test(extras), 'print-color-adjust exact present');
+  assert(/body\.print-pdf::after/.test(extras) && /display:\s*none/.test(extras), 'print-pdf hides grain overlay');
+  assert(/body\.print-pdf\s*\{[^}]*overflow:\s*visible/.test(extras), 'print-pdf unlocks body overflow');
+  assert(/body\.print-pdf\s*\{[^}]*height:\s*auto/.test(extras), 'print-pdf unlocks body height');
+  assert(/body\.print-pdf \.slide:last-child/.test(extras) && /break-after:\s*auto/.test(extras), 'last slide avoids trailing blank page');
   const mediaPrint = extras.slice(extras.indexOf('@media print'));
   assert(/html\[data-3d\] \.slide-3d-frame/.test(mediaPrint), 'raw @media print flatten present');
+  assert(/@page\s*\{[^}]*size:\s*13\.333in\s+7\.5in/.test(mediaPrint), '@page uses inch-based 1280x720 size');
+  assert(/background:\s*var\(--bg\)/.test(mediaPrint), '@media print uses theme background token');
+  assert(/body\.print-pdf \.slide\s*\{[^}]*opacity:\s*1/.test(mediaPrint), '@media print forces slide visibility');
+  assert(/body\.print-pdf \.slide \.reveal\s*\{[^}]*opacity:\s*1/.test(mediaPrint), '@media print forces reveal visibility');
 
   const presenter = readFileSync(join(SHARED, 'premium-presenter.js'), 'utf8');
   assert(/parallax\.toggle.*toggleParallax/.test(presenter), 'presenter parallax.toggle routes to compat wrapper');

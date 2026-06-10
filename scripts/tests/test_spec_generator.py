@@ -70,6 +70,38 @@ class SpecGeneratorTests(unittest.TestCase):
         self.assertNotIn("DIV+ divider-act", "\n".join(rows.values()))
         self.assertIn(self.gen.PATTERN_NOTE, rows[4])
 
+    def test_speaker_notes_column_in_header(self) -> None:
+        self.assertIn("Speaker Notes", self.spec_14)
+
+    def test_every_slide_row_has_speaker_notes(self) -> None:
+        rows = self.map_rows(self.spec_14)
+        for i, row in rows.items():
+            cells = [c.strip() for c in row.strip("|").split("|")]
+            self.assertGreaterEqual(len(cells), 7, f"Row {i} has fewer than 7 cells")
+            notes_cell = cells[6]
+            self.assertTrue(
+                len(notes_cell) > 10,
+                f"Row {i} speaker notes cell is empty or too short: {notes_cell!r}",
+            )
+
+    def test_content_slide_notes_tied_to_pattern(self) -> None:
+        rows = self.map_rows(self.spec_14)
+        for i, row in rows.items():
+            if not self.gen.is_content_slide(i, 14):
+                continue
+            cells = [c.strip() for c in row.strip("|").split("|")]
+            notes_cell = cells[6]
+            self.assertNotEqual(notes_cell, "TBD", f"Row {i} notes is still TBD")
+            self.assertNotIn("add notes here", notes_cell.lower(), f"Row {i} has generic placeholder")
+
+    def test_fixed_slot_notes_not_generic(self) -> None:
+        rows = self.map_rows(self.spec_14)
+        for fixed_slot in (1, 2, 14):
+            cells = [c.strip() for c in rows[fixed_slot].strip("|").split("|")]
+            notes_cell = cells[6]
+            self.assertTrue(len(notes_cell) > 10, f"Slot {fixed_slot} notes too short: {notes_cell!r}")
+            self.assertNotIn("add notes here", notes_cell.lower())
+
 
 if __name__ == "__main__":
     unittest.main()

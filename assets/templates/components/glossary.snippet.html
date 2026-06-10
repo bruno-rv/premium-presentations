@@ -1,0 +1,33 @@
+<!-- Glossary: term-link buttons + JSON dictionary block (requires premium-glossary.js) -->
+<!-- Usage: place the JSON block anywhere in <body>; term-link buttons can appear in any slide. -->
+
+<!-- JSON dictionary — one entry per term. Both "title" and "body" are required. -->
+<script type="application/json" id="glossary">
+{
+  "RAG": {
+    "title": "RAG — Retrieval-Augmented Generation",
+    "body": "Augments an LLM with documents retrieved at query time. Chunk → embed → search → inject top results into the prompt → generate."
+  },
+  "LLM": {
+    "title": "LLM — Large Language Model",
+    "body": "A transformer-scale model trained on text to predict tokens — the generator in a RAG pipeline."
+  }
+}
+</script>
+
+<!-- Term-link button: inline in slide body text, renders with dotted underline. -->
+<!-- data-term must match a key in the glossary JSON exactly (case-sensitive). -->
+<section class="slide">
+  <p class="slide__label">Concepts</p>
+  <h2 class="slide__heading">Vector retrieval basics</h2>
+  <div class="slide__body">
+    <p>
+      A <button class="term-link" type="button" data-term="RAG">RAG</button> pipeline
+      pairs an <button class="term-link" type="button" data-term="LLM">LLM</button>
+      with a vector search index so answers are grounded in your documents.
+    </p>
+  </div>
+  <aside class="notes">
+    Click any underlined term to open its definition popup.
+  </aside>
+</section>

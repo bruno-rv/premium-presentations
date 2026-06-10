@@ -40,18 +40,35 @@
 
 ## Slide Map
 
-| # | Type | Title | Key Content | Visual Pattern | Why Panel |
-|---|------|-------|-------------|----------------|-----------|
-| 1 | Title | … | … | slide--title | N/A |
-| 2 | Hook Quote | … | … | slide--quote | N/A |
-| 3 | Content | … | … | FLOW+ live-flow \| PIPE pipeline-vertical \| P9 compare-paradigm \| P14 journey \| TL timeline \| STG stage-card \| GL glass-code \| TERM terminal \| BAR bar-chart \| FLOW setup-flow \| STAT stats-row \| CHK checklist \| kpi-row \| content-grid+aside-card \| data-table | "{Why this matters}" |
-| … | … | … | … | … | … |
-| N | Closing Quote | … | … | slide--quote | N/A |
+| # | Type | Title | Key Content | Visual Pattern | Why Panel | Speaker Notes |
+|---|------|-------|-------------|----------------|-----------|---------------|
+| 1 | Title | … | … | slide--title | N/A | … |
+| 2 | Hook Quote | … | … | slide--quote | N/A | … |
+| 3 | Content | … | … | FLOW+ live-flow \| PIPE pipeline-vertical \| P9 compare-paradigm \| P14 journey \| TL timeline \| STG stage-card \| GL glass-code \| TERM terminal \| BAR bar-chart \| FLOW setup-flow \| STAT stats-row \| CHK checklist \| kpi-row \| content-grid+aside-card \| data-table | "{Why this matters}" | … |
+| … | … | … | … | … | … | … |
+| N | Closing Quote | … | … | slide--quote | N/A | … |
 
 **Visual Pattern rule:** every Content row names one concrete pattern from the
 routing table in [components.md](components.md) — never leave it generic and
 never plan a bare heading + paragraph slide. Vary patterns: ≥5 distinct ones
 in a 12+ slide deck, no pattern on more than 2 consecutive slides.
+
+**Speaker Notes rule:** every slide row carries a Speaker Notes entry — 2–4
+sentences of what the presenter says aloud (delivery cues, transitions, the
+"why" behind the slide). Notes are distinct from on-slide text; they describe
+pacing, emphasis, or context the audience never reads. The generation skill
+renders each entry as `<aside class="notes">…</aside>` as the last child
+inside the `.slide` section.
+
+---
+
+## Glossary (optional)
+
+If the deck introduces domain terms that benefit from hover definitions, list them here. The generator will emit a `<script type="application/json" id="glossary">` block and wrap in-text mentions with `.term-link` buttons. Omit this section if the deck does not need term popups.
+
+| Key | Title | Body |
+|-----|-------|------|
+| {TERM} | {Full name or expansion} | {One-sentence definition.} |
 
 ---
 

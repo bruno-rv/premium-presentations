@@ -60,7 +60,10 @@
   }
 
   function post(type, detail) {
-    const payload = Object.assign({ type, ts: Date.now() }, detail || {});
+    const sessionId = document.documentElement.dataset.session || '';
+    const seq = window.PremiumPresenter && typeof window.PremiumPresenter.nextStateSeq === 'function'
+      ? window.PremiumPresenter.nextStateSeq() : undefined;
+    const payload = Object.assign({ type, ts: Date.now(), sessionId }, seq != null ? { seq } : {}, detail || {});
     if (window.PremiumPresenter && typeof window.PremiumPresenter.postToPeer === 'function') {
       try { window.PremiumPresenter.postToPeer(payload); return; } catch (_) {}
     }
@@ -186,6 +189,7 @@
   }
 
   function mount() {
+    if (isInPopup()) return;
     if (panel || document.getElementById('premium-timer-panel')) {
       panel = document.getElementById('premium-timer-panel');
       return;
@@ -233,6 +237,7 @@
   }
 
   function start() {
+    if (isInPopup()) return;
     if (running) return;
     mount();
     if (mode === 'endAt' && targetEndAtMs <= Date.now()) {
@@ -255,6 +260,7 @@
   }
 
   function pause() {
+    if (isInPopup()) return;
     if (!running) return;
     elapsedAtPause = elapsedAtPause + (performance.now() - startTs);
     pausedAt = performance.now();
@@ -268,6 +274,7 @@
   }
 
   function stop() {
+    if (isInPopup()) return;
     running = false;
     releaseWakeLock();
     if (raf) cancelAnimationFrame(raf);
@@ -277,6 +284,7 @@
   }
 
   function reset(minutes) {
+    if (isInPopup()) return;
     if (minutes) totalMs = minutes * 60 * 1000;
     elapsedAtPause = 0;
     pausedAt = 0;
@@ -290,6 +298,7 @@
   }
 
   function setMinutes(m) {
+    if (isInPopup()) return;
     if (!Number.isFinite(m) || m <= 0) throw new Error('Invalid minutes: ' + m);
     mode = 'duration';
     totalMs = m * 60 * 1000;
@@ -305,6 +314,7 @@
   }
 
   function setEndAt(timestampMs) {
+    if (isInPopup()) return;
     if (!Number.isFinite(timestampMs) || timestampMs <= Date.now()) {
       throw new Error('Invalid end timestamp: must be a finite future timestamp');
     }
@@ -420,13 +430,25 @@
     } catch (_) {}
   }
 
+  function isInPopup() {
+    return new URLSearchParams(location.search).get('presenter') === '1';
+  }
+
   function init() {
+    // In the popup the timer is driven by tick messages from the deck.
+    // No local restore, no RAF, no wake lock, no bell audio, no postTick.
+    if (isInPopup()) return;
+
     readConfig();
     restore();
     const ch = getCh();
     if (ch) {
       ch.addEventListener('message', (e) => {
-        if (e.data && e.data.type === 'slidechange') onSlideChange();
+        if (!e.data) return;
+        // Drop slidechange from other sessions. Legacy unstamped messages pass.
+        const msgSid = e.data.sessionId;
+        if (msgSid && msgSid !== document.documentElement.dataset.session) return;
+        if (e.data.type === 'slidechange') onSlideChange();
       });
     }
     document.addEventListener('visibilitychange', () => {

@@ -40,11 +40,13 @@ at the bottom of each table.
 | `premium-search.js` | Cmd+K fuzzy slide search |
 | `premium-clicker.js` | WebHID clicker support + Shift+C keyboard binding |
 | `premium-og-cover.js` | PNG slide export for OG covers |
+| `premium-slide-content.js` | Pure functions over slide DOM: `getTitle(slide, i)`, `getNotesHtml(slide)`, `getSummaryHtml(slide)`; shared between deck and popup |
 | `premium-presenter.js` | Presenter popup lifecycle, BroadcastChannel/postMessage/localStorage bridge, presenter UI DOM |
 | `premium-mermaid.js` | Conditional (Mermaid markup): CDN load, `handDrawn` theme, auto-fit, clip detection, zoom/pan, theme re-render |
 | `premium-journey.js` | Conditional (`.journey-stage` markup): SVG path journey animation |
 | `premium-flow.js` | Conditional (`.live-flow` markup): phase spotlight cycling over `.flow-node`/`.flow-arrow` ids from `data-flow-phases` JSON, shimmer arrow animation, banner label; pauses off-screen, static under reduced motion |
 | `premium-red-chrome.js` | Conditional (red decks): brand bar + hero mark injection |
+| `premium-glossary.js` | Conditional (`.term-link[data-term]` or `id="glossary"` markup): parses JSON dictionary, injects `#term-popup` modal, click/Esc/focus handlers; `window.PremiumGlossary` API |
 
 Linked decks use `../../shared/…` from `assets/decks/<slug>/`.
 

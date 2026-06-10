@@ -29,9 +29,12 @@ loadScript(popup, 'premium-presenter.js');
 
 await new Promise((r) => setTimeout(r, 100));
 
-// Verify popup built with controls
-const startBtn = popup.window.document.getElementById('pp-start');
-if (!startBtn) throw new Error('pp-start missing');
+// Verify popup built with controls.
+// Timer bar has #pp-timer-startstop (toggle) and #pp-timer-reset.
+// Settings panel has #pp-minutes (hidden in #pp-timer-settings until gear opens it,
+// but exists in DOM and can be queried directly).
+const startStopBtn = popup.window.document.getElementById('pp-timer-startstop');
+if (!startStopBtn) throw new Error('pp-timer-startstop missing');
 const minutesInput = popup.window.document.getElementById('pp-minutes');
 if (!minutesInput) throw new Error('pp-minutes missing');
 
@@ -49,8 +52,8 @@ await new Promise((r) => setTimeout(r, 500));
 
 console.log('  deck PremiumTimer after setMinutes(5):', JSON.stringify(PT.getState()));
 
-// User clicks Start
-startBtn.click();
+// User clicks Start (first click = Start on the startstop toggle).
+startStopBtn.click();
 await new Promise((r) => setTimeout(r, 100));
 
 const state = PT.getState();
@@ -62,8 +65,8 @@ if (!state.running) {
 console.log('  PASS — popup Start button drives deck timer');
 
 console.log('Test: popup Pause button stops deck timer');
-const pauseBtn = popup.window.document.getElementById('pp-pause');
-pauseBtn.click();
+// Second click on the toggle = Pause.
+startStopBtn.click();
 await new Promise((r) => setTimeout(r, 100));
 
 const state2 = PT.getState();
@@ -75,10 +78,10 @@ if (state2.running) {
 console.log('  PASS — popup Pause button stops deck timer');
 
 console.log('Test: popup Reset button stops + resets deck timer');
-// First restart so we have non-zero elapsed.
-startBtn.click();
+// Third click = Start again so we have non-zero elapsed.
+startStopBtn.click();
 await new Promise((r) => setTimeout(r, 200));
-const resetBtn = popup.window.document.getElementById('pp-reset');
+const resetBtn = popup.window.document.getElementById('pp-timer-reset');
 resetBtn.click();
 await new Promise((r) => setTimeout(r, 100));
 

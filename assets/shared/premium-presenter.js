@@ -3,7 +3,7 @@
  *
  * Architecture (per PLAN.md, 5-round Codex-approved):
  *   - Two windows: deck (audience-shared) + popup (presenter).
- *   - Per-session BroadcastChannel ('premium-deck:<uuid>') with sessionId in
+ *   - Per-session BroadcastChannel ('premium-deck' global) with sessionId in
  *     every message. Mismatched sessionIds are ignored.
  *   - Initial handshake: popup sends `presenter.ready`, deck replies with
  *     `snapshot` (titles + notes + current index).
@@ -19,20 +19,23 @@
  *     the deck window corner. NO notes, no jump list, no timer pill in
  *     the prompt — presenter content stays presenter-only.
  *   - Owner state machine: 'deck' | 'popup' | 'none'. See premium-controller.js.
+ *
+ * Seq allocator: PremiumPresenter.nextStateSeq() — monotonic counter shared
+ *   across all modules. Popup reducer ignores messages with seq <= last seen
+ *   per kind (slideSeq, timerSeq) to drop stale replays.
  */
 (function () {
   const AUTO_OPEN_FLAG_KEY = 'premium-presenter-auto:';
-  const FALLBACK_RETRY_FLAG = 'premium-presenter-fallback-shown';
   const HEARTBEAT_MS = 1000;
-  const OPEN_AFTER_MS = 800;  // wait for the first slide to settle before opening
+  const OPEN_AFTER_MS = 800;
 
   let channel = null;
   let popup = null;
   let popupTitle = '';
-  let sessionId = '';
   let storageTick = 0;
   const STORAGE_KEY = 'premium-deck-msg';
   let commandIdCounter = 0;
+  let _previewCounter = 0;
   let seenCommandIds = new Set();
   let heartbeatTimer = 0;
   let discoverTimer = 0;
@@ -40,18 +43,31 @@
   let popupTimerState = null;
   let fallbackPrompt = null;
   let openingTimer = 0;
-  // window-message transport — needed for file:// origins where BroadcastChannel
-  // is blocked by Chrome's opaque-origin rule. The deck holds a `popup` ref;
-  // the popup reaches the deck via `window.opener`. Both transports are tried
-  // on send; the dedup set on receive collapses any echo.
   let postTransportInstalled = false;
   let autoOpenDone = false;
-  // Diagnostics (only when ?presenter=diag)
+
+  // Monotonic seq counter shared with timer and any future modules.
+  let _seq = 0;
+  function nextStateSeq() {
+    return ++_seq;
+  }
+
+  // Per-kind cursors for the popup reducer (Phase 2b).
+  let slideSeq = 0;
+  let timerSeq = 0;
+
+  // Diagnostics — only when ?ppdiag=1.
   const DIAG = {
     sent: 0, recv: 0, lastSent: '', lastRecv: '',
     bcAvail: false, lsAvail: false, opener: false,
   };
+
+  function isDiagMode() {
+    return new URLSearchParams(location.search).get('ppdiag') === '1';
+  }
+
   function updateDiag() {
+    if (!isDiagMode()) return;
     const el = document.getElementById('pp-diag');
     if (!el) return;
     el.hidden = false;
@@ -74,11 +90,6 @@
 
   function getCh() {
     if (!channel) {
-      // Use a single global channel name. Per-session channels break when
-      // either side reloads (the URL-stamped sessionId in the popup becomes
-      // stale), forcing a discovery dance. The sessionId in the message
-      // payload is still validated on receive, so wrong-target messages
-      // are filtered out — and a single user only runs one deck at a time.
       try { channel = new BroadcastChannel('premium-deck'); } catch (_) { return null; }
     }
     return channel;
@@ -93,8 +104,6 @@
     } catch (_) { return false; }
   }
 
-  // Open the popup window. Chrome blocks window.open() without a user gesture,
-  // so callers should be in a gesture context (one-shot click/keydown listener).
   function openPopup() {
     if (popup && !popup.closed) {
       popup.focus();
@@ -108,7 +117,6 @@
     const popupUrl = new URL(location.href);
     popupUrl.searchParams.set('presenter', '1');
     popupUrl.searchParams.set('session', sid);
-    // hash and all other params preserved automatically
     const features = 'popup,width=1280,height=720,left=' + Math.max(0, screen.width - 1300) + ',top=80';
     const windowName = 'premium-presenter:' + sid;
     popupTitle = 'Presenter — ' + (document.title || 'deck');
@@ -119,14 +127,9 @@
       showFallbackPrompt();
       return null;
     }
-    // Some browsers (Safari, some Chrome configs) set document.title in the new window
-    // before the new page's scripts run. We can't reliably set it from here; the popup
-    // itself sets its title from `document.title` after parsing query params.
     return popup;
   }
 
-  // Show a small "popup blocked — click to retry" prompt in the deck window corner.
-  // Critical: NO notes content here. The audience window must remain clean.
   function showFallbackPrompt() {
     if (fallbackPrompt) return;
     if (document.documentElement.dataset.presenterOpening === 'true') {
@@ -142,7 +145,6 @@
     document.body.appendChild(fallbackPrompt);
     fallbackPrompt.querySelector('.premium-presenter-fallback__btn')
       .addEventListener('click', () => {
-        // A real click is a user gesture — window.open() will succeed.
         hideFallbackPrompt();
         try { localStorage.setItem(AUTO_OPEN_FLAG_KEY + location.pathname, '1'); } catch (_) {}
         openPopup();
@@ -167,26 +169,13 @@
     if (!e.data) return;
     const type = e.data.type;
     if (!type) return;
-    if (
-      type === 'presenter.discover' ||
-      type === 'presenter.ready' ||
-      type === 'presenter.heartbeat' ||
-      type === 'presenter.closing' ||
-      type === 'control'
-    ) {
-      rememberPopupSource(e);
-    }
-    // The popup asks "who is the deck?" so it can re-sync session after the
-    // deck reloads. Reply on the SAME transport the discover came in on —
-    // otherwise popup might be listening on a stale session's channel.
+
+    // presenter.discover and presenter.hereIam bypass session filtering:
+    // they are the adoption handshake and must cross session boundaries.
     if (type === 'presenter.discover') {
+      rememberPopupSource(e);
       try {
         const reply = { type: 'presenter.hereIam', deckSessionId: getSessionId() };
-        // Reply via window.postMessage to the popup (opener is the deck; popup
-        // is the one that opened the request). postMessage is direct, so it
-        // doesn't depend on channel sessionId matching.
-        // But e.source is the actual popup window object (window.postMessage
-        // sets it on the receiving side). Use it.
         if (e.source && typeof e.source.postMessage === 'function') {
           e.source.postMessage(reply, '*');
         } else if (popup && !popup.closed) {
@@ -195,21 +184,36 @@
       } catch (_) {}
       return;
     }
+
+    // Shared session filter: drop messages from a known foreign session.
+    // Messages that carry no sessionId (legacy bundles without stamping) pass.
+    const msgSid = e.data.sessionId || '';
+    const ourSid = getSessionId();
+    if (msgSid && ourSid && msgSid !== ourSid) return;
+
+    // rememberPopupSource only for messages that passed the session gate.
+    if (
+      type === 'presenter.ready' ||
+      type === 'presenter.heartbeat' ||
+      type === 'presenter.closing' ||
+      type === 'control'
+    ) {
+      rememberPopupSource(e);
+    }
+
     DIAG.recv++;
     DIAG.lastRecv = e.data.type || '?';
-    try { updateDeckBadge(); } catch (_) {}
+    updateDiag();
 
     if (type === 'presenter.ready') {
-      // Popup is alive and ready. Hand over the deck.
       document.documentElement.dataset.presenterDisplay = 'on';
       document.documentElement.dataset.presenterOpening = 'false';
       document.title = 'Audience — ' + (document.title.replace(/^Presenter — /, '').replace(/^Audience — /, '') || 'deck');
-      try { showDeckBadge(); updateDeckBadge(); } catch (_) {}
       replyWithSnapshot();
     } else if (type === 'presenter.heartbeat') {
-      // Controller's listener already records this for the owner state machine.
-      // The presenter-display attribute is set on the first ready, not on
-      // every heartbeat (avoid flicker on transient connection blips).
+      if (window.PremiumController && typeof window.PremiumController.recordHeartbeat === 'function') {
+        try { window.PremiumController.recordHeartbeat(!!e.data.popupFocused); } catch (_) {}
+      }
     } else if (type === 'presenter.closing') {
       teardownPresenterMode();
     } else if (type === 'control' && e.data.action) {
@@ -230,6 +234,7 @@
     postToPeer({
       type: 'snapshot',
       sessionId: getSessionId(),
+      seq: nextStateSeq(),
       index: state.index,
       total: state.total,
       titles,
@@ -240,11 +245,6 @@
   }
 
   function handleControl(msg) {
-    // NOTE: we deliberately do NOT check msg.sessionId against our sessionId
-    // here. The popup's URL-stamped sessionId can desync from the deck's
-    // (e.g. the deck reloaded with a fresh randomUUID). The popup is the
-    // only legitimate sender of control messages on this channel, and the
-    // BroadcastChannel listener only runs on the popup's window. Accept.
     if (msg.commandId) {
       if (seenCommandIds.has(msg.commandId)) return;
       seenCommandIds.add(msg.commandId);
@@ -266,12 +266,10 @@
       window.PremiumPresentations.cycle3d(msg.dir === -1 ? -1 : 1);
     } else if (a === 'mode3d.set' && window.PremiumPresentations && window.PremiumPresentations.set3dMode) {
       window.PremiumPresentations.set3dMode(msg.value);
-    }
-    else if (a === 'timer.toggle' && window.PremiumTimer) {
+    } else if (a === 'timer.toggle' && window.PremiumTimer) {
       if (window.PremiumTimer.getState().running) window.PremiumTimer.pause();
       else window.PremiumTimer.start();
-    }
-    else if (a === 'timer.start' && window.PremiumTimer) window.PremiumTimer.start();
+    } else if (a === 'timer.start' && window.PremiumTimer) window.PremiumTimer.start();
     else if (a === 'timer.pause' && window.PremiumTimer) window.PremiumTimer.pause();
     else if (a === 'timer.reset' && window.PremiumTimer) {
       window.PremiumTimer.reset();
@@ -299,40 +297,155 @@
 
   // ─── Popup-side rendering ──────────────────────────────────────────────────
 
+  // Build a DOM clone of a slide for preview. Uses a deterministic rename-map to
+  // give all IDs unique suffixes so that SVG url(#...) refs, data-* attributes,
+  // and ARIA references remain internally consistent inside the clone.
+  function buildSlidePreview(slide) {
+    if (!slide) return null;
+    const wrap = document.createElement('div');
+    wrap.className = 'pp-preview';
+    wrap.setAttribute('aria-hidden', 'true');
+
+    const clone = slide.cloneNode(true);
+    // Add .visible so deck CSS (`.slide { opacity: 0 }` unless `.visible`) shows the clone.
+    clone.classList.add('visible');
+
+    // Build rename map: include the clone root itself if it has an id,
+    // plus all descendant elements with ids.
+    const suffix = '-pp' + (++_previewCounter);
+    const idMap = new Map();
+    if (clone.id) {
+      const newId = clone.id + suffix;
+      idMap.set(clone.id, newId);
+      clone.id = newId;
+    }
+    clone.querySelectorAll('[id]').forEach((el) => {
+      const oldId = el.id;
+      const newId = oldId + suffix;
+      idMap.set(oldId, newId);
+      el.id = newId;
+    });
+
+    function rewriteIdRef(oldRef) {
+      return idMap.has(oldRef) ? idMap.get(oldRef) : oldRef;
+    }
+
+    function rewriteUrlHash(val) {
+      if (!val) return val;
+      return val.replace(/url\(#([^)]+)\)/g, (_, id) => 'url(#' + rewriteIdRef(id) + ')');
+    }
+
+    // Rewrite href / xlink:href fragment refs.
+    clone.querySelectorAll('[href]').forEach((el) => {
+      const v = el.getAttribute('href');
+      if (v && v.startsWith('#')) el.setAttribute('href', '#' + rewriteIdRef(v.slice(1)));
+    });
+    clone.querySelectorAll('[xlink\\:href]').forEach((el) => {
+      const v = el.getAttribute('xlink:href');
+      if (v && v.startsWith('#')) el.setAttribute('xlink:href', '#' + rewriteIdRef(v.slice(1)));
+    });
+
+    // Rewrite url(#oldId) in inline style attributes and SVG presentation attributes.
+    const SVG_PRES_ATTRS = ['fill', 'stroke', 'clip-path', 'mask', 'filter',
+      'marker-start', 'marker-mid', 'marker-end'];
+    clone.querySelectorAll('[style]').forEach((el) => {
+      el.setAttribute('style', rewriteUrlHash(el.getAttribute('style')));
+    });
+    SVG_PRES_ATTRS.forEach((attr) => {
+      clone.querySelectorAll('[' + attr + ']').forEach((el) => {
+        el.setAttribute(attr, rewriteUrlHash(el.getAttribute(attr)));
+      });
+    });
+
+    // Rewrite data-journey-gradient (id reference).
+    clone.querySelectorAll('[data-journey-gradient]').forEach((el) => {
+      const v = el.getAttribute('data-journey-gradient');
+      if (v && idMap.has(v)) el.setAttribute('data-journey-gradient', idMap.get(v));
+    });
+
+    // Rewrite data-flow-phases JSON (ids may be embedded as strings).
+    clone.querySelectorAll('[data-flow-phases]').forEach((el) => {
+      const raw = el.getAttribute('data-flow-phases');
+      try {
+        const parsed = JSON.parse(raw);
+        const json = JSON.stringify(parsed, (key, val) => {
+          if (typeof val === 'string' && idMap.has(val)) return idMap.get(val);
+          return val;
+        });
+        el.setAttribute('data-flow-phases', json);
+      } catch (_) {
+        el.removeAttribute('data-flow-phases');
+      }
+    });
+
+    // Rewrite label for= and ARIA space-separated id lists.
+    clone.querySelectorAll('[for]').forEach((el) => {
+      el.setAttribute('for', rewriteIdRef(el.getAttribute('for')));
+    });
+    ['aria-labelledby', 'aria-describedby', 'aria-controls'].forEach((attr) => {
+      clone.querySelectorAll('[' + attr + ']').forEach((el) => {
+        const rewritten = el.getAttribute(attr).split(/\s+/)
+          .map((id) => rewriteIdRef(id)).join(' ');
+        el.setAttribute(attr, rewritten);
+      });
+    });
+
+    // Strip notes from preview.
+    clone.querySelectorAll('aside.notes, .slide__notes').forEach((n) => n.remove());
+
+    wrap.appendChild(clone);
+    return wrap;
+  }
+
   function buildPopupDom() {
     document.title = popupTitle || ('Presenter — ' + (document.title || 'deck'));
     document.documentElement.dataset.controller = 'popup';
     document.body.classList.add('premium-presenter-popup');
 
+    const sessionShort = escapeHtml(getSessionId().slice(0, 8));
+    const diagAttr = isDiagMode() ? '' : ' hidden';
+
+    // Grid layout: .premium-presenter is a direct-child grid container.
+    // Children: __top (top), __instrument (main), __rail (rail), __status (status).
+    // __rail is a direct child — NOT nested inside __instrument — so CSS grid-area works.
     const root = document.createElement('div');
     root.className = 'premium-presenter';
     root.innerHTML = `
-      <header class="premium-presenter__top">
+      <header class="premium-presenter__top" id="pp-top">
         <div class="premium-presenter__title" id="pp-title">${escapeHtml(document.title.replace(/^Presenter — /, ''))}</div>
         <div class="premium-presenter__counter" id="pp-counter">– / –</div>
         <div class="premium-presenter__mode" id="pp-mode">—</div>
+        <button type="button" class="premium-presenter__gear" id="pp-gear" aria-expanded="false" aria-controls="pp-timer-settings" title="Timer settings">⚙</button>
       </header>
-      <main class="premium-presenter__main">
-        <aside class="premium-presenter__notes" id="pp-notes-wrap">
-          <h2 class="premium-presenter__next-label">Next slide</h2>
-          <h3 class="premium-presenter__next-title" id="pp-next-title">—</h3>
-          <h2 class="premium-presenter__notes-label">Notes</h2>
+      <section class="premium-presenter__instrument" id="pp-instrument">
+        <div class="pp-previews" id="pp-previews">
+          <div class="pp-previews__current" id="pp-preview-current" aria-label="Current slide preview"></div>
+          <div class="pp-previews__next" id="pp-preview-next" aria-label="Next slide preview"></div>
+        </div>
+        <div class="premium-presenter__notes-panel" id="pp-notes-panel">
+          <div class="premium-presenter__next-label">Next</div>
+          <div class="premium-presenter__next-title" id="pp-next-title">—</div>
+          <div class="premium-presenter__notes-label">Notes</div>
           <div class="premium-presenter__notes-body" id="pp-notes"></div>
-        </aside>
-        <nav class="premium-presenter__rail" id="pp-rail">
-          <h2 class="premium-presenter__rail-label">Slides</h2>
-          <ol class="premium-presenter__list" id="pp-list"></ol>
-        </nav>
-      </main>
+        </div>
+      </section>
+      <nav class="premium-presenter__rail" id="pp-rail" aria-label="Slide navigation" data-open="false">
+        <button type="button" class="premium-presenter__rail-close" id="pp-rail-close" aria-label="Close slide list">✕</button>
+        <div class="premium-presenter__rail-label">Slides</div>
+        <ol class="premium-presenter__list" id="pp-list"></ol>
+      </nav>
       <footer class="premium-presenter__status" id="pp-status">
-        <span>presenter: connecting…</span>
-        <span>session: ${escapeHtml(getSessionId().slice(0, 8))}</span>
+        <span class="pp-status__dot" id="pp-status-dot" aria-label="Connection status"></span>
+        <span id="pp-status-label">connecting…</span>
+        <span id="pp-status-session">session: ${sessionShort}</span>
       </footer>
-      <div class="premium-presenter__timer" id="pp-timer">
+      <div class="premium-presenter__timer-bar" id="pp-timer-bar">
         <div class="premium-presenter__timer-time" id="pp-timer-time">--:--</div>
         <div class="premium-presenter__timer-pace" id="pp-timer-pace">—</div>
+        <button type="button" id="pp-timer-startstop" class="pp-timer-btn">Start</button>
+        <button type="button" id="pp-timer-reset" class="pp-timer-btn">Reset</button>
       </div>
-      <div class="premium-presenter__controls" id="pp-controls">
+      <div class="premium-presenter__timer-settings" id="pp-timer-settings" hidden>
         <label>Mode
           <select id="pp-mode-select">
             <option value="duration">Duration</option>
@@ -341,23 +454,17 @@
         </label>
         <label>Minutes <input type="number" id="pp-minutes" min="1" max="600" step="1"></label>
         <label>End time <input type="time" id="pp-endtime"></label>
-        <button type="button" id="pp-start" data-action="start">Start ⇧T</button>
-        <button type="button" id="pp-pause" data-action="pause">Pause</button>
-        <button type="button" id="pp-reset" data-action="reset">Reset</button>
       </div>
-      <div class="premium-presenter__diag" id="pp-diag" hidden></div>
+      <div class="premium-presenter__diag" id="pp-diag"${diagAttr}></div>
     `;
     document.body.appendChild(root);
 
     bindPopupEvents();
-    // Send initial handshake
+    window.addEventListener('resize', recomputePreviewScales);
     sendReady();
-    // Heartbeat
     if (heartbeatTimer) clearInterval(heartbeatTimer);
     heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_MS);
     sendHeartbeat();
-    // Discover poll — keeps the popup's sessionId in sync with the deck's
-    // (which changes whenever the deck reloads). Every 2s is enough.
     if (discoverTimer) clearInterval(discoverTimer);
     discoverTimer = setInterval(sendDiscover, 2000);
     sendDiscover();
@@ -373,7 +480,7 @@
   }
 
   function sendReady() {
-    postToPeer({ type: 'presenter.ready', sessionId: getSessionId(), seq: ++commandIdCounter });
+    postToPeer({ type: 'presenter.ready', sessionId: getSessionId(), seq: nextStateSeq() });
   }
 
   function sendHeartbeat() {
@@ -381,15 +488,16 @@
       type: 'presenter.heartbeat',
       sessionId: getSessionId(),
       popupFocused: document.hasFocus(),
-      seq: ++commandIdCounter,
+      seq: nextStateSeq(),
     });
-    // Update the status line
-    const status = document.getElementById('pp-status');
-    if (status) {
-      const focused = document.hasFocus();
-      status.firstElementChild.textContent =
-        'presenter: ' + (focused ? 'connected (focused)' : 'connected (unfocused — deck has input)');
-    }
+    const focused = document.hasFocus();
+    const dot = document.getElementById('pp-status-dot');
+    const label = document.getElementById('pp-status-label');
+    if (dot) dot.dataset.state = focused ? 'connected-focused' : 'connected';
+    if (label) label.textContent = focused ? 'focused' : 'connected (deck has input)';
+    // Session can change via hereIam adoption — keep the footer label live.
+    const sessionEl = document.getElementById('pp-status-session');
+    if (sessionEl) sessionEl.textContent = 'session: ' + getSessionId().slice(0, 8);
   }
 
   function sendControl(action, extra) {
@@ -401,27 +509,16 @@
     }, extra || {}));
   }
 
-  // Send a payload to the peer window. Tries BOTH BroadcastChannel and a
-  // direct window.postMessage (which works on file:// where BC is blocked).
-  // The receiver dedupes by commandId, so even if multiple transports land, only
-  // the first is processed. Three transports, in order of preference:
-  //   1) BroadcastChannel — fast, works on http/https same-origin.
-  //   2) window.postMessage — direct ref, works on file:// popups opened via
-  //      window.open (the popup is also a file:// but Chrome still permits
-  //      postMessage between them when opener was set at open time).
-  //   3) localStorage 'storage' event — most reliable on file:// because it
-  //      does not require any origin relationship. Also catches the case
-  //      where the popup was opened in a separate tab (no opener reference).
+  // Three transports: BroadcastChannel, window.postMessage, localStorage.
+  // Receiver dedupes by commandId.
   function postToPeer(payload) {
     DIAG.sent++;
     DIAG.lastSent = payload.type || '?';
     updateDiag();
-    // 1) BroadcastChannel
     try {
       const ch = getCh();
       if (ch) ch.postMessage(payload);
     } catch (_) {}
-    // 2) window.postMessage
     try {
       if (isInPopup()) {
         if (window.opener && !window.opener.closed) window.opener.postMessage(payload, '*');
@@ -429,10 +526,6 @@
         popup.postMessage(payload, '*');
       }
     } catch (_) {}
-    // 3) localStorage storage event. Global key — same rationale as the
-    //    global BroadcastChannel name: the popup is the only legitimate
-    //    sender, and the receiver validates by channel/listener, not by
-    //    storage key. Per-session keys would break when either side reloads.
     try {
       storageTick++;
       const wrapped = JSON.stringify({ _t: storageTick, payload });
@@ -441,73 +534,118 @@
   }
 
   function bindPopupEvents() {
-    // Wire jump list clicks
+    // Rail jump list.
     document.getElementById('pp-list').addEventListener('click', (e) => {
       const li = e.target.closest('li[data-index]');
-      try { console.log('[PP-popup] rail click target=' + (e.target && e.target.tagName) + ' text=' + ((e.target && e.target.textContent || '').slice(0, 30)) + ' li=' + (li ? li.dataset.index : 'null')); } catch (_) {}
       if (!li) return;
       const idx = parseInt(li.dataset.index, 10);
-      if (Number.isInteger(idx)) {
-        try { console.log('[PP-popup] sending control.jump index=' + idx + ' sid=' + getSessionId().slice(0, 8)); } catch (_) {}
-        sendControl('jump', { index: idx });
-      }
+      if (Number.isInteger(idx)) sendControl('jump', { index: idx });
     });
 
-    // Timer controls
+    // Rail toggle via keyboard (g) and close button.
+    const rail = document.getElementById('pp-rail');
+    const railClose = document.getElementById('pp-rail-close');
+    if (railClose) {
+      railClose.addEventListener('click', () => {
+        if (rail) rail.dataset.open = 'false';
+      });
+    }
+
+    // Gear → timer settings disclosure.
+    const gear = document.getElementById('pp-gear');
+    const timerSettings = document.getElementById('pp-timer-settings');
+    if (gear && timerSettings) {
+      gear.addEventListener('click', () => {
+        const expanded = gear.getAttribute('aria-expanded') === 'true';
+        gear.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+        timerSettings.hidden = expanded;
+      });
+    }
+
+    // Timer bar buttons.
+    const startStopBtn = document.getElementById('pp-timer-startstop');
+    const resetBtn = document.getElementById('pp-timer-reset');
+    if (startStopBtn) startStopBtn.addEventListener('click', () => sendControl('timer.toggle'));
+    if (resetBtn) resetBtn.addEventListener('click', () => sendControl('timer.reset'));
+
+    // Timer settings inputs.
     const minutesInput = document.getElementById('pp-minutes');
     const endtimeInput = document.getElementById('pp-endtime');
     const modeSelect = document.getElementById('pp-mode-select');
 
-    let minutesDebounce = 0;
-    minutesInput.addEventListener('input', () => {
-      clearTimeout(minutesDebounce);
-      minutesDebounce = setTimeout(() => {
-        const m = parseFloat(minutesInput.value);
-        if (Number.isFinite(m) && m > 0) sendControl('timer.setMinutes', { value: m });
-      }, 400);
-    });
-    let endtimeDebounce = 0;
-    endtimeInput.addEventListener('input', () => {
-      clearTimeout(endtimeDebounce);
-      endtimeDebounce = setTimeout(() => {
-        const v = endtimeInput.value;
-        if (!v) return;
-        const [h, mm] = v.split(':').map(Number);
-        if (!Number.isFinite(h) || !Number.isFinite(mm)) return;
-        const target = new Date();
-        target.setHours(h, mm, 0, 0);
-        if (target.getTime() <= Date.now()) target.setDate(target.getDate() + 1);
-        sendControl('timer.setEndAt', { value: target.getTime() });
-      }, 400);
-    });
-    modeSelect.addEventListener('change', () => {
-      if (modeSelect.value === 'endAt') {
-        // Switch UI to end-time input; deck will recompute mode.
-        endtimeInput.focus();
-      } else {
-        // Revert to duration; the most recently set minutes (or current default) applies.
-        const m = parseFloat(minutesInput.value);
-        if (Number.isFinite(m) && m > 0) sendControl('timer.setMinutes', { value: m });
-      }
-    });
-    document.getElementById('pp-start').addEventListener('click', () => sendControl('timer.start'));
-    document.getElementById('pp-pause').addEventListener('click', () => sendControl('timer.pause'));
-    document.getElementById('pp-reset').addEventListener('click', () => sendControl('timer.reset'));
+    if (minutesInput) {
+      let minutesDebounce = 0;
+      minutesInput.addEventListener('input', () => {
+        clearTimeout(minutesDebounce);
+        minutesDebounce = setTimeout(() => {
+          const m = parseFloat(minutesInput.value);
+          if (Number.isFinite(m) && m > 0) sendControl('timer.setMinutes', { value: m });
+        }, 400);
+      });
+    }
 
-    // Keyboard
+    if (endtimeInput) {
+      let endtimeDebounce = 0;
+      endtimeInput.addEventListener('input', () => {
+        clearTimeout(endtimeDebounce);
+        endtimeDebounce = setTimeout(() => {
+          const v = endtimeInput.value;
+          if (!v) return;
+          const [h, mm] = v.split(':').map(Number);
+          if (!Number.isFinite(h) || !Number.isFinite(mm)) return;
+          const target = new Date();
+          target.setHours(h, mm, 0, 0);
+          if (target.getTime() <= Date.now()) target.setDate(target.getDate() + 1);
+          sendControl('timer.setEndAt', { value: target.getTime() });
+        }, 400);
+      });
+    }
+
+    if (modeSelect) {
+      modeSelect.addEventListener('change', () => {
+        if (modeSelect.value === 'endAt') {
+          if (endtimeInput) endtimeInput.focus();
+        } else {
+          if (minutesInput) {
+            const m = parseFloat(minutesInput.value);
+            if (Number.isFinite(m) && m > 0) sendControl('timer.setMinutes', { value: m });
+          }
+        }
+      });
+    }
+
+    // Keyboard shortcuts.
     document.addEventListener('keydown', (e) => {
       if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA')) return;
       const key = e.key.toLowerCase();
-      if (e.key === 'Escape') { e.preventDefault(); try { window.close(); } catch (_) {} return; }
+
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        // Close rail if open, else close popup.
+        const r = document.getElementById('pp-rail');
+        if (r && r.dataset.open === 'true') { r.dataset.open = 'false'; return; }
+        try { window.close(); } catch (_) {}
+        return;
+      }
+      if (key === 'g') {
+        e.preventDefault();
+        const r = document.getElementById('pp-rail');
+        if (r) r.dataset.open = r.dataset.open === 'true' ? 'false' : 'true';
+        return;
+      }
+      if (key === '?' || (e.key === '/' && e.shiftKey)) {
+        e.preventDefault();
+        return;
+      }
       if (key === ' ' || e.code === 'ArrowRight' || e.code === 'ArrowDown' || e.code === 'PageDown') {
         e.preventDefault(); sendControl('next'); return;
       }
       if (e.code === 'ArrowLeft' || e.code === 'ArrowUp' || e.code === 'PageUp') {
         e.preventDefault(); sendControl('prev'); return;
       }
+      if (key === 'b' || key === '.') { e.preventDefault(); sendControl('curtain'); return; }
       if (key === 'h') { e.preventDefault(); sendControl('controls.toggleHidden'); return; }
-      // e.code, not e.key: Shift+3 produces layout-specific characters.
       if (e.code === 'Digit3') {
         e.preventDefault();
         sendControl('mode3d.cycle', { dir: e.shiftKey ? -1 : 1 });
@@ -515,30 +653,110 @@
       }
       if (key === 't' && e.shiftKey) { e.preventDefault(); sendControl('timer.toggle'); return; }
       if (key === 't') { e.preventDefault(); sendControl('theme.cycle'); return; }
-      if (key === 'b' || key === '.') { e.preventDefault(); sendControl('curtain'); return; }
-      if (key === 'd') { e.preventDefault(); sendControl('curtain'); return; }  // deck blackout = curtain
+    });
+  }
+
+  // Resolve content for a slide index.
+  // Priority: local DOM (PremiumSlideContent) > wire notes > wire bodyHtml.
+  function resolveSlideContent(idx, wireNotes, wireBody) {
+    const slide = (function () {
+      try {
+        const deck = document.getElementById('deck');
+        if (deck) return deck.querySelectorAll('.slide')[idx] || null;
+      } catch (_) {}
+      return null;
+    })();
+
+    if (slide && window.PremiumSlideContent) {
+      const localNotes = window.PremiumSlideContent.getNotesHtml(slide);
+      if (localNotes) return localNotes;
+      const localSummary = window.PremiumSlideContent.getSummaryHtml(slide);
+      if (localSummary) return localSummary;
+    }
+    return wireNotes || wireBody || '';
+  }
+
+  function getLocalSlide(idx) {
+    try {
+      const deck = document.getElementById('deck');
+      if (!deck) return null;
+      return deck.querySelectorAll('.slide')[idx] || null;
+    } catch (_) { return null; }
+  }
+
+  function computePreviewScale(container) {
+    const w = container.offsetWidth || 0;
+    const h = container.offsetHeight || 0;
+    const sw = w / 1280;
+    const sh = h / 720;
+    return Math.min(sw, sh) || 0.2;
+  }
+
+  function refreshPreviews(currentIdx, nextIdx) {
+    const currentWrap = document.getElementById('pp-preview-current');
+    const nextWrap = document.getElementById('pp-preview-next');
+    if (!currentWrap || !nextWrap) return;
+
+    const currentSlide = getLocalSlide(currentIdx);
+    const nextSlide = nextIdx != null ? getLocalSlide(nextIdx) : null;
+
+    currentWrap.innerHTML = '';
+    nextWrap.innerHTML = '';
+
+    if (currentSlide) {
+      const preview = buildSlidePreview(currentSlide);
+      if (preview) {
+        preview.style.setProperty('--pp-preview-scale', computePreviewScale(currentWrap));
+        currentWrap.appendChild(preview);
+      }
+    }
+    if (nextSlide) {
+      const preview = buildSlidePreview(nextSlide);
+      if (preview) {
+        preview.style.setProperty('--pp-preview-scale', computePreviewScale(nextWrap));
+        nextWrap.appendChild(preview);
+      }
+    }
+  }
+
+  function recomputePreviewScales() {
+    document.querySelectorAll('.pp-preview').forEach((preview) => {
+      const container = preview.parentElement;
+      if (container) {
+        preview.style.setProperty('--pp-preview-scale', computePreviewScale(container));
+      }
     });
   }
 
   function renderSnapshot(d) {
+    // Seq filter: drop stale replays.
+    if (d.seq != null && d.seq <= slideSeq) return;
+    if (d.seq != null) slideSeq = d.seq;
+
     const counter = document.getElementById('pp-counter');
     if (counter) counter.textContent = (d.index + 1) + ' / ' + d.total;
     const list = document.getElementById('pp-list');
     if (list && d.titles) {
       list.innerHTML = d.titles.map((t, i) =>
-        `<li data-index="${i}" class="${i === d.index ? 'is-active' : ''}">${escapeHtml(t)}</li>`
+        '<li data-index="' + i + '" class="' + (i === d.index ? 'is-active' : '') + '">' + escapeHtml(t) + '</li>'
       ).join('');
     }
     const notes = d.notes || [];
     const bodies = d.bodyHtmls || [];
-    renderNotes(notes[d.index] || bodies[d.index] || '');
+    const content = resolveSlideContent(d.index, notes[d.index], bodies[d.index]);
+    renderNotes(content, getLocalSlide(d.index));
     const nextTitle = document.getElementById('pp-next-title');
     if (nextTitle) nextTitle.textContent = (d.titles && d.titles[d.index + 1]) || 'End of deck';
-    // Timer state from snapshot
+    refreshPreviews(d.index, d.index + 1 < d.total ? d.index + 1 : null);
     if (d.timer) renderTimer(d.timer);
+    updateStatus('connected');
   }
 
   function renderSlidechange(d) {
+    // Seq filter.
+    if (d.seq != null && d.seq <= slideSeq) return;
+    if (d.seq != null) slideSeq = d.seq;
+
     const counter = document.getElementById('pp-counter');
     if (counter) counter.textContent = (d.index + 1) + ' / ' + d.total;
     const list = document.getElementById('pp-list');
@@ -547,14 +765,48 @@
         li.classList.toggle('is-active', i === d.index);
       });
     }
-    renderNotes(d.notes || d.bodyHtml || '');
+    const content = resolveSlideContent(d.index, d.notes, d.bodyHtml);
+    renderNotes(content, getLocalSlide(d.index));
     const nextTitle = document.getElementById('pp-next-title');
     if (nextTitle) nextTitle.textContent = d.nextTitle || 'End of deck';
+    // Update previews if local DOM available.
+    const total = d.total || 0;
+    refreshPreviews(d.index, d.index + 1 < total ? d.index + 1 : null);
+    updateStatus('connected');
   }
 
-  function renderNotes(html) {
+  function renderNotes(html, slideEl) {
     const el = document.getElementById('pp-notes');
-    if (el) el.innerHTML = html || '<em class="premium-presenter__no-notes">No notes for this slide</em>';
+    if (!el) return;
+    el.innerHTML = html || '<em class="premium-presenter__no-notes">No notes for this slide</em>';
+    // Append compact Terms section when the slide has glossary entries.
+    try {
+      const glossary = window.PremiumGlossary;
+      if (glossary && typeof glossary.getTermsForSlide === 'function' && slideEl) {
+        const terms = glossary.getTermsForSlide(slideEl);
+        if (terms && terms.length > 0) {
+          const existing = el.querySelector('.pp-notes-terms');
+          if (existing) existing.remove();
+          const section = document.createElement('div');
+          section.className = 'pp-notes-terms';
+          section.innerHTML =
+            '<p class="pp-notes-terms__label">Terms</p>' +
+            '<ul class="pp-notes-terms__list">' +
+            terms.map(function (t) {
+              return '<li><strong>' + escapeHtml(t.key) + '</strong> — ' + escapeHtml(t.body) + '</li>';
+            }).join('') +
+            '</ul>';
+          el.appendChild(section);
+        }
+      }
+    } catch (_) {}
+  }
+
+  function updateStatus(state) {
+    const dot = document.getElementById('pp-status-dot');
+    if (dot && state === 'connected') {
+      dot.dataset.state = dot.dataset.state || 'connected';
+    }
   }
 
   function derivePopupTimerState() {
@@ -600,8 +852,11 @@
     const time = document.getElementById('pp-timer-time');
     const pace = document.getElementById('pp-timer-pace');
     const modeEl = document.getElementById('pp-mode');
+    const startStop = document.getElementById('pp-timer-startstop');
+
     if (!s) {
       if (time) time.textContent = '--:--';
+      if (startStop) startStop.textContent = 'Start';
       return;
     }
     if (time) {
@@ -612,7 +867,9 @@
     }
     if (pace) pace.textContent = (s.state || 'ok');
     if (modeEl) modeEl.textContent = s.mode === 'endAt' ? 'ends at ' + new Date(s.targetEndAtMs).toLocaleTimeString() : Math.round((s.totalMs || 0) / 60000) + ' min';
-    // Reflect current mode + value into the controls (without re-posting).
+    if (startStop) startStop.textContent = s.running ? 'Pause' : 'Start';
+
+    // Sync settings inputs (non-focused only).
     const minutesInput = document.getElementById('pp-minutes');
     const endtimeInput = document.getElementById('pp-endtime');
     const modeSelect = document.getElementById('pp-mode-select');
@@ -630,6 +887,11 @@
   }
 
   function renderTimer(s) {
+    // Seq filter for timer messages.
+    const seq = (s && s.seq) != null ? s.seq : null;
+    if (seq != null && seq <= timerSeq) return;
+    if (seq != null) timerSeq = seq;
+
     if (s) {
       popupTimerState = Object.assign({}, s, {
         receivedAtMs: Number.isFinite(s.ts) ? s.ts : Date.now(),
@@ -645,24 +907,25 @@
 
   function onPopupMessage(e) {
     if (!e.data) return;
-    // Special case: the deck's `presenter.hereIam` carries the deck's actual
-    // sessionId, which may differ from the popup's (stale URL param). Adopt
-    // the deck's session and rebuild the BroadcastChannel.
     if (e.data.type === 'presenter.hereIam') {
       const deckSid = e.data.deckSessionId;
       if (deckSid && deckSid !== getSessionId()) {
-        try { console.log('[PP-popup] adopting deck session ' + deckSid.slice(0, 8) + ' (was ' + getSessionId().slice(0, 8) + ')'); } catch (_) {}
         document.documentElement.dataset.session = deckSid;
-        // getCh() will close the old channel and open a new one on next call.
-        // Re-send ready so the deck can reply with the snapshot on the new channel.
+        // Reset seq cursors so the reloaded deck's fresh seq stream (restarting
+        // at 1) is not dropped as stale by the reducer.
+        slideSeq = 0;
+        timerSeq = 0;
+        popupTimerState = null;
+        renderTimer(null);
         sendReady();
       }
       return;
     }
-    // Accept any message from the deck regardless of sessionId — the deck
-    // may have reloaded with a fresh randomUUID. If the deck told us its
-    // new sessionId via presenter.hereIam, we already adopted it. Any
-    // subsequent slidechange/snapshot/tick we accept unconditionally.
+    // Single session filter: ignore messages from other sessions
+    // (once adopted via hereIam our sessionId tracks the deck).
+    const msgSid = e.data.sessionId;
+    if (msgSid && msgSid !== getSessionId()) return;
+
     DIAG.recv++;
     DIAG.lastRecv = e.data.type || '?';
     updateDiag();
@@ -672,8 +935,6 @@
     else if (e.data.type === 'bell') flashTimerOnBell();
   }
 
-  // Popup periodically asks "who is the deck?" so it can re-sync if the deck
-  // reloaded with a new session. Targets the opener (deck window) directly.
   function sendDiscover() {
     try {
       if (window.opener && !window.opener.closed) {
@@ -683,52 +944,34 @@
   }
 
   function flashTimerOnBell() {
-    const el = document.getElementById('pp-timer');
+    const el = document.getElementById('pp-timer-bar');
     if (!el) return;
     el.classList.remove('is-bell');
-    void el.offsetWidth;  // restart animation
+    void el.offsetWidth;
     el.classList.add('is-bell');
   }
 
   function onPopupUnload() {
-    // Tell the deck we're going away so it can tear down presenter mode quickly.
-    // postToPeer covers both BroadcastChannel (http) and window.postMessage (file://).
     postToPeer({ type: 'presenter.closing', sessionId: getSessionId() });
   }
 
   // ─── init() ────────────────────────────────────────────────────────────────
 
   function init() {
-    sessionId = getSessionId();
+    const sessionId = getSessionId();
     if (!sessionId) {
       console.warn('PremiumPresenter: no sessionId, presenter view disabled');
       return;
     }
-    // Channel is optional: BroadcastChannel may be unavailable (e.g. on
-    // file:// in Chrome, where each window has an opaque origin). The
-    // postMessage + localStorage 'storage' transports installed below
-    // cover that case.
     const ch = getCh();
 
-    // window.message is the file://-compatible transport; install before any
-    // send so the popup's `presenter.ready` (sent synchronously inside
-    // buildPopupDom) can be answered by the deck's replyWithSnapshot via the
-    // same path.
     if (!postTransportInstalled) {
       postTransportInstalled = true;
       window.addEventListener('message', (e) => {
         if (!e.data || typeof e.data !== 'object') return;
-        // The popup is the only legitimate sender on this window (other than
-        // the deck sending itself). Accept any payload that has a type we
-        // recognize, regardless of sessionId — the per-receiver handlers
-        // (handleControl, onPopupMessage) apply their own filtering where
-        // it matters.
         if (isInPopup()) onPopupMessage(e);
         else onDeckMessage(e);
       });
-      // localStorage 'storage' event — the reliable file:// transport. Fires
-      // on every OTHER window of the same origin (and on file:// Chrome treats
-      // each tab as same-origin for this event) when our key is written.
       window.addEventListener('storage', (e) => {
         if (e.key !== STORAGE_KEY) return;
         if (!e.newValue) return;
@@ -742,14 +985,9 @@
     }
 
     if (isInPopup()) {
-      // Detect capabilities for diagnostics
       try { DIAG.opener = !!(window.opener && !window.opener.closed); } catch (_) {}
       try { DIAG.bcAvail = !!(typeof BroadcastChannel === 'function' && getCh()); } catch (_) {}
       try { DIAG.lsAvail = !!localStorage; } catch (_) {}
-      // Attach the listener BEFORE buildPopupDom(): buildPopupDom calls
-      // sendReady() synchronously, and the deck's replyWithSnapshot() must
-      // land on a listener that exists. Otherwise the popup would miss its
-      // first snapshot and stay empty until the next slidechange.
       if (ch) ch.addEventListener('message', onPopupMessage);
       buildPopupDom();
       updateDiag();
@@ -758,9 +996,8 @@
       return;
     }
 
-    // Deck side
+    // Deck side.
     if (ch) ch.addEventListener('message', onDeckMessage);
-    // ⇧P opens popup
     document.addEventListener('keydown', (e) => {
       if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
@@ -770,32 +1007,8 @@
       }
     });
 
-    // Deck-side diag — small badge top-right when presenter is connected.
-    // Shows last received message type and recv count, so the user can
-    // confirm controls actually land on the deck.
-    function showDeckBadge() {
-      let badge = document.getElementById('pp-deck-badge');
-      if (badge) { badge.hidden = false; return; }
-      badge = document.createElement('div');
-      badge.id = 'pp-deck-badge';
-      badge.className = 'pp-deck-badge';
-      badge.textContent = 'presenter: connecting…';
-      document.body.appendChild(badge);
-    }
-    function updateDeckBadge() {
-      const badge = document.getElementById('pp-deck-badge');
-      if (!badge) return;
-      if (document.documentElement.dataset.presenterDisplay === 'on') {
-        badge.textContent = 'presenter: ON · recv=' + DIAG.recv + (DIAG.lastRecv ? ' (' + DIAG.lastRecv + ')' : '');
-      } else {
-        badge.textContent = 'presenter: connecting… · recv=' + DIAG.recv;
-      }
-    }
-
-    // Poll popup liveness; not authoritative, but responsive to X-button
     setInterval(monitorPopup, 2000);
 
-    // Auto-open if requested, on first user gesture
     if (shouldAutoOpen()) {
       document.documentElement.dataset.presenterOpening = 'true';
       const onGesture = () => {
@@ -823,11 +1036,8 @@
     isInPopup,
     sessionId: () => getSessionId(),
   };
-  // Expose postToPeer so other modules (e.g. SlideEngine on deck side) can
-  // broadcast via the SAME 3 transports popup listens on: global BC,
-  // window.message to the popup, and localStorage. Without this, the deck's
-  // slidechange went out on a per-session BC the popup never subscribed to.
   window.PremiumPresenter = Object.assign(window.PremiumPresenter || {}, {
     postToPeer,
+    nextStateSeq,
   });
 })();

@@ -21,18 +21,23 @@ loadScript(deck, 'premium-timer.js');
 loadScript(deck, 'slide-engine.js');
 deck.window.eval('new SlideEngine();');
 
+loadScript(deck, 'premium-presenter.js');
+
+// Wait for DOMContentLoaded callbacks so premium-controller.js has written
+// document.documentElement.dataset.session before we read it for the popup URL.
+await new Promise((r) => setTimeout(r, 50));
+
+const deckSession = deck.window.document.documentElement.dataset.session;
+console.log('  deck session:', deckSession);
+if (!deckSession) throw new Error('deck session not set — DOMContentLoaded may not have fired');
+
 const popup = makeWindow({
-  url: 'http://localhost/deck.html?presenter=1&session=PLACEHOLDER',
+  url: 'http://localhost/deck.html?presenter=1&session=' + deckSession,
   focused: true,
   withSlides: false,
 });
 loadScript(popup, 'premium-controller.js');
 loadScript(popup, 'premium-presenter.js');
-const deckSession = deck.window.document.documentElement.dataset.session;
-console.log('  deck session:', deckSession);
-popup.window.history.replaceState(null, '', 'http://localhost/deck.html?presenter=1&session=' + deckSession);
-
-loadScript(deck, 'premium-presenter.js');
 
 // Wait for handshake
 await new Promise((r) => setTimeout(r, 300));

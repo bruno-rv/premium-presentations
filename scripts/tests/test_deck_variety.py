@@ -100,5 +100,104 @@ class DeckVarietyTests(unittest.TestCase):
             self.assertEqual(1, self.validator.validate(path, strict_variety=True))
 
 
+def _minimal_deck(slides_html: str) -> str:
+    return (
+        "<!DOCTYPE html><html lang='en'><head><style>"
+        "@media (prefers-reduced-motion: reduce) {} "
+        ".deck { scroll-snap-type: y mandatory; } .premium-bg-3d {}"
+        "</style></head><body><div id='deck'>"
+        + slides_html
+        + "</div><script>/* SlideEngine PremiumPresentations */"
+        "document.addEventListener('DOMContentLoaded', function () { new SlideEngine(); });"
+        "</script></body></html>"
+    )
+
+
+SLIDE_WITH_NOTES = (
+    '<section class="slide stats-row">'
+    '<h2>H</h2><div class="stats-row"><div class="stat-card">x</div></div>'
+    '<aside class="notes">What to say here. Transition to next topic. Keep it brief.</aside>'
+    "</section>"
+)
+
+SLIDE_WITHOUT_NOTES = (
+    '<section class="slide stats-row">'
+    '<h2>H</h2><div class="stats-row"><div class="stat-card">x</div></div>'
+    "</section>"
+)
+
+
+class MissingNotesWarningTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.validator = load_validator()
+
+    def validate_html(self, html: str) -> tuple[int, list[str]]:
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "fixture.html"
+            path.write_text(html, encoding="utf-8")
+            import io
+            import contextlib
+
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                code = self.validator.validate(path)
+            output = buf.getvalue()
+            warnings = [
+                line.strip()
+                for line in output.splitlines()
+                if line.strip().startswith("WARN:")
+            ]
+            return code, warnings
+
+    def test_missing_notes_produces_warning(self) -> None:
+        html = _minimal_deck(SLIDE_WITHOUT_NOTES * 2)
+        code, warnings = self.validate_html(html)
+        self.assertEqual(0, code, "missing notes must not fail — it is a warning only")
+        notes_warnings = [w for w in warnings if "aside" in w and "notes" in w]
+        self.assertEqual(1, len(notes_warnings), f"Expected 1 notes warning, got: {warnings}")
+
+    def test_missing_notes_warning_not_gated_by_strict_variety(self) -> None:
+        html = _minimal_deck(SLIDE_WITHOUT_NOTES * 2)
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "fixture.html"
+            path.write_text(html, encoding="utf-8")
+            import io
+            import contextlib
+
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                code_normal = self.validator.validate(path, strict_variety=False)
+            output_normal = buf.getvalue()
+
+            buf2 = io.StringIO()
+            with contextlib.redirect_stdout(buf2):
+                code_strict = self.validator.validate(path, strict_variety=True)
+            output_strict = buf2.getvalue()
+
+        self.assertEqual(0, code_normal)
+        self.assertIn("aside", output_normal)
+        self.assertIn("aside", output_strict)
+
+    def test_all_notes_present_no_warning(self) -> None:
+        html = _minimal_deck(SLIDE_WITH_NOTES * 2)
+        code, warnings = self.validate_html(html)
+        self.assertEqual(0, code)
+        notes_warnings = [w for w in warnings if "aside" in w and "notes" in w]
+        self.assertEqual(0, len(notes_warnings), f"Unexpected notes warnings: {notes_warnings}")
+
+    def test_partial_notes_warns_correct_count(self) -> None:
+        html = _minimal_deck(SLIDE_WITH_NOTES + SLIDE_WITHOUT_NOTES + SLIDE_WITHOUT_NOTES)
+        code, warnings = self.validate_html(html)
+        self.assertEqual(0, code)
+        notes_warnings = [w for w in warnings if "aside" in w and "notes" in w]
+        self.assertEqual(1, len(notes_warnings))
+        self.assertIn("2 slide(s)", notes_warnings[0])
+
+
 if __name__ == "__main__":
     unittest.main()

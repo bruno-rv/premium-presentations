@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _common import (
     FLOW_JS,
+    GLOSSARY_JS,
     JOURNEY_JS,
     RED_CSS,
     RED_JS,
@@ -85,6 +86,13 @@ def needs_flow_runtime(html: str) -> bool:
     return bool(re.search(r"\bclass\s*=\s*[\"'][^\"']*\blive-flow\b", html, re.I))
 
 
+def needs_glossary_runtime(html: str) -> bool:
+    return bool(
+        re.search(r"\bclass\s*=\s*[\"'][^\"']*\bterm-link\b", html, re.I)
+        or re.search(r'\bid\s*=\s*["\']glossary["\']', html, re.I)
+    )
+
+
 def check_file(path: Path, errors: list[str]) -> None:
     html = path.read_text(encoding="utf-8")
     css_required = REQUIRED_CSS + (RED_CSS if needs_red_runtime(path, html) else ())
@@ -93,6 +101,7 @@ def check_file(path: Path, errors: list[str]) -> None:
         + (RED_JS if needs_red_runtime(path, html) else ())
         + (JOURNEY_JS if needs_journey_runtime(html) else ())
         + (FLOW_JS if needs_flow_runtime(html) else ())
+        + (GLOSSARY_JS if needs_glossary_runtime(html) else ())
     )
 
     css_present = modules_present(html, "css", css_required)

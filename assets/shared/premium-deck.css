@@ -247,6 +247,11 @@ body::after {
   align-items: flex-start;
   text-align: left;
 }
+/* Speaker notes: hidden from audience, read by the presenter popup */
+.slide aside.notes,
+.slide .slide__notes {
+  display: none;
+}
 .has-theme-visual > :not(.theme-visual):not(.notes):not(.slide__number) {
   position: relative;
   z-index: 2;

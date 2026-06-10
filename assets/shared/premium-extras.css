@@ -23,6 +23,15 @@ body.curtain.curtain--message::before {
 }
 
 /* PDF export — opt-in via ?print-pdf query OR body.print-pdf class */
+body.print-pdf {
+  overflow: visible !important;
+  height: auto !important;
+  background: var(--bg) !important;
+  color: var(--text) !important;
+}
+body.print-pdf::after {
+  display: none !important;
+}
 body.print-pdf .deck {
   display: block !important;
   height: auto !important;
@@ -46,6 +55,14 @@ body.print-pdf .slide {
   scroll-snap-align: none !important;
   position: relative !important;
   display: block !important;
+  background: var(--bg) !important;
+  color: var(--text) !important;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
+body.print-pdf .slide:last-child {
+  break-after: auto !important;
+  page-break-after: auto !important;
 }
 body.print-pdf .slide .reveal {
   opacity: 1 !important;
@@ -79,8 +96,45 @@ body.print-pdf .premium-bg-3d__canvas {
   transform: none !important;
 }
 @media print {
-  @page { size: 1280px 720px; margin: 0; }
-  html, body { background: #000 !important; }
+  @page { size: 13.333in 7.5in; margin: 0; }
+  html, body {
+    background: var(--bg) !important;
+    color: var(--text) !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  body.print-pdf {
+    overflow: visible !important;
+    height: auto !important;
+  }
+  body.print-pdf::after {
+    display: none !important;
+  }
+  body.print-pdf .slide {
+    opacity: 1 !important;
+    transform: none !important;
+    background: var(--bg) !important;
+    color: var(--text) !important;
+  }
+  body.print-pdf .slide .reveal {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+  body.print-pdf .deck-dots,
+  body.print-pdf .deck-progress,
+  body.print-pdf .deck-hints,
+  body.print-pdf .deck-counter,
+  body.print-pdf .premium-controls-shell,
+  body.print-pdf .premium-bg-3d,
+  body.print-pdf .premium-timer,
+  body.print-pdf .premium-clicker-status,
+  body.print-pdf .premium-search-overlay,
+  body.print-pdf .premium-presenter-overlay,
+  body.print-pdf .premium-tts-cursor,
+  body.print-pdf .premium-3d-toast {
+    display: none !important;
+  }
   /* Flatten 3D even when body.print-pdf is absent (raw Cmd+P). */
   html[data-3d] .slide-3d-frame,
   html[data-3d] .slide-3d-frame *,
@@ -202,41 +256,69 @@ body.premium-presenter-popup {
   flex-direction: column;
 }
 
-/* Hide deck content behind the popup panel — the popup is an instrument,
-   not a mirror. Deck's own CSS still paints #deck / .slide / .dots. */
-body.premium-presenter-popup #deck,
+/* Hide deck chrome from the popup — the popup is an instrument, not a mirror.
+   #deck / .slide stay rendered so the popup can clone them for previews.
+   Do NOT hide .slide-3d-frame — previews clone the live slide. */
+body.premium-presenter-popup .deck-progress,
+body.premium-presenter-popup .deck-counter,
+body.premium-presenter-popup .deck-hints,
 body.premium-presenter-popup .deck-dots,
-body.premium-presenter-popup .premium-deck__chrome,
-body.premium-presenter-popup .progress-bar,
-body.premium-presenter-popup .counter,
-body.premium-presenter-popup .hints {
+body.premium-presenter-popup .premium-controls-shell,
+body.premium-presenter-popup .premium-timer,
+body.premium-presenter-popup .premium-bg-3d,
+body.premium-presenter-popup .premium-3d-toast,
+body.premium-presenter-popup .premium-clicker-status,
+body.premium-presenter-popup .premium-search-overlay,
+body.premium-presenter-popup .premium-tts-cursor {
   display: none !important;
+}
+/* Catch-all: deck-specific body chrome (glossary popups, custom overlays, …)
+   can't be enumerated — hide every body child except the presenter root and
+   #deck (kept offscreen for preview cloning). */
+body.premium-presenter-popup > :not(.premium-presenter):not(#deck):not(script):not(style):not(link) {
+  display: none !important;
+}
+/* Make #deck invisible but still in DOM so previews can clone slides. */
+body.premium-presenter-popup #deck {
+  position: fixed !important;
+  left: -9999px !important;
+  top: -9999px !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+/* Flatten 3D transforms inside preview clones so they don't break scale(). */
+.pp-preview .slide-3d-frame,
+.pp-preview .slide-3d-frame * {
+  transform: none !important;
+  perspective: none !important;
 }
 
 .premium-presenter {
   display: grid;
-  grid-template-rows: auto 1fr auto;
-  grid-template-columns: 1fr 280px;
+  grid-template-rows: auto 1fr auto auto auto;
+  grid-template-columns: 1fr;
   grid-template-areas:
-    "top rail"
-    "main rail"
-    "status status";
+    "top"
+    "instrument"
+    "timer-bar"
+    "timer-settings"
+    "status";
   height: 100vh;
   width: 100vw;
-  padding: 16px;
-  padding-top: 220px; /* room for fixed controls panel at top */
-  padding-bottom: 120px; /* room for fixed timer at bottom */
-  gap: 12px;
+  padding: 12px;
+  gap: 8px;
   box-sizing: border-box;
   position: relative;
+  overflow: hidden;
 }
 
+/* ── top bar ──────────────────────────────────────────────────────────────── */
 .premium-presenter__top {
   grid-area: top;
   display: flex;
   align-items: center;
-  gap: 18px;
-  padding: 10px 16px;
+  gap: 12px;
+  padding: 8px 14px;
   background: #fff;
   border: 1px solid #e7e5e4;
   border-radius: 10px;
@@ -244,18 +326,90 @@ body.premium-presenter-popup .hints {
   font-size: 13px;
 }
 .premium-presenter__title { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.premium-presenter__counter { color: #57534e; }
-.premium-presenter__mode { color: #78716c; font-size: 12px; }
+.premium-presenter__counter { color: #57534e; white-space: nowrap; }
+.premium-presenter__mode { color: #78716c; font-size: 12px; white-space: nowrap; }
+.premium-presenter__gear {
+  font: inherit;
+  padding: 2px 7px;
+  border: 1px solid #d6d3d1;
+  border-radius: 4px;
+  background: #fafaf9;
+  color: #57534e;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+}
+.premium-presenter__gear:hover { background: #f5f5f4; }
 
-.premium-presenter__main {
-  grid-area: main;
+/* ── instrument panel ─────────────────────────────────────────────────────── */
+.premium-presenter__instrument {
+  grid-area: instrument;
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 10px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── previews ─────────────────────────────────────────────────────────────── */
+.pp-previews {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  min-height: 0;
+}
+.pp-previews__current,
+.pp-previews__next {
+  position: relative;
+  background: #f5f5f4;
+  border: 1px solid #e7e5e4;
+  border-radius: 8px;
+  overflow: hidden;
+  min-height: 0;
+  aspect-ratio: 16 / 9;
+  width: 100%;
+}
+.pp-previews__current { border-color: #1c1917; border-width: 2px; }
+/* Slide preview clones: scale to fit the preview container. */
+.pp-preview {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.pp-preview .slide {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 1280px !important;
+  height: 720px !important;
+  transform-origin: top left !important;
+  transform: scale(var(--pp-preview-scale, 0.2)) !important;
+  pointer-events: none !important;
+  /* Force visibility regardless of deck CSS (deck hides .slide without .visible). */
+  opacity: 1 !important;
+}
+/* Force .reveal children visible and static inside preview clones. */
+.pp-preview .reveal {
+  opacity: 1 !important;
+  transform: none !important;
+  transition: none !important;
+  animation: none !important;
+}
+/* Disable all transitions and animations on preview descendants. */
+.pp-preview * {
+  transition: none !important;
+  animation: none !important;
+}
+
+/* ── notes panel ─────────────────────────────────────────────────────────── */
+.premium-presenter__notes-panel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 6px;
   background: #fff;
   border: 1px solid #e7e5e4;
   border-radius: 10px;
-  padding: 18px 22px;
+  padding: 14px 16px;
   overflow-y: auto;
   min-height: 0;
 }
@@ -269,59 +423,85 @@ body.premium-presenter-popup .hints {
   font-weight: 600;
 }
 .premium-presenter__next-title {
-  margin: 0 0 14px;
-  font-size: 20px;
+  margin: 0 0 8px;
+  font-size: 17px;
   line-height: 1.3;
   font-weight: 600;
   color: #1c1917;
 }
 .premium-presenter__notes-body {
-  font-size: 17px;
+  font-size: 16px;
   line-height: 1.6;
   overflow-y: auto;
   color: #292524;
+  flex: 1;
 }
 .premium-presenter__notes-body p { margin: 0 0 0.7em; }
 .premium-presenter__notes-body ul,
 .premium-presenter__notes-body ol { padding-left: 1.4em; margin: 0 0 0.7em; }
 .premium-presenter__notes-body .pp-summary__lead {
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1.5;
   color: #1c1917;
-  margin: 0 0 12px;
+  margin: 0 0 10px;
   font-weight: 500;
 }
 .premium-presenter__notes-body .pp-summary__quote {
   border: 1px solid #d6d3d1;
   border-radius: 6px;
   padding: 4px 0 4px 12px;
-  margin: 0 0 12px;
+  margin: 0 0 10px;
   color: #57534e;
   font-style: italic;
 }
 .premium-presenter__notes-body .pp-summary__bullets {
   list-style: disc;
   padding-left: 1.4em;
-  margin: 0 0 12px;
+  margin: 0 0 10px;
 }
 .premium-presenter__notes-body .pp-summary__bullets li {
-  margin: 0 0 6px;
+  margin: 0 0 5px;
   line-height: 1.4;
 }
 .premium-presenter__no-notes { color: #a8a29e; font-style: italic; }
 
+/* ── rail — overlay drawer ─────────────────────────────────────────────────── */
 .premium-presenter__rail {
-  grid-area: rail;
+  position: fixed;
+  inset: 0 0 0 auto;
+  width: 280px;
   background: #fff;
-  border: 1px solid #e7e5e4;
-  border-radius: 10px;
+  border-left: 1px solid #e7e5e4;
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
   padding: 12px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  z-index: 200;
+  transform: translateX(100%);
+  transition: transform 0.2s ease;
 }
+.premium-presenter__rail[data-open="true"] {
+  transform: translateX(0);
+}
+.premium-presenter__rail-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font: inherit;
+  padding: 2px 7px;
+  border: 1px solid #d6d3d1;
+  border-radius: 4px;
+  background: transparent;
+  color: #57534e;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+}
+.premium-presenter__rail-close:hover { background: #f5f5f4; }
 .premium-presenter__rail-label {
   margin: 0 0 8px;
+  padding-right: 28px;
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -351,16 +531,108 @@ body.premium-presenter-popup .hints {
   font-weight: 600;
 }
 
+/* ── timer bar ─────────────────────────────────────────────────────────────── */
+.premium-presenter__timer-bar {
+  grid-area: timer-bar;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #fff;
+  border: 1px solid #e7e5e4;
+  border-radius: 10px;
+  padding: 8px 16px;
+  font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+}
+.premium-presenter__timer-time {
+  font-size: 24px;
+  font-weight: 600;
+  color: #1c1917;
+  line-height: 1.1;
+  min-width: 72px;
+}
+.premium-presenter__timer-pace {
+  font-size: 11px;
+  color: #78716c;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  flex: 1;
+}
+.pp-timer-btn {
+  font: inherit;
+  padding: 4px 10px;
+  border: 1px solid #d6d3d1;
+  border-radius: 4px;
+  background: #fafaf9;
+  color: #1c1917;
+  cursor: pointer;
+  font-size: 12px;
+}
+.pp-timer-btn:hover { background: #f5f5f4; }
+.premium-presenter__timer-bar.is-bell { animation: pp-bell 0.6s ease; }
+@keyframes pp-bell { 0%, 100% { background: #fff; } 50% { background: #fef3c7; } }
+
+/* ── timer settings disclosure ─────────────────────────────────────────────── */
+.premium-presenter__timer-settings[hidden] {
+  display: none !important;
+}
+.premium-presenter__timer-settings {
+  grid-area: timer-settings;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  background: #fafaf9;
+  border: 1px solid #e7e5e4;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 12px;
+}
+.premium-presenter__timer-settings label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #44403c;
+}
+.premium-presenter__timer-settings input,
+.premium-presenter__timer-settings select {
+  font: inherit;
+  padding: 2px 6px;
+  border: 1px solid #d6d3d1;
+  border-radius: 4px;
+  background: #fff;
+  color: #1c1917;
+}
+.premium-presenter__timer-settings input[type="number"] { width: 68px; }
+.premium-presenter__timer-settings input[type="time"] { width: 88px; }
+
+/* ── status footer ─────────────────────────────────────────────────────────── */
 .premium-presenter__status {
   grid-area: status;
   font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
   font-size: 11px;
   color: #57534e;
   display: flex;
-  gap: 18px;
-  padding: 4px 10px;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 8px;
 }
+.pp-status__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #a8a29e;
+  flex-shrink: 0;
+}
+.pp-status__dot[data-state="connected"],
+.pp-status__dot[data-state="connected-focused"] {
+  background: #16a34a;
+}
+.pp-status__dot[data-state="connected"] {
+  background: #ca8a04;
+}
+#pp-status-session { color: #a8a29e; margin-left: auto; }
 
+/* ── diag bar ─────────────────────────────────────────────────────────────── */
 .premium-presenter__diag {
   position: fixed;
   bottom: 0;
@@ -377,81 +649,6 @@ body.premium-presenter-popup .hints {
   text-overflow: ellipsis;
   border-top: 1px solid #44403c;
 }
-
-.pp-deck-badge {
-  position: fixed;
-  top: 12px;
-  right: 12px;
-  z-index: 99999;
-  background: #1c1917;
-  color: #fafaf9;
-  font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
-  font-size: 11px;
-  padding: 6px 10px;
-  border-radius: 6px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
-  pointer-events: none;
-}
-
-.premium-presenter__timer {
-  position: fixed;
-  bottom: 100px;
-  right: 24px;
-  background: #fff;
-  border: 1px solid #e7e5e4;
-  border-radius: 10px;
-  padding: 10px 18px;
-  font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
-  text-align: center;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
-}
-.premium-presenter__timer-time { font-size: 28px; font-weight: 600; color: #1c1917; line-height: 1.1; }
-.premium-presenter__timer-pace { font-size: 11px; color: #78716c; text-transform: uppercase; letter-spacing: 0.08em; margin-top: 2px; }
-.premium-presenter__timer.is-bell { animation: pp-bell 0.6s ease; }
-@keyframes pp-bell { 0%, 100% { background: #fff; } 50% { background: #fef3c7; } }
-
-.premium-presenter__controls {
-  position: fixed;
-  top: 16px;
-  right: 16px;
-  background: #fff;
-  border: 1px solid #e7e5e4;
-  border-radius: 10px;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  font-size: 12px;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
-}
-.premium-presenter__controls label {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  color: #44403c;
-}
-.premium-presenter__controls input,
-.premium-presenter__controls select {
-  font: inherit;
-  padding: 3px 6px;
-  border: 1px solid #d6d3d1;
-  border-radius: 4px;
-  background: #fafaf9;
-  color: #1c1917;
-}
-.premium-presenter__controls input[type="number"] { width: 70px; }
-.premium-presenter__controls input[type="time"] { width: 90px; }
-.premium-presenter__controls button {
-  font: inherit;
-  padding: 5px 10px;
-  border: 1px solid #d6d3d1;
-  border-radius: 4px;
-  background: #fafaf9;
-  color: #1c1917;
-  cursor: pointer;
-}
-.premium-presenter__controls button:hover { background: #f5f5f4; }
 
 /* ──────────────────────────────────────────────────────────────────────────
  * Fallback prompt — shown when window.open() is blocked.
@@ -508,4 +705,96 @@ body.premium-presenter-popup .hints {
 .premium-clicker-status.is-visible {
   opacity: 1;
   transform: translate(-50%, 0);
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Glossary — term links + definition popup
+ * Used with premium-glossary.js (conditional module).
+ * Theme-aware via CSS custom properties.
+ * ────────────────────────────────────────────────────────────────────────── */
+.term-link {
+  appearance: none;
+  -webkit-appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-decoration-color: color-mix(in srgb, var(--accent, #d4a843) 70%, transparent);
+  text-decoration-thickness: from-font;
+  text-underline-offset: 0.16em;
+}
+.term-link:hover,
+.term-link:focus-visible {
+  color: var(--accent, #d4a843);
+  text-decoration-style: solid;
+  outline: none;
+}
+.term-link--gold { color: var(--accent, #d4a843); }
+.term-popup {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: none;
+}
+.term-popup.is-open { display: block; }
+.term-popup__backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: rgba(8, 8, 12, 0.62);
+  backdrop-filter: blur(3px);
+  cursor: pointer;
+}
+.term-popup__card {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(520px, calc(100vw - 48px));
+  background: var(--surface, #16161c);
+  color: var(--text, #f4f1ea);
+  border: 1px solid color-mix(in srgb, var(--accent, #d4a843) 35%, transparent);
+  border-radius: 14px;
+  padding: 26px 30px 20px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+}
+.term-popup__close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  appearance: none;
+  background: none;
+  border: 0;
+  color: inherit;
+  opacity: 0.6;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 6px;
+}
+.term-popup__close:hover { opacity: 1; }
+.term-popup__title {
+  margin: 0 0 10px;
+  font-size: 1.15rem;
+  line-height: 1.3;
+  color: var(--accent, #d4a843);
+}
+.term-popup__body {
+  margin: 0 0 14px;
+  font-size: 0.98rem;
+  line-height: 1.6;
+}
+.term-popup__hint {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.45;
 }

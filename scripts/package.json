@@ -12,7 +12,7 @@
   "scripts": {
     "test": "node --test tests/theme-quality.test.mjs",
     "test:presenter": "node tests/presenter-smoke.mjs",
-    "test:popup": "node tests/test-popup-bc.mjs && node tests/test-popup-e2e.mjs && node tests/test-popup-postmessage.mjs && node tests/test-popup-storage.mjs && node tests/test-popup-timer.mjs",
+    "test:popup": "node tests/test-popup-bc.mjs && node tests/test-popup-e2e.mjs && node tests/test-popup-postmessage.mjs && node tests/test-popup-storage.mjs && node tests/test-popup-timer.mjs && node tests/test-presenter-seq.mjs && node tests/test-slide-content.mjs && node tests/test-glossary.mjs",
     "test:bundle": "node tests/verify_bundle.mjs"
   },
   "devDependencies": {

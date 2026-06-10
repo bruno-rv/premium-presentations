@@ -82,13 +82,16 @@ if (!/Talk about two/.test(notesHtml)) {
 }
 console.log('  PASS — rail click updates deck and popup notes via direct postMessage');
 
+// Timer settings live in #pp-timer-settings (hidden until gear opens it),
+// but the inputs exist in DOM and can be queried directly.
 const minutesInput = popup.window.document.getElementById('pp-minutes');
 minutesInput.value = '5';
 minutesInput.dispatchEvent(new popup.window.Event('input', { bubbles: true }));
 await new Promise((r) => setTimeout(r, 500));
 
-const startBtn = popup.window.document.getElementById('pp-start');
-startBtn.click();
+// #pp-timer-startstop is the toggle (Start / Pause); #pp-timer-reset is reset.
+const startStopBtn = popup.window.document.getElementById('pp-timer-startstop');
+startStopBtn.click();  // first click → Start
 await new Promise((r) => setTimeout(r, 150));
 
 const timerState = deck.window.PremiumTimer.getState();
@@ -106,8 +109,7 @@ if (tickingText === timerText || !/^4:5[89]$/.test(tickingText)) {
 }
 console.log('  PASS — presenter timer counts down locally when deck rAF is paused');
 
-const pauseBtn = popup.window.document.getElementById('pp-pause');
-pauseBtn.click();
+startStopBtn.click();  // second click → Pause (toggle)
 await new Promise((r) => setTimeout(r, 150));
 const pausedText = popup.window.document.getElementById('pp-timer-time').textContent;
 await new Promise((r) => setTimeout(r, 1100));
@@ -117,9 +119,9 @@ if (stillPausedText !== pausedText) {
 }
 console.log('  PASS — Pause freezes presenter timer');
 
-startBtn.click();
+startStopBtn.click();  // third click → Start again
 await new Promise((r) => setTimeout(r, 150));
-const resetBtn = popup.window.document.getElementById('pp-reset');
+const resetBtn = popup.window.document.getElementById('pp-timer-reset');
 resetBtn.click();
 await new Promise((r) => setTimeout(r, 150));
 const resetText = popup.window.document.getElementById('pp-timer-time').textContent;

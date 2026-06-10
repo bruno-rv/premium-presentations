@@ -84,6 +84,11 @@ SlideEngine.prototype.firstPhrase = function (text) {
 };
 
 SlideEngine.prototype.getSlideTitle = function (slide, i) {
+  // Delegate to PremiumSlideContent when available.
+  if (window.PremiumSlideContent && typeof window.PremiumSlideContent.getTitle === 'function') {
+    return window.PremiumSlideContent.getTitle(slide, i);
+  }
+  // Inline fallback (same logic).
   const custom = slide.dataset.navTitle || slide.dataset.title;
   if (custom) return this.truncateNavTitle(custom);
 
@@ -150,26 +155,24 @@ SlideEngine.prototype.getSlideTitle = function (slide, i) {
 // Notes are read from <aside class="notes"> or .slide__notes inside the slide.
 // Returns the inner HTML so the popup can render bold/links. No notes → ''.
 SlideEngine.prototype.getSlideNotesHtml = function (slide) {
+  if (window.PremiumSlideContent && typeof window.PremiumSlideContent.getNotesHtml === 'function') {
+    return window.PremiumSlideContent.getNotesHtml(slide);
+  }
   if (!slide) return '';
   const el = slide.querySelector('aside.notes, .slide__notes');
   return el ? el.innerHTML : '';
 };
 
 // Slide summary — used by the presenter popup as a fallback when no speaker
-// notes have been authored for a slide. Returns a condensed "speaker cheat
-// sheet" view: the first ~2 sentences of the lead paragraph, plus up to
-// 4 short bullets from any list, plus a blockquote if present. Headings,
-// nav, and decorative chrome are stripped so the popup shows a quick
-// talking-points summary, not a duplicate of the slide.
+// notes have been authored. Delegates to PremiumSlideContent when available.
 SlideEngine.prototype.getSlideSummaryHtml = function (slide) {
+  if (window.PremiumSlideContent && typeof window.PremiumSlideContent.getSummaryHtml === 'function') {
+    return window.PremiumSlideContent.getSummaryHtml(slide);
+  }
+  // Inline fallback for bundles without PremiumSlideContent.
   if (!slide) return '';
-  // Search common body containers in priority order.
   const containers = [
-    '.content-grid',         // split layouts: pick the lead column
-    '.slide__body',
-    '.slide__points',
-    '.slide__split',
-    '.slide__quote',
+    '.content-grid', '.slide__body', '.slide__points', '.slide__split', '.slide__quote',
   ];
   let body = null;
   for (const sel of containers) {
@@ -178,11 +181,11 @@ SlideEngine.prototype.getSlideSummaryHtml = function (slide) {
   }
   if (!body) return '';
   const clone = body.cloneNode(true);
-  // Strip decorative chrome
-  clone.querySelectorAll('.slide__label, .slide__heading, .slide__display, .slide__number, .slide__chrome, .slide__nav, .slide__dot-strip, .slide__notes, h1, h2, h3, h4, script, style, svg, .reveal').forEach((n) => n.remove());
-
+  clone.querySelectorAll(
+    '.slide__label, .slide__heading, .slide__display, .slide__number, .slide__chrome, ' +
+    '.slide__nav, .slide__dot-strip, .slide__notes, h1, h2, h3, h4, script, style, svg'
+  ).forEach((n) => n.remove());
   const parts = [];
-  // Lead paragraph: first <p>, truncated to ~2 sentences.
   const lead = clone.querySelector('p');
   if (lead) {
     const text = (lead.textContent || '').trim().replace(/\s+/g, ' ');
@@ -191,16 +194,13 @@ SlideEngine.prototype.getSlideSummaryHtml = function (slide) {
     if (lead2) parts.push('<p class="pp-summary__lead">' + escapeSummary(lead2) + '</p>');
     lead.remove();
   }
-  // Blockquote: take as a callout.
   const quote = clone.querySelector('blockquote');
   if (quote) {
     const text = (quote.textContent || '').trim();
     if (text) parts.push('<blockquote class="pp-summary__quote">' + escapeSummary(text) + '</blockquote>');
     quote.remove();
   }
-  // Bullets: first 4 short items from any <ul>/<ol>.
-  const lists = clone.querySelectorAll('ul, ol');
-  lists.forEach((list) => {
+  clone.querySelectorAll('ul, ol').forEach((list) => {
     const items = [...list.querySelectorAll(':scope > li')].slice(0, 4).map((li) => {
       const t = (li.textContent || '').trim().replace(/\s+/g, ' ');
       const short = t.length > 140 ? t.slice(0, 137) + '…' : t;
@@ -344,9 +344,12 @@ SlideEngine.prototype.updateChrome = function () {
 // never reached it.
 SlideEngine.prototype.broadcastSnapshot = function () {
   const sessionId = document.documentElement.dataset.session;
+  const seq = window.PremiumPresenter && typeof window.PremiumPresenter.nextStateSeq === 'function'
+    ? window.PremiumPresenter.nextStateSeq() : undefined;
   const payload = {
     type: 'snapshot',
     sessionId,
+    seq,
     index: this.current,
     total: this.total,
     titles: this.getAllTitles(),
@@ -411,9 +414,12 @@ SlideEngine.prototype.broadcastSlidechange = function (slide) {
   const nextSlide = this.slides[idx + 1];
   const nextTitle = nextSlide ? this.getSlideTitle(nextSlide, idx + 1) : '';
   const nextNotes = nextSlide ? this.getSlideNotesHtml(nextSlide) : '';
+  const seq = window.PremiumPresenter && typeof window.PremiumPresenter.nextStateSeq === 'function'
+    ? window.PremiumPresenter.nextStateSeq() : undefined;
   const payload = {
     type: 'slidechange',
     sessionId,
+    seq,
     index: idx,
     id: slide.id,
     total: this.total,
@@ -586,6 +592,9 @@ SlideEngine.prototype.exposeApi = function () {
     const ch = new BroadcastChannel('premium-deck');
     ch.addEventListener('message', (e) => {
       if (!e.data) return;
+      // Drop messages from other sessions. Legacy bundles without sessionId pass.
+      const msgSid = e.data.sessionId;
+      if (msgSid && msgSid !== document.documentElement.dataset.session) return;
       if (e.data.type === 'slidechange' && handlers.slidechange.size) {
         handlers.slidechange.forEach((h) => {
           try { h({ index: e.data.index, id: e.data.id, total: e.data.total, title: e.data.title, notes: e.data.notes, nextTitle: e.data.nextTitle, nextNotes: e.data.nextNotes }); } catch (_) {}

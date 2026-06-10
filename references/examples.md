@@ -203,6 +203,39 @@ fallback uses the slide's lead + bullets).
 </section>
 ```
 
+## Glossary term links
+
+Add a JSON dictionary block once per deck (anywhere in `<body>`) and use `.term-link` buttons inline in slide text. The bundler auto-includes `premium-glossary.js` when it detects the markup.
+
+```html
+<!-- JSON dictionary — place once, anywhere in <body> -->
+<script type="application/json" id="glossary">
+{
+  "RAG": {
+    "title": "RAG — Retrieval-Augmented Generation",
+    "body": "Augments an LLM with documents retrieved at query time."
+  },
+  "LLM": {
+    "title": "LLM — Large Language Model",
+    "body": "A transformer-scale model trained on text to predict tokens."
+  }
+}
+</script>
+
+<!-- Term-link button inline in slide text — data-term must match a dictionary key exactly -->
+<section class="slide">
+  <div class="slide__body">
+    <p>
+      A <button class="term-link" type="button" data-term="RAG">RAG</button>
+      pipeline pairs an <button class="term-link" type="button" data-term="LLM">LLM</button>
+      with a vector index.
+    </p>
+  </div>
+</section>
+```
+
+The popup is injected automatically. Clicking a term link or pressing Esc closes it. The presenter popup's Notes pane shows a compact Terms section for the active slide.
+
 ## Validation commands
 
 ```bash

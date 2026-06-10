@@ -380,6 +380,43 @@
     syncThemeVisuals(document.documentElement.dataset.theme);
   }
 
+  async function prepareAndPrintPdf() {
+    if (document.body.classList.contains('print-pdf')) return;
+    document.body.classList.add('print-pdf');
+
+    document.querySelectorAll('#deck .slide').forEach((s) => s.classList.add('visible'));
+
+    if (document.fonts && document.fonts.ready) {
+      try { await document.fonts.ready; } catch (_) {}
+    }
+
+    await Promise.all(
+      [...document.images].map((img) =>
+        img.complete
+          ? Promise.resolve()
+          : new Promise((resolve) => {
+              img.onload = resolve;
+              img.onerror = resolve;
+            })
+      )
+    );
+
+    const pendingMermaid = document.querySelectorAll('.mermaid-wrap pre.mermaid');
+    let needsMermaidWait = false;
+    pendingMermaid.forEach((el) => {
+      if (!el.querySelector('svg')) needsMermaidWait = true;
+    });
+    if (needsMermaidWait) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+
+    await new Promise((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(resolve));
+    });
+
+    window.print();
+  }
+
   function mountControls() {
     if (document.querySelector('.premium-controls-shell')) return;
     const root = document.documentElement;
@@ -547,9 +584,7 @@
     printBtn.innerHTML = 'PDF<span class="premium-kbd">⇧E</span>';
     printBtn.title = 'Export as PDF (Shift+E)';
     printBtn.addEventListener('click', () => {
-      if (document.body.classList.contains('print-pdf')) return;
-      document.body.classList.add('print-pdf');
-      window.print();
+      prepareAndPrintPdf();
     });
     printGroup.appendChild(printBtn);
     panel.appendChild(printGroup);
@@ -822,7 +857,9 @@
   function init() {
     mountBackground();
     mount3dFrames();
-    mountControls();
+    // Skip shell mount in presenter popup — the popup has its own instrument
+    // panel and we don't want a 3D select or toast overlaid on it.
+    if (!isPresenterPopup()) mountControls();
     bindControlShortcuts();
     bindMotionLifecycle();
     restorePreferences();
@@ -832,16 +869,13 @@
     refresh3dSelect();
   }
 
-  // ?print-pdf query auto-activates print mode. Add the class as early as
-  // possible (synchronously in the head if this script runs in the head,
-  // otherwise at parse time) so the print stylesheet is applied before
-  // layout, then trigger window.print() once everything is laid out.
+  // ?print-pdf query auto-activates print mode once the deck is laid out.
   if (new URLSearchParams(location.search).get('print-pdf') === '1') {
-    document.body.classList.add('print-pdf');
+    const runPrint = () => { prepareAndPrintPdf(); };
     if (document.readyState === 'complete') {
-      window.print();
+      runPrint();
     } else {
-      window.addEventListener('load', () => window.print(), { once: true });
+      window.addEventListener('load', runPrint, { once: true });
     }
   }
 
@@ -870,6 +904,7 @@
     refreshThemeVisuals: mountThemeVisuals,
     getThemes: discoverThemes,
     THEMES: discoverThemes(),
+    exportPdf: prepareAndPrintPdf,
   };
 })();
 /* Marker + laser: shared/premium-annotations.js */

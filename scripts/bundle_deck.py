@@ -115,11 +115,29 @@ def wants_premium_mermaid(html: str) -> bool:
 
 
 def wants_premium_journey(html: str) -> bool:
-    return "premium-journey.js" in html or "journey-stage" in html
+    # Match script src reference OR class attribute usage; avoids false-positives
+    # from "journey-stage" appearing in inlined CSS text after inline_stylesheets().
+    return "premium-journey.js" in html or bool(
+        re.search(r'class=["\'][^"\']*\bjourney-stage\b', html)
+    )
 
 
 def wants_premium_flow(html: str) -> bool:
-    return "premium-flow.js" in html or "live-flow" in html
+    # Same guard: match class attribute, not bare substring that could appear in CSS.
+    return "premium-flow.js" in html or bool(
+        re.search(r'class=["\'][^"\']*\blive-flow\b', html)
+    )
+
+
+def wants_premium_glossary(html: str) -> bool:
+    # Match script src reference, data-term= attribute, or id="glossary" tag —
+    # never a bare "term-link" substring that would match CSS class definitions
+    # inside inlined <style> blocks.
+    return (
+        "premium-glossary.js" in html
+        or bool(re.search(r'\bdata-term=["\']', html))
+        or bool(re.search(r'\bid=["\']glossary["\']', html))
+    )
 
 
 def build_mermaid_module() -> str:
@@ -251,7 +269,14 @@ def bundle_html(html: str, html_path: Path) -> str:
     if "/* --- premium-themes.css --- */" in html and "../../shared/" not in html:
         return html  # already bundled
 
+    # Capture conditional-module decisions from the ORIGINAL html BEFORE
+    # inline_stylesheets() runs.  After inlining, CSS text (e.g. ".term-link",
+    # ".live-flow", ".journey-stage" selectors) would cause false-positive
+    # matches and bundle modules into every deck.
     use_mermaid = wants_premium_mermaid(html)
+    use_journey = wants_premium_journey(html)
+    use_flow = wants_premium_flow(html)
+    use_glossary = wants_premium_glossary(html)
 
     html = inline_stylesheets(html, html_path)
     scripts = collect_script_srcs(html, html_path)
@@ -264,16 +289,21 @@ def bundle_html(html: str, html_path: Path) -> str:
         if p not in seen_paths:
             seen_paths.add(p)
             script_paths.append(p)
-    if wants_premium_journey(html):
+    if use_journey:
         journey_path = SHARED / "premium-journey.js"
         if journey_path.is_file() and journey_path not in seen_paths:
             seen_paths.add(journey_path)
             script_paths.append(journey_path)
-    if wants_premium_flow(html):
+    if use_flow:
         flow_path = SHARED / "premium-flow.js"
         if flow_path.is_file() and flow_path not in seen_paths:
             seen_paths.add(flow_path)
             script_paths.append(flow_path)
+    if use_glossary:
+        glossary_path = SHARED / "premium-glossary.js"
+        if glossary_path.is_file() and glossary_path not in seen_paths:
+            seen_paths.add(glossary_path)
+            script_paths.append(glossary_path)
     inline_js = build_classic_scripts(script_paths) if script_paths else ""
 
     footer_parts: list[str] = []
@@ -288,15 +318,16 @@ def bundle_html(html: str, html_path: Path) -> str:
         # prevents one bad init from killing all later DOMContentLoaded listeners,
         # which would leave the deck un-navigable).
         boot = "document.addEventListener('DOMContentLoaded', function () {\n"
-        if wants_premium_journey(html):
+        if use_journey:
             boot += "  if (typeof initPremiumJourney === 'function') {\n"
             boot += "    try { initPremiumJourney(); } catch (e) { console.error('[PremiumJourney] init failed', e); }\n"
             boot += "  }\n"
-        if wants_premium_flow(html):
+        if use_flow:
             boot += "  if (typeof initPremiumFlow === 'function') {\n"
             boot += "    try { initPremiumFlow(); } catch (e) { console.error('[PremiumFlow] init failed', e); }\n"
             boot += "  }\n"
         boot += "  try { new SlideEngine(); } catch (e) { console.error('[SlideEngine] init failed', e); }\n"
+        # Glossary self-initializes (no explicit init call needed — IIFE runs at parse time).
         boot += "});\n"
         footer_parts.append("<script>\n" + boot + "</script>")
 

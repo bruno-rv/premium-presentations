@@ -23,6 +23,7 @@ Portable patterns for Premium Presentations decks. Use with `assets/shared/premi
 | **PIPE** | Pipeline vertical | Sequential stages / medallion layers, 3–6 steps top-down | `assets/templates/components/pipeline-vertical.snippet.html` |
 | **TERM** | Terminal window | CLI demos, commands, logs | `assets/templates/components/terminal-window.snippet.html` |
 | **RAIL** | Accent rail | Left-edge gradient rail on text-leaning content slides | CSS-only: `slide--rail` modifier |
+| **GLOSS** | Glossary term links | Inline term buttons with definition popup — use when a slide deck introduces many specialized terms (requires `premium-glossary.js`) | `assets/templates/components/glossary.snippet.html` |
 
 ## Routing: content type → component
 

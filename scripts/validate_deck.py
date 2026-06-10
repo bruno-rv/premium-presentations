@@ -204,6 +204,75 @@ def validate(html_path: Path, spec_path: str = "", strict_variety: bool = False)
     else:
         warnings.extend(v_msgs)
 
+    slides_with_notes = len(re.findall(r'<aside\s[^>]*class=["\'][^"\']*\bnotes\b', text, re.I))
+    if slides > 0 and slides_with_notes < slides:
+        missing = slides - slides_with_notes
+        warn(
+            f"{missing} slide(s) missing <aside class=\"notes\"> — "
+            "add speaker notes so the presenter popup has content "
+            "(see references/examples.md)"
+        )
+
+    # Glossary consistency checks (warnings, never errors).
+    # The dictionary itself is validated whenever present — even with zero
+    # term-links — so a malformed dict never passes silently. The links↔dict
+    # cross-checks stay conditional on term-links existing.
+    term_keys_in_html = set(re.findall(r'data-term=["\']([^"\']+)["\']', text, re.I))
+    glossary_match = re.search(
+        r'<script\s[^>]*\btype=["\']application/json["\'][^>]*\bid=["\']glossary["\'][^>]*>'
+        r'([\s\S]*?)</script>',
+        text,
+        re.I,
+    ) or re.search(
+        r'<script\s[^>]*\bid=["\']glossary["\'][^>]*\btype=["\']application/json["\'][^>]*>'
+        r'([\s\S]*?)</script>',
+        text,
+        re.I,
+    )
+    if term_keys_in_html and not glossary_match:
+        warn(
+            f"{len(term_keys_in_html)} term-link(s) present but no "
+            '<script type="application/json" id="glossary"> dictionary found — '
+            "add the JSON data block (see references/components.md)"
+        )
+    if glossary_match:
+        import json as _json
+        raw = glossary_match.group(1).strip()
+        try:
+            parsed_dict = _json.loads(raw)
+            if not isinstance(parsed_dict, dict):
+                warn(
+                    "glossary <script id=\"glossary\"> is valid JSON but not an object "
+                    "(expected a key→{title,body} mapping)"
+                )
+            else:
+                for entry_key, entry_val in parsed_dict.items():
+                    if not isinstance(entry_val, dict):
+                        warn(
+                            f'glossary entry "{entry_key}" is not an object '
+                            "(expected {{title, body}})"
+                        )
+                    elif not entry_val.get("title") or not entry_val.get("body"):
+                        missing_fields = [
+                            f for f in ("title", "body") if not entry_val.get(f)
+                        ]
+                        warn(
+                            f'glossary entry "{entry_key}" missing field(s): '
+                            + ", ".join(missing_fields)
+                        )
+                if term_keys_in_html:
+                    missing_keys = term_keys_in_html - set(parsed_dict.keys())
+                    if missing_keys:
+                        warn(
+                            f"{len(missing_keys)} term-link key(s) missing from glossary dictionary: "
+                            + ", ".join(sorted(missing_keys))
+                        )
+        except _json.JSONDecodeError as exc:
+            warn(
+                f"glossary <script id=\"glossary\"> contains malformed JSON "
+                f"({exc}) — term-links will not resolve"
+            )
+
     if standalone and "PremiumPresentations" not in bundle:
         errors.append(
             "Standalone deck missing PremiumPresentations — controls script likely truncated; re-bundle"
