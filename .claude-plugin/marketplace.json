@@ -1,0 +1,17 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "premium-presentations",
+  "description": "Generate magazine-quality dual-theme HTML slide decks with cursor-tracked 3D effects, click-to-expand modals, and a runtime depth slider.",
+  "owner": {
+    "name": "Bruno Rodrigues Veloso",
+    "url": "https://github.com/bruno-rv"
+  },
+  "plugins": [
+    {
+      "name": "premium-presentations",
+      "description": "Premium HTML slide decks: dual themes, 3D tilt, expandable modals, self-contained single-file output.",
+      "source": "./",
+      "category": "productivity"
+    }
+  ]
+}
