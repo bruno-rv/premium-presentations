@@ -1,7 +1,7 @@
 {
   "name": "premium-presentations",
   "description": "Generate magazine-quality dual-theme HTML slide decks with cursor-tracked 3D effects, click-to-expand modals, and a runtime depth slider. Self-contained single-file presentations.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": {
     "name": "Bruno Rodrigues Veloso",
     "url": "https://github.com/bruno-rv"
