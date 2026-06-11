@@ -1,8 +1,10 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "id": "premium-presentations",
   "name": "premium-presentations",
   "metadata": {
-    "description": "Generate magazine-quality dual-theme HTML slide decks with cursor-tracked 3D effects, click-to-expand modals, and a runtime depth slider."
+    "description": "Generate magazine-quality dual-theme HTML slide decks with cursor-tracked 3D effects, click-to-expand modals, and a runtime depth slider.",
+    "version": "1.0.0"
   },
   "owner": {
     "name": "Bruno Rodrigues Veloso",

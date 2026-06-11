@@ -2,8 +2,7 @@
 
 Claude skill for generating polished, browser-rendered HTML presentation decks.
 
-This repository is the skill package. `SKILL.md` is the agent entry point;
-`README.md` is only human-facing orientation.
+This repo is the Claude Code plugin package and the skill source. `SKILL.md` is the agent entry point; `README.md` is human-facing orientation only.
 
 ## Preview
 
@@ -21,17 +20,37 @@ This repository is the skill package. `SKILL.md` is the agent entry point;
 
 ## Install
 
-Clone or copy this folder into your Claude skills directory:
+### Claude Code plugin (recommended)
+
+Add to `~/.claude/settings.json`:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "premium-presentations": {
+      "source": { "source": "github", "repo": "bruno-rv/premium-presentations" }
+    }
+  },
+  "enabledPlugins": {
+    "premium-presentations@premium-presentations": true
+  }
+}
+```
+
+### Manual
+
+Clone the repo and link the skill subdirectory:
 
 ```bash
+git clone https://github.com/bruno-rv/premium-presentations.git
 mkdir -p ~/.claude/skills
-git clone https://github.com/bruno-rv/premium-presentations.git ~/.claude/skills/premium-presentations
+ln -s "$(pwd)/premium-presentations/skills/premium-presentations" ~/.claude/skills/premium-presentations
 ```
 
 For local validation scripts that use Node dependencies:
 
 ```bash
-npm --prefix scripts ci
+npm --prefix skills/premium-presentations/scripts ci
 ```
 
 ## Use
@@ -39,46 +58,54 @@ npm --prefix scripts ci
 List available themes:
 
 ```bash
-./scripts/list-themes.py
+./skills/premium-presentations/scripts/list-themes.py
 ```
 
 Create a deck:
 
 ```bash
-./scripts/new-deck.sh warm my-talk "My Title" 12
+./skills/premium-presentations/scripts/new-deck.sh warm my-talk "My Title" 12
 ```
 
 The generated deck is written to:
 
 ```text
-assets/decks/my-talk/my-talk-slides.html
+skills/premium-presentations/assets/decks/my-talk/my-talk-slides.html
 ```
 
 Validate it:
 
 ```bash
-python3 scripts/validate_deck.py assets/decks/my-talk/my-talk-slides.html assets/decks/my-talk/my-talk-slide-spec.md
+python3 skills/premium-presentations/scripts/validate_deck.py \
+  skills/premium-presentations/assets/decks/my-talk/my-talk-slides.html \
+  skills/premium-presentations/assets/decks/my-talk/my-talk-slide-spec.md
 ```
 
 Open the studio:
 
 ```bash
-open assets/studio/index.html
+open skills/premium-presentations/assets/studio/index.html
 ```
 
 ## Layout
 
 ```text
-premium-presentations/
-├── SKILL.md
-├── README.md
-├── assets/
-│   ├── shared/
-│   ├── studio/
-│   └── templates/
-├── docs/
-├── references/
-└── scripts/
+premium-presentations/          ← repo root
+├── .claude-plugin/
+│   ├── plugin.json
+│   └── marketplace.json
+├── docs/                       ← screenshots for this README
+├── skills/
+│   └── premium-presentations/  ← skill root (SKILL.md entry point)
+│       ├── SKILL.md
+│       ├── assets/
+│       │   ├── shared/         ← runtime CSS/JS, theme visuals
+│       │   ├── studio/
+│       │   └── templates/
+│       ├── references/
+│       └── scripts/
+├── LICENSE
+└── README.md
 ```
 
 `assets/` contains bundled resources used by generated output: runtime CSS/JS,
@@ -102,19 +129,20 @@ These commands test the skill package itself (deck-output validation lives in
 `SKILL.md`):
 
 ```bash
-python3 scripts/tests/test_skill_layout.py
-python3 scripts/tests/test_runtime_contract.py
-python3 scripts/validate_runtime_contract.py
-npm --prefix scripts test
-npm --prefix scripts run test:presenter
-npm --prefix scripts run test:popup
+python3 skills/premium-presentations/scripts/tests/test_skill_layout.py
+python3 skills/premium-presentations/scripts/tests/test_runtime_contract.py
+python3 skills/premium-presentations/scripts/validate_runtime_contract.py
+npm --prefix skills/premium-presentations/scripts test
+npm --prefix skills/premium-presentations/scripts run test:presenter
+npm --prefix skills/premium-presentations/scripts run test:popup
 git diff --check
 ```
 
 Create and validate a smoke deck:
 
 ```bash
-./scripts/new-deck.sh editorial smoke-deck "Smoke Deck" 2
-python3 scripts/validate_deck.py assets/decks/smoke-deck/smoke-deck-slides.html
-rm -rf assets/decks/smoke-deck
+./skills/premium-presentations/scripts/new-deck.sh editorial smoke-deck "Smoke Deck" 2
+python3 skills/premium-presentations/scripts/validate_deck.py \
+  skills/premium-presentations/assets/decks/smoke-deck/smoke-deck-slides.html
+rm -rf skills/premium-presentations/assets/decks/smoke-deck
 ```
