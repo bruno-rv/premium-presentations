@@ -21,6 +21,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _common import JS_BUNDLE_ORDER as JS_ORDER
+from _common import REQUIRED_JS
 from _common import ROOT, SHARED
 
 
@@ -304,6 +305,12 @@ def bundle_html(html: str, html_path: Path) -> str:
         if glossary_path.is_file() and glossary_path not in seen_paths:
             seen_paths.add(glossary_path)
             script_paths.append(glossary_path)
+    # Inject any REQUIRED_JS modules absent from old bundles (added after initial generation).
+    for name in REQUIRED_JS:
+        req_path = SHARED / name
+        if req_path.is_file() and req_path not in seen_paths:
+            seen_paths.add(req_path)
+            script_paths.append(req_path)
     inline_js = build_classic_scripts(script_paths) if script_paths else ""
 
     footer_parts: list[str] = []
