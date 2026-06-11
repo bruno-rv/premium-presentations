@@ -7,6 +7,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent.parent.parent
+REPO_ROOT = ROOT.parent.parent
 ALLOWED_TOP_LEVEL = {
     ".gitignore",
     "LICENSE",
@@ -84,7 +85,7 @@ class SkillLayoutTests(unittest.TestCase):
 
     def test_skill_docs_use_references_path(self) -> None:
         skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
-        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
         references = "\n".join(
             path.read_text(encoding="utf-8")
             for path in sorted((ROOT / "references").glob("*.md"))
@@ -100,7 +101,7 @@ class SkillLayoutTests(unittest.TestCase):
         self.assertNotIn("reference/", skill)
 
     def test_generated_decks_are_ignored(self) -> None:
-        gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
+        gitignore = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8")
         self.assertIn("assets/decks/", gitignore)
 
 
