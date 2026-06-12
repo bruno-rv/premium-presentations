@@ -13,6 +13,8 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import base64
+import json
 import re
 import subprocess
 import sys
@@ -230,6 +232,140 @@ def strip_inlined_mermaid(html: str) -> str:
     )
 
 
+# ---------------------------------------------------------------------------
+# Theme-visuals embed helpers
+# ---------------------------------------------------------------------------
+
+# Tempered-greedy, quote-bounded regex: matches slide--title/slide--divider
+# only when they appear inside a class="..." or class='...' attribute VALUE.
+# Raw substring search is forbidden: inlined CSS selectors contain these
+# strings and would cause false-positives.  data-x="slide--title" must NOT
+# match because the capture group anchors on `class\s*=`.
+_VISUAL_CLASS_RE = re.compile(
+    r"""\bclass\s*=\s*(["'])(?:(?!\1)[\s\S])*\bslide--(?:title|divider)\b(?:(?!\1)[\s\S])*\1"""
+)
+
+# Matches the entire injected <script> block that contains the embed marker,
+# so re-bundling strips the old block before inserting a fresh one.
+_EMBED_BLOCK_RE = re.compile(
+    r"<script>\s*/\*\s*---\s*theme-visuals-embed\s*---\s*\*/[\s\S]*?</script>\s*",
+    re.I,
+)
+
+# Relative-path detector for override-hygiene warning: a value is "relative"
+# when it does NOT start with https?:, data:, blob:, file:, or /.
+_RELATIVE_PATH_RE = re.compile(r"^(?!https?:|data:|blob:|file:|/)")
+
+def _manifest_path() -> Path:
+    # Resolved at call time so tests can patch the module-level SHARED.
+    return SHARED / "assets" / "theme-visuals" / "manifest.json"
+
+
+def has_visual_slides(html: str) -> bool:
+    """Return True if the deck markup contains a slide--title or slide--divider
+    class attribute value (not a bare substring — see _VISUAL_CLASS_RE)."""
+    return bool(_VISUAL_CLASS_RE.search(html))
+
+
+def load_theme_visuals_map() -> dict[str, dict[str, Path]]:
+    """Return {theme: {role: Path}} built from manifest.json.
+
+    Falls back to globbing <theme>-hero.webp / <theme>-map.webp only when
+    the manifest file is missing.  Missing manifest-listed asset files are
+    reported immediately so the caller can fail hard.
+    """
+    manifest_path = _manifest_path()
+    visuals_dir = manifest_path.parent
+
+    if manifest_path.is_file():
+        raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+        result: dict[str, dict[str, Path]] = {}
+        for theme, meta in raw.items():
+            role_map: dict[str, Path] = {}
+            for entry in meta.get("assets", []):
+                role = entry["role"]
+                src = entry["src"]
+                asset_path = visuals_dir / src
+                if not asset_path.is_file():
+                    raise FileNotFoundError(
+                        f"theme-visuals embed: manifest lists {src!r} "
+                        f"(theme={theme!r}, role={role!r}) but the file "
+                        f"does not exist: {asset_path}"
+                    )
+                role_map[role] = asset_path
+            if role_map:
+                result[theme] = role_map
+        return result
+
+    # Fallback: glob for <theme>-hero.webp / <theme>-map.webp.
+    result = {}
+    for webp in sorted(visuals_dir.glob("*-hero.webp")):
+        theme = webp.stem[: -len("-hero")]
+        map_path = visuals_dir / f"{theme}-map.webp"
+        role_map = {"hero": webp}
+        if map_path.is_file():
+            role_map["map"] = map_path
+        result[theme] = role_map
+    return result
+
+
+def strip_theme_visuals_embed(html: str) -> str:
+    """Remove any previously-injected theme-visuals embed block for idempotence."""
+    return _EMBED_BLOCK_RE.sub("", html)
+
+
+def warn_relative_visual_overrides(html: str) -> None:
+    """Warn (stderr, non-fatal) when deck carries data-theme-visual-* attributes
+    with relative-path values — those overrides will break outside the repo."""
+    for match in re.finditer(r'\bdata-theme-visual-\S+\s*=\s*["\']([^"\']+)["\']', html):
+        value = match.group(1)
+        if _RELATIVE_PATH_RE.match(value):
+            print(
+                f"[bundle_deck] WARNING: data-theme-visual-* override has a relative "
+                f"path ({value!r}) — it will break when the deck is opened outside "
+                "the repo. Use a data: URI or absolute path instead.",
+                file=sys.stderr,
+            )
+
+
+def _build_theme_visuals_payload() -> str:
+    """Encode all manifest theme visuals as data: URIs and return the <script> block.
+
+    Raises FileNotFoundError if any manifest-listed asset file is absent.
+    Called only when the deck has already been confirmed to have visual slides.
+    """
+    theme_map = load_theme_visuals_map()
+
+    payload: dict[str, dict[str, str]] = {}
+    for theme, role_map in theme_map.items():
+        payload[theme] = {}
+        for role, asset_path in role_map.items():
+            raw = asset_path.read_bytes()
+            b64 = base64.b64encode(raw).decode("ascii")
+            payload[theme][role] = f"data:image/webp;base64,{b64}"
+
+    payload_json = json.dumps(payload)
+    return (
+        "<script>\n"
+        "/* --- theme-visuals-embed --- */\n"
+        f"window.PremiumThemeVisuals = Object.assign({payload_json}, "
+        "window.PremiumThemeVisuals || {});\n"
+        "</script>"
+    )
+
+
+def build_theme_visuals_embed(html: str) -> str:
+    """Build the <script> embed block when the deck has visual slides.
+
+    Returns an empty string when the deck has no slide--title or
+    slide--divider class attribute values.  Raises FileNotFoundError if a
+    manifest-listed asset file is absent.
+    """
+    if not has_visual_slides(html):
+        return ""
+    return _build_theme_visuals_payload()
+
+
 def unstandalone_html(html: str) -> str:
     """Strip previously-inlined shared/ content and the standalone marker
     so bundle_html() re-reads shared/ source from disk.
@@ -262,22 +398,59 @@ def unstandalone_html(html: str) -> str:
         _restore_script,
         html,
     )
+    html = strip_theme_visuals_embed(html)
     html = strip_inlined_mermaid(html)
     return html
 
 
-def bundle_html(html: str, html_path: Path) -> str:
-    if "/* --- premium-themes.css --- */" in html and "../../shared/" not in html:
-        return html  # already bundled
+def bundle_html(html: str, html_path: Path, *, embed_visuals: bool = True) -> str:
+    # Already-bundled detection: if the deck is standalone AND either has the
+    # embed block (visuals already embedded) or embed is disabled, return as-is.
+    # If it's standalone but missing the embed block and embed_visuals is True,
+    # fall through so we can inject the embed block (same pattern as REQUIRED_JS
+    # auto-inject on re-bundle).
+    is_standalone = (
+        "/* --- premium-themes.css --- */" in html and "../../shared/" not in html
+    )
+    has_embed = "/* --- theme-visuals-embed --- */" in html
+    if is_standalone and (has_embed or not embed_visuals):
+        return html  # already fully bundled
+
+    if is_standalone and embed_visuals and not has_embed:
+        # Already-bundled deck that predates the embed step: inject the embed
+        # block now without touching the rest of the inlined content.  This
+        # mirrors the REQUIRED_JS auto-inject-on-re-bundle pattern.
+        warn_relative_visual_overrides(html)
+        embed_block = build_theme_visuals_embed(html)
+        if embed_block:
+            controls_marker = "/* --- premium-controls.js --- */"
+            idx = html.find(controls_marker)
+            if idx != -1:
+                # Back up to the start of the <script> tag that contains the marker.
+                script_start = html.rfind("<script>", 0, idx)
+                if script_start == -1:
+                    script_start = idx
+                html = html[:script_start] + embed_block + "\n" + html[script_start:]
+            else:
+                # premium-controls.js block not found; inject before </body>.
+                idx_body = html.lower().rfind("</body>")
+                if idx_body == -1:
+                    html = html + "\n" + embed_block
+                else:
+                    html = html[:idx_body] + embed_block + "\n" + html[idx_body:]
+        return html
 
     # Capture conditional-module decisions from the ORIGINAL html BEFORE
     # inline_stylesheets() runs.  After inlining, CSS text (e.g. ".term-link",
-    # ".live-flow", ".journey-stage" selectors) would cause false-positive
-    # matches and bundle modules into every deck.
+    # ".live-flow", ".journey-stage", ".slide--title" selectors) would cause
+    # false-positive matches and bundle modules into every deck.
     use_mermaid = wants_premium_mermaid(html)
     use_journey = wants_premium_journey(html)
     use_flow = wants_premium_flow(html)
     use_glossary = wants_premium_glossary(html)
+    # has_visual_slides uses a quote-bounded class-attribute regex (safe post-inline),
+    # but capturing pre-inline keeps it consistent with the other detection flags.
+    use_embed = embed_visuals and has_visual_slides(html)
 
     html = inline_stylesheets(html, html_path)
     scripts = collect_script_srcs(html, html_path)
@@ -313,7 +486,19 @@ def bundle_html(html: str, html_path: Path) -> str:
             script_paths.append(req_path)
     inline_js = build_classic_scripts(script_paths) if script_paths else ""
 
+    # Warn about relative-path data-theme-visual-* overrides (non-fatal).
+    warn_relative_visual_overrides(html)
+
+    # Build the theme-visuals embed block using the pre-inline detection flag.
+    # load_theme_visuals_map() / base64 encoding only runs when needed.
+    embed_block = _build_theme_visuals_payload() if use_embed else ""
+
     footer_parts: list[str] = []
+    # Embed block goes BEFORE the inlined premium-controls.js block so the
+    # window.PremiumThemeVisuals global is unconditionally available when
+    # syncThemeVisuals() runs (which happens at DOMContentLoaded via SlideEngine).
+    if embed_block:
+        footer_parts.append(embed_block)
     if inline_js:
         footer_parts.append(inline_js)
 
@@ -370,6 +555,11 @@ def main() -> int:
         action="store_true",
         help="Re-bundle even if the HTML looks already standalone",
     )
+    parser.add_argument(
+        "--no-embed-visuals",
+        action="store_true",
+        help="Skip embedding theme visuals as base64 data URIs (visuals will 404 outside the repo)",
+    )
     args = parser.parse_args()
 
     html_path = args.html.resolve()
@@ -381,14 +571,16 @@ def main() -> int:
     if not args.in_place and out_path is None:
         out_path = html_path.with_name(html_path.stem + ".standalone.html")
 
+    embed_visuals = not args.no_embed_visuals
+
     original = read_text(html_path)
     if args.force:
         # Strip any previous inlined content + standalone marker so the bundler
         # re-inlines from shared/ source. Re-link to ../../shared/ first.
         linked = unstandalone_html(original)
-        bundled = bundle_html(linked, html_path)
+        bundled = bundle_html(linked, html_path, embed_visuals=embed_visuals)
     else:
-        bundled = bundle_html(original, html_path)
+        bundled = bundle_html(original, html_path, embed_visuals=embed_visuals)
 
     if bundled == original and not args.force:
         print(f"Already standalone (no ../../shared/ links): {html_path}")

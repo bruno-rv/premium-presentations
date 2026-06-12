@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 BUNDLER_PATH = ROOT / "scripts" / "bundle_deck.py"
@@ -196,6 +200,402 @@ class WantsMatcher_Tests(unittest.TestCase):
     def test_wants_journey_false_on_css_text(self) -> None:
         html = '<style>.journey-stage { font-weight: bold; }</style>'
         self.assertFalse(self.bundler.wants_premium_journey(html))
+
+
+_THEME_VISUALS_DIR = SHARED / "assets" / "theme-visuals"
+_MANIFEST_PATH = _THEME_VISUALS_DIR / "manifest.json"
+_EMBED_MARKER = "/* --- theme-visuals-embed --- */"
+_CONTROLS_MARKER = "/* --- premium-controls.js --- */"
+
+
+def _make_visual_deck(*, class_attr: str = '"slide slide--title"', tag: str = "section") -> str:
+    """Minimal deck with a visual slide using the given class attribute markup."""
+    return (
+        '<!DOCTYPE html><html lang="en"><head>'
+        f'<link rel="stylesheet" href="{_SHARED_LINK}premium-themes.css">'
+        f'<link rel="stylesheet" href="{_SHARED_LINK}premium-extras.css">'
+        f'<link rel="stylesheet" href="{_SHARED_LINK}premium-components.css">'
+        '</head><body>'
+        '<div id="deck">'
+        f'<{tag} class={class_attr}><h1>Title</h1>'
+        '<aside class="notes">Notes.</aside>'
+        f'</{tag}>'
+        '<section class="slide slide--quote"><blockquote>Q</blockquote>'
+        '<aside class="notes">Notes.</aside></section>'
+        '</div>'
+        f'<script src="{_SHARED_LINK}slide-engine.js"></script>'
+        f'<script src="{_SHARED_LINK}premium-controls.js"></script>'
+        '</body></html>'
+    )
+
+
+def _make_no_visual_deck() -> str:
+    """Minimal deck with NO slide--title or slide--divider slides."""
+    return (
+        '<!DOCTYPE html><html lang="en"><head>'
+        f'<link rel="stylesheet" href="{_SHARED_LINK}premium-themes.css">'
+        f'<link rel="stylesheet" href="{_SHARED_LINK}premium-extras.css">'
+        f'<link rel="stylesheet" href="{_SHARED_LINK}premium-components.css">'
+        '</head><body>'
+        '<div id="deck">'
+        '<section class="slide slide--quote"><blockquote>Q</blockquote>'
+        '<aside class="notes">Notes.</aside></section>'
+        '<section class="slide slide--content"><p>Content</p>'
+        '<aside class="notes">Notes.</aside></section>'
+        '</div>'
+        f'<script src="{_SHARED_LINK}slide-engine.js"></script>'
+        f'<script src="{_SHARED_LINK}premium-controls.js"></script>'
+        '</body></html>'
+    )
+
+
+def _make_css_only_visual_deck() -> str:
+    """Deck where slide--title appears ONLY inside a <style> CSS selector, never in markup."""
+    return (
+        '<!DOCTYPE html><html lang="en"><head>'
+        f'<link rel="stylesheet" href="{_SHARED_LINK}premium-themes.css">'
+        '</head><body>'
+        '<style>'
+        '.slide--title { background: blue; } '
+        '.slide--divider .title { font-size: 2em; }'
+        '</style>'
+        '<div id="deck">'
+        '<section class="slide slide--quote"><blockquote>Q</blockquote>'
+        '<aside class="notes">Notes.</aside></section>'
+        '</div>'
+        f'<script src="{_SHARED_LINK}slide-engine.js"></script>'
+        f'<script src="{_SHARED_LINK}premium-controls.js"></script>'
+        '</body></html>'
+    )
+
+
+class BundleThemeVisualsEmbedTests(unittest.TestCase):
+    """Tests for theme-visuals embed block injection (PLAN.md Approach §2 + §6)."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        if not _MANIFEST_PATH.is_file():
+            raise unittest.SkipTest("theme-visuals manifest.json not found — skipping")
+        if not (SHARED / "premium-controls.js").is_file():
+            raise unittest.SkipTest("premium-controls.js not found — skipping")
+        cls.bundler = load_bundler()
+        with open(_MANIFEST_PATH, encoding="utf-8") as fh:
+            cls.manifest = json.load(fh)
+
+    def _bundle(self, html: str) -> str:
+        """Bundle an HTML string via bundle_html(), using a real deck slot so ../../shared/ resolves."""
+        deck_dir = ROOT / "assets" / "decks" / "_test_bundle_tmp"
+        deck_dir.mkdir(parents=True, exist_ok=True)
+        path = deck_dir / "deck.html"
+        try:
+            path.write_text(html, encoding="utf-8")
+            return bundle_string(self.bundler, html, path)
+        finally:
+            path.unlink(missing_ok=True)
+            try:
+                deck_dir.rmdir()
+            except OSError:
+                pass
+
+    def _bundle_via_cli(self, html: str, extra_args: list[str] | None = None) -> tuple[str, int]:
+        """Write html to a temp file and invoke bundle_deck.py via subprocess.
+        Returns (bundled_html, returncode).
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Replicate the repo layout so ../../shared/ resolves correctly:
+            # tmpdir/assets/decks/_cli_test_tmp/deck.html  →  ../../shared/ = tmpdir/assets/shared/
+            deck_dir = Path(tmpdir) / "assets" / "decks" / "_cli_test_tmp"
+            deck_dir.mkdir(parents=True)
+            shared_link = Path(tmpdir) / "assets" / "shared"
+            # Symlink shared/ so the bundler can read real JS/CSS assets.
+            shared_link.symlink_to(SHARED.resolve())
+            html_path = deck_dir / "deck.html"
+            html_path.write_text(html, encoding="utf-8")
+            out_path = deck_dir / "deck.standalone.html"
+            cmd = [
+                sys.executable,
+                str(BUNDLER_PATH),
+                str(html_path),
+                "-o", str(out_path),
+            ]
+            if extra_args:
+                cmd.extend(extra_args)
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode == 0 and out_path.is_file():
+                bundled = out_path.read_text(encoding="utf-8")
+            else:
+                bundled = result.stdout + result.stderr
+            return bundled, result.returncode
+
+    # ------------------------------------------------------------------
+    # Test 1: inlined premium-controls.js contains fixed passthrough regex
+    # ------------------------------------------------------------------
+
+    def test_controls_js_passthrough_includes_data_uri_scheme(self) -> None:
+        """Bundled output's inlined premium-controls.js contains 'data:' in the
+        themeVisualSrc passthrough pattern (PLAN Approach §1)."""
+        bundled = self._bundle(_make_visual_deck())
+        # The fixed pattern is: /^(?:https?:|data:|blob:|file:|\/|\.\/|\.\.\/)/.test(file)
+        # The key substring that proves the fix landed:
+        self.assertIn("(?:https?:|data:|blob:|file:", bundled,
+                      "Inlined premium-controls.js must contain the fixed passthrough regex "
+                      "with 'data:' and 'blob:' schemes")
+
+    # ------------------------------------------------------------------
+    # Test 2: embed block present with all themes × roles from manifest
+    # ------------------------------------------------------------------
+
+    def test_embed_block_present_with_all_manifest_themes_and_roles(self) -> None:
+        """Bundled visual deck contains embed block; every manifest theme/role has a
+        valid data:image/webp;base64, URI in the block (PLAN §6 item 2)."""
+        bundled = self._bundle(_make_visual_deck())
+        self.assertIn(_EMBED_MARKER, bundled,
+                      "Bundled visual deck must contain the theme-visuals embed marker")
+        # Extract the embed script block for targeted assertions.
+        start = bundled.find(_EMBED_MARKER)
+        # Find the closing tag of the embed <script> block.
+        end = bundled.find("</script>", start)
+        embed_block = bundled[start:end]
+        for theme, theme_data in self.manifest.items():
+            for asset in theme_data["assets"]:
+                role = asset["role"]
+                # Each theme→role combo must be represented as a data: URI.
+                self.assertIn(
+                    "data:image/webp;base64,",
+                    embed_block,
+                    f"Embed block must contain a data:image/webp;base64, URI "
+                    f"(missing for theme={theme!r} role={role!r})",
+                )
+                # Verify the theme key appears in the embed block (as a JSON string key).
+                self.assertIn(
+                    f'"{theme}"',
+                    embed_block,
+                    f"Embed block must contain theme key {theme!r}",
+                )
+
+    def test_manifest_has_exactly_four_themes(self) -> None:
+        """Manifest declares exactly 4 themes — conscious gate so new themes fail loudly."""
+        self.assertEqual(
+            len(self.manifest),
+            4,
+            f"Expected exactly 4 themes in manifest.json, got {len(self.manifest)}: "
+            f"{list(self.manifest.keys())}. Update this test if adding a new theme.",
+        )
+
+    # ------------------------------------------------------------------
+    # Test 3: --no-embed-visuals skips the embed block
+    # ------------------------------------------------------------------
+
+    def test_no_embed_visuals_flag_omits_block(self) -> None:
+        """--no-embed-visuals CLI flag produces output with no embed marker (PLAN §6 item 3)."""
+        bundled, rc = self._bundle_via_cli(_make_visual_deck(), extra_args=["--no-embed-visuals"])
+        self.assertEqual(rc, 0, f"Bundler exited non-zero with --no-embed-visuals: {bundled}")
+        self.assertNotIn(_EMBED_MARKER, bundled,
+                         "--no-embed-visuals must omit the theme-visuals-embed block")
+
+    # ------------------------------------------------------------------
+    # Test 4: re-bundle idempotent — exactly one embed block
+    # ------------------------------------------------------------------
+
+    def test_rebundle_produces_exactly_one_embed_block(self) -> None:
+        """Running bundler twice (--force) on a visual deck yields exactly one embed marker (PLAN §6 item 4)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            deck_dir = Path(tmpdir) / "assets" / "decks" / "_rebundle_test_tmp"
+            deck_dir.mkdir(parents=True)
+            shared_link = Path(tmpdir) / "assets" / "shared"
+            shared_link.symlink_to(SHARED.resolve())
+            html_path = deck_dir / "deck.html"
+            html_path.write_text(_make_visual_deck(), encoding="utf-8")
+
+            # First bundle — output in-place.
+            r1 = subprocess.run(
+                [sys.executable, str(BUNDLER_PATH), str(html_path), "--in-place"],
+                capture_output=True, text=True,
+            )
+            self.assertEqual(r1.returncode, 0,
+                             f"First bundle failed: {r1.stdout}{r1.stderr}")
+
+            # Second bundle with --force to re-process the already-standalone file.
+            r2 = subprocess.run(
+                [sys.executable, str(BUNDLER_PATH), str(html_path), "--in-place", "--force"],
+                capture_output=True, text=True,
+            )
+            self.assertEqual(r2.returncode, 0,
+                             f"Second bundle (--force) failed: {r2.stdout}{r2.stderr}")
+
+            twice_bundled = html_path.read_text(encoding="utf-8")
+            count = twice_bundled.count(_EMBED_MARKER)
+            self.assertEqual(count, 1,
+                             f"Expected exactly 1 embed marker after re-bundle, found {count}")
+
+    # ------------------------------------------------------------------
+    # Test 5: no slide--title / slide--divider → no embed block
+    # ------------------------------------------------------------------
+
+    def test_no_visual_slides_produces_no_embed_block(self) -> None:
+        """Deck without slide--title or slide--divider gets no embed block (PLAN §6 item 5)."""
+        bundled = self._bundle(_make_no_visual_deck())
+        self.assertNotIn(_EMBED_MARKER, bundled,
+                         "Deck with no visual slides must NOT contain the theme-visuals-embed block")
+
+    # ------------------------------------------------------------------
+    # Test 6: slide--title only in CSS selector text → no embed block
+    # ------------------------------------------------------------------
+
+    def test_css_only_slide_class_does_not_trigger_embed(self) -> None:
+        """Deck whose only slide--title occurrences are in CSS selectors (not markup)
+        must NOT get an embed block (PLAN §6 item 6 / Approach §2 detection rule)."""
+        bundled = self._bundle(_make_css_only_visual_deck())
+        self.assertNotIn(_EMBED_MARKER, bundled,
+                         "CSS selector text '.slide--title' must not trigger embed; "
+                         "detection must be quote-bounded class attribute match only")
+
+    # ------------------------------------------------------------------
+    # Test 7: single-quoted class attribute → embed block present
+    # ------------------------------------------------------------------
+
+    def test_single_quoted_class_attr_triggers_embed(self) -> None:
+        """Single-quoted class='slide slide--title' markup must trigger embed (PLAN §6 item 7)."""
+        # Build a deck with single-quoted class attribute.
+        deck_html = _make_visual_deck(class_attr="'slide slide--title'")
+        bundled = self._bundle(deck_html)
+        self.assertIn(_EMBED_MARKER, bundled,
+                      "Single-quoted class='slide slide--title' must trigger theme-visuals embed")
+
+    # ------------------------------------------------------------------
+    # Test 8: non-class attribute containing slide--title → no embed block
+    # ------------------------------------------------------------------
+
+    def test_non_class_attribute_does_not_trigger_embed(self) -> None:
+        """data-x=\"slide--title\" (slide--title in a non-class attribute) must NOT trigger
+        embed (PLAN §6 item 8 / Approach §2 detection rule)."""
+        deck_html = _make_visual_deck(class_attr='"slide slide--quote" data-x="slide--title"',
+                                      tag="section")
+        # The section has class "slide slide--quote" (no visual class) but data-x="slide--title".
+        # Replace with a deck where slide--title appears only in data-x, not class.
+        no_title_class_html = (
+            '<!DOCTYPE html><html lang="en"><head>'
+            f'<link rel="stylesheet" href="{_SHARED_LINK}premium-themes.css">'
+            f'<link rel="stylesheet" href="{_SHARED_LINK}premium-extras.css">'
+            f'<link rel="stylesheet" href="{_SHARED_LINK}premium-components.css">'
+            '</head><body>'
+            '<div id="deck">'
+            '<section class="slide slide--quote" data-x="slide--title"><h1>Title</h1>'
+            '<aside class="notes">Notes.</aside></section>'
+            '<section class="slide slide--content"><p>Content</p>'
+            '<aside class="notes">Notes.</aside></section>'
+            '</div>'
+            f'<script src="{_SHARED_LINK}slide-engine.js"></script>'
+            f'<script src="{_SHARED_LINK}premium-controls.js"></script>'
+            '</body></html>'
+        )
+        bundled = self._bundle(no_title_class_html)
+        self.assertNotIn(_EMBED_MARKER, bundled,
+                         "data-x='slide--title' (non-class attribute) must NOT trigger embed; "
+                         "detection must be restricted to class attribute values only")
+
+    # ------------------------------------------------------------------
+    # Test 9: missing manifest-listed asset → bundler fails non-zero / raises
+    # ------------------------------------------------------------------
+
+    def test_missing_manifest_asset_causes_bundle_failure(self) -> None:
+        """If a manifest-listed .webp asset is absent, the bundler must fail
+        (non-zero exit or raised exception) (PLAN §6 item 9 / Approach §2 fail-hard rule)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            # Create a minimal repo layout:
+            #   tmp/assets/decks/_miss_asset_test/deck.html
+            #   tmp/assets/shared/ → symlink to real SHARED
+            # Then inject a fake theme-visuals dir with a manifest that references
+            # a nonexistent file, and patch the bundler's SHARED to point here.
+            fake_shared = tmp_path / "fake_shared"
+            fake_shared.mkdir()
+            # Copy real shared content so the bundler can load CSS/JS assets.
+            for item in SHARED.iterdir():
+                if item.is_file():
+                    shutil.copy2(item, fake_shared / item.name)
+                elif item.is_dir() and item.name != "assets":
+                    shutil.copytree(item, fake_shared / item.name)
+            # Set up fake theme-visuals with a manifest listing a nonexistent file.
+            fake_tv_dir = fake_shared / "assets" / "theme-visuals"
+            fake_tv_dir.mkdir(parents=True)
+            broken_manifest = {
+                "editorial": {
+                    "assets": [
+                        {"role": "hero", "src": "editorial-hero-MISSING.webp"},
+                        {"role": "map",  "src": "editorial-map-MISSING.webp"},
+                    ]
+                }
+            }
+            (fake_tv_dir / "manifest.json").write_text(
+                json.dumps(broken_manifest), encoding="utf-8"
+            )
+            # Do NOT copy the .webp files — they remain absent.
+
+            # Deck directory under fake_shared's parent so ../../shared/ → fake_shared.
+            deck_dir = tmp_path / "assets" / "decks" / "_miss_asset_test_tmp"
+            deck_dir.mkdir(parents=True)
+            (tmp_path / "assets" / "shared").symlink_to(fake_shared.resolve())
+
+            html_path = deck_dir / "deck.html"
+            html_path.write_text(_make_visual_deck(), encoding="utf-8")
+
+            # Test via subprocess using the real bundler entry point,
+            # patching ROOT/SHARED inside the bundler module via monkeypatching the
+            # module-level SHARED and ROOT in bundle_deck.bundle_html.
+            # Since subprocess isolation is cleanest, we call via Python -c with patch.
+            patch_script = f"""
+import sys
+from pathlib import Path
+from unittest.mock import patch
+
+sys.path.insert(0, {str(BUNDLER_PATH.parent)!r})
+import bundle_deck, _common
+
+fake_shared = Path({str(fake_shared)!r})
+html_path = Path({str(html_path)!r})
+html = html_path.read_text(encoding='utf-8')
+
+with patch.object(_common, 'SHARED', fake_shared), \\
+     patch.object(bundle_deck, 'SHARED', fake_shared):
+    try:
+        bundle_deck.bundle_html(html, html_path)
+        sys.exit(0)
+    except Exception as exc:
+        print(f'RAISED: {{exc}}', file=sys.stderr)
+        sys.exit(1)
+"""
+            result = subprocess.run(
+                [sys.executable, "-c", patch_script],
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(
+                result.returncode, 0,
+                "Bundler must fail (non-zero exit or raised error) when a manifest-listed "
+                f"asset file is missing. stdout={result.stdout!r} stderr={result.stderr!r}",
+            )
+
+    # ------------------------------------------------------------------
+    # Test 10: embed block appears BEFORE premium-controls.js inlined block
+    # ------------------------------------------------------------------
+
+    def test_embed_block_precedes_inlined_controls_js(self) -> None:
+        """Embed block marker must appear before the inlined premium-controls.js
+        marker in the bundled output (PLAN §6 item 10 / Approach §2 injection order)."""
+        bundled = self._bundle(_make_visual_deck())
+        self.assertIn(_EMBED_MARKER, bundled,
+                      "Bundled visual deck must contain the theme-visuals-embed block")
+        self.assertIn(_CONTROLS_MARKER, bundled,
+                      "Bundled deck must contain the inlined premium-controls.js block")
+        embed_idx = bundled.index(_EMBED_MARKER)
+        controls_idx = bundled.index(_CONTROLS_MARKER)
+        self.assertLess(
+            embed_idx,
+            controls_idx,
+            f"theme-visuals-embed block (pos {embed_idx}) must appear BEFORE "
+            f"the inlined premium-controls.js block (pos {controls_idx})",
+        )
 
 
 if __name__ == "__main__":
