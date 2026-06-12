@@ -324,7 +324,7 @@
       window.PremiumThemeVisuals[normalized] &&
       (window.PremiumThemeVisuals[normalized][role] || window.PremiumThemeVisuals[normalized].hero);
     const file = fromAttr || fromGlobal || (normalized + '-' + role + '.webp');
-    if (/^(?:https?:|file:|\/|\.\/|\.\.\/)/.test(file)) return file;
+    if (/^(?:https?:|data:|blob:|file:|\/|\.\/|\.\.\/)/.test(file)) return file;
     return themeVisualBase() + file;
   }
 
