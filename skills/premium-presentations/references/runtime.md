@@ -42,7 +42,7 @@ at the bottom of each table.
 | `premium-og-cover.js` | PNG slide export for OG covers |
 | `premium-slide-content.js` | Pure functions over slide DOM: `getTitle(slide, i)`, `getNotesHtml(slide)`, `getSummaryHtml(slide)`; shared between deck and popup |
 | `premium-presenter.js` | Presenter popup lifecycle, BroadcastChannel/postMessage/localStorage bridge, presenter UI DOM |
-| `premium-mermaid.js` | Conditional (Mermaid markup): CDN load, `handDrawn` theme, auto-fit, clip detection, zoom/pan, theme re-render |
+| `premium-mermaid.js` | Conditional (Mermaid markup): portable local renderer with optional preloaded full Mermaid support, auto-fit, clip detection, zoom/pan, theme re-render |
 | `premium-journey.js` | Conditional (`.journey-stage` markup): SVG path journey animation |
 | `premium-flow.js` | Conditional (`.live-flow` markup): phase spotlight cycling over `.flow-node`/`.flow-arrow` ids from `data-flow-phases` JSON, shimmer arrow animation, banner label; pauses off-screen, static under reduced motion |
 | `premium-red-chrome.js` | Conditional (red decks): brand bar + hero mark injection |
@@ -71,7 +71,7 @@ plus `premium-flow.js` when a file contains `.live-flow` markup.
 
 **Live theme switch:** `PremiumPresentations.setTheme('<theme>')` or UI control. The control panel discovers themes from loaded CSS. Dispatches `premium-theme-change` on `<html>`.
 
-**Theme visuals:** `.slide--title` receives a `hero` visual; `.slide--divider` receives a `map` visual. Default assets follow `assets/shared/assets/theme-visuals/<theme>-<role>.webp`. Override with `data-theme-visual-<theme>-<role>` or `window.PremiumThemeVisuals`; disable per slide with `data-theme-visual="off"`.
+**Theme visuals:** `.slide--title` receives a `hero` visual; `.slide--divider` receives a `map` visual. Default linked-mode assets follow `assets/shared/assets/theme-visuals/<theme>-<role>.webp`; bundled standalone decks embed those images as `data:` URIs. Override with `data-theme-visual-<theme>-<role>` or `window.PremiumThemeVisuals` only when the value is a `data:image/...` URI in standalone output; unsafe remote or sidecar paths are ignored. Disable per slide with `data-theme-visual="off"`.
 
 **3D modes:** **`3`** cycles `off → ambient → tilt → depth` (`Shift+3` backward; handled
 via `e.code === 'Digit3'`, layout-safe). `data-3d="<mode>"` on `<html>` is the source
@@ -100,8 +100,9 @@ To add a theme:
    (themes without one fall back to `assets/templates/premium-base.html`).
 3. Optionally add visuals in `assets/shared/assets/theme-visuals/` using
    `<theme>-hero.webp` and `<theme>-map.webp`.
-4. Load custom webfonts through template `<link>` tags or
-   `data-theme-fonts-<theme>="https://..."` on `<html>`.
+4. Keep font stacks portable: use system/local families. Optional runtime font
+   stylesheets must be `data:text/css` URLs; remote and sidecar stylesheet
+   paths are ignored by the runtime.
 5. Optionally add a focused `themes-<theme>.md` reference if the theme has
    non-obvious rules.
 
@@ -122,14 +123,17 @@ theme-specific slides.
 
 ### Mermaid + theme change
 
+`premium-mermaid.js` includes a portable local renderer for simple flowcharts.
+If a deck needs full Mermaid syntax such as sequence, ER, class, or state
+diagrams, preload a local bundled Mermaid object as `window.mermaid` before
+calling `initPremiumMermaid()`.
+
 ```html
 <script type="module">
-  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-  async function renderMermaid() { /* themeVariables per data-theme */ mermaid.initialize({...}); await mermaid.run(); }
+  import { initPremiumMermaid } from '../../shared/premium-mermaid.js';
   document.addEventListener('DOMContentLoaded', async () => {
-    await renderMermaid();
+    await initPremiumMermaid();
     new SlideEngine();
-    document.documentElement.addEventListener('premium-theme-change', renderMermaid);
   });
 </script>
 ```

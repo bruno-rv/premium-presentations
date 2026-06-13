@@ -314,6 +314,64 @@ def strip_theme_visuals_embed(html: str) -> str:
     return _EMBED_BLOCK_RE.sub("", html)
 
 
+def strip_standalone_runtime_marker(html: str) -> str:
+    return re.sub(
+        r"<script>\s*/\*\s*---\s*premium-standalone-runtime\s*---\s*\*/[\s\S]*?</script>\s*",
+        "",
+        html,
+        flags=re.I,
+    )
+
+
+def strip_remote_resource_links(html: str) -> str:
+    """Remove fetchable remote resources from deck HTML before bundling."""
+    html = re.sub(
+        r"<link\b(?=[^>]*\bhref=[\"'](?:https?:)?//)[^>]*>\s*",
+        "",
+        html,
+        flags=re.I,
+    )
+    html = re.sub(
+        r"<script\b(?=[^>]*\bsrc=[\"'](?:https?:)?//)[^>]*>\s*</script>\s*",
+        "",
+        html,
+        flags=re.I,
+    )
+    return html
+
+
+def strip_unsafe_portable_attrs(html: str) -> str:
+    """Drop override attributes that would make a bundled deck fetch sidecars."""
+    html = re.sub(
+        r"\sdata-theme-visual-[\w-]+\s*=\s*([\"'])(?!(?:data:image/|blob:))[\s\S]*?\1",
+        "",
+        html,
+        flags=re.I,
+    )
+    html = re.sub(
+        r"\sdata-theme-fonts-[\w-]+\s*=\s*([\"'])(?!data:text/css[,;])[\s\S]*?\1",
+        "",
+        html,
+        flags=re.I,
+    )
+    return html
+
+
+def strip_default_cover_meta(html: str) -> str:
+    """Remove the scaffold's old relative OG cover reference.
+
+    The deck scaffold does not create og-cover.png automatically. Keeping this
+    meta tag in a standalone HTML file advertises a missing sidecar asset when
+    the deck is moved or shared as a single file.
+    """
+    return re.sub(
+        r"<meta(?=[^>]*\bproperty=[\"']og:image[\"'])(?=[^>]*\bcontent=[\"']og-cover\.png[\"'])[^>]*>\s*",
+        "",
+        html,
+        flags=re.I,
+    )
+
+
 def warn_relative_visual_overrides(html: str) -> None:
     """Warn (stderr, non-fatal) when deck carries data-theme-visual-* attributes
     with relative-path values — those overrides will break outside the repo."""
@@ -348,8 +406,17 @@ def _build_theme_visuals_payload() -> str:
     return (
         "<script>\n"
         "/* --- theme-visuals-embed --- */\n"
-        f"window.PremiumThemeVisuals = Object.assign({payload_json}, "
-        "window.PremiumThemeVisuals || {});\n"
+        f"window.PremiumThemeVisuals = Object.assign(window.PremiumThemeVisuals || {{}}, {payload_json});\n"
+        "</script>"
+    )
+
+
+def build_standalone_runtime_marker() -> str:
+    return (
+        "<script>\n"
+        "/* --- premium-standalone-runtime --- */\n"
+        "window.PremiumBundle = Object.assign(window.PremiumBundle || {}, { standalone: true });\n"
+        "document.documentElement.dataset.premiumStandalone = 'true';\n"
         "</script>"
     )
 
@@ -400,17 +467,23 @@ def unstandalone_html(html: str) -> str:
     )
     html = strip_theme_visuals_embed(html)
     html = strip_inlined_mermaid(html)
+    html = strip_standalone_runtime_marker(html)
     return html
 
 
 def bundle_html(html: str, html_path: Path, *, embed_visuals: bool = True) -> str:
+    html = strip_remote_resource_links(html)
+    html = strip_unsafe_portable_attrs(html)
+    html = strip_default_cover_meta(html)
+
     # Already-bundled detection: if the deck is standalone AND either has the
     # embed block (visuals already embedded) or embed is disabled, return as-is.
     # If it's standalone but missing the embed block and embed_visuals is True,
     # fall through so we can inject the embed block (same pattern as REQUIRED_JS
     # auto-inject on re-bundle).
     is_standalone = (
-        "/* --- premium-themes.css --- */" in html and "../../shared/" not in html
+        "/* --- premium-themes.css --- */" in html
+        and "/* --- slide-engine.js --- */" in html
     )
     has_embed = "/* --- theme-visuals-embed --- */" in html
     if is_standalone and (has_embed or not embed_visuals):
@@ -494,6 +567,7 @@ def bundle_html(html: str, html_path: Path, *, embed_visuals: bool = True) -> st
     embed_block = _build_theme_visuals_payload() if use_embed else ""
 
     footer_parts: list[str] = []
+    footer_parts.append(build_standalone_runtime_marker())
     # Embed block goes BEFORE the inlined premium-controls.js block so the
     # window.PremiumThemeVisuals global is unconditionally available when
     # syncThemeVisuals() runs (which happens at DOMContentLoaded via SlideEngine).

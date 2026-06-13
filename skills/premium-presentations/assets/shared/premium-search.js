@@ -1,10 +1,7 @@
 /**
- * Premium Presentations — fuzzy search palette (Cmd/Ctrl+K).
- * Lazy-loads MiniSearch from CDN.
+ * Premium Presentations — portable slide search palette (Cmd/Ctrl+K).
  */
 (function () {
-  const MS_URL = 'https://cdn.jsdelivr.net/npm/minisearch@7/+esm';
-  let msLib = null;
   let index = null;
   let docs = [];
   let active = false;
@@ -14,40 +11,129 @@
   let currentFocus = 0;
   let currentResults = [];
 
-  async function loadMiniSearch() {
-    if (msLib) return msLib;
-    msLib = await import(MS_URL);
-    return msLib;
+  function textOf(el) {
+    return (el?.innerText || el?.textContent || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function tokenize(text) {
+    return text
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .split(/[^a-z0-9]+/)
+      .filter(Boolean);
+  }
+
+  function editDistance(a, b, limit = 2) {
+    if (a === b) return 0;
+    if (Math.abs(a.length - b.length) > limit) return limit + 1;
+    const prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+    const curr = new Array(b.length + 1);
+    for (let i = 1; i <= a.length; i++) {
+      curr[0] = i;
+      let rowMin = curr[0];
+      for (let j = 1; j <= b.length; j++) {
+        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+        curr[j] = Math.min(
+          curr[j - 1] + 1,
+          prev[j] + 1,
+          prev[j - 1] + cost
+        );
+        rowMin = Math.min(rowMin, curr[j]);
+      }
+      if (rowMin > limit) return limit + 1;
+      for (let j = 0; j <= b.length; j++) prev[j] = curr[j];
+    }
+    return prev[b.length];
+  }
+
+  function tokenScore(queryToken, docToken) {
+    if (!queryToken || !docToken) return 0;
+    if (docToken === queryToken) return 8;
+    if (docToken.startsWith(queryToken)) return 5;
+    if (docToken.includes(queryToken)) return 3;
+    if (queryToken.length >= 4 && editDistance(queryToken, docToken) <= 1) return 1.5;
+    return 0;
+  }
+
+  function scoreDoc(doc, queryTokens) {
+    if (!queryTokens.length) return 1;
+    let total = 0;
+    for (const q of queryTokens) {
+      let best = 0;
+      for (const t of doc.headingTokens) best = Math.max(best, tokenScore(q, t) * 2);
+      for (const t of doc.bodyTokens) best = Math.max(best, tokenScore(q, t));
+      if (!best) return 0;
+      total += best;
+    }
+    return total;
+  }
+
+  function escapeHtml(text) {
+    return String(text || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   function buildDocs() {
     const slides = [...document.querySelectorAll('#deck .slide')];
     return slides.map((s, i) => {
-      const heading = s.querySelector('[data-nav-title], .slide__heading, .slide__display, .slide__label')?.textContent?.trim() || '';
-      const body = s.innerText.replace(/\s+/g, ' ').trim().slice(0, 200);
-      return { id: i, slideId: s.id, num: i + 1, heading, body };
+      const heading =
+        s.getAttribute('data-nav-title') ||
+        textOf(s.querySelector('.slide__heading, .slide__display, .slide__label'));
+      const body = textOf(s).slice(0, 400);
+      return {
+        id: i,
+        slideId: s.id,
+        num: i + 1,
+        heading,
+        body,
+        headingTokens: tokenize(heading),
+        bodyTokens: tokenize(body),
+      };
     });
   }
 
   async function rebuild() {
     docs = buildDocs();
-    const ms = await loadMiniSearch();
-    index = new ms.default({
-      fields: ['heading', 'body'],
-      store: ['num', 'heading', 'body', 'slideId'],
-      searchOptions: { boost: { heading: 2 }, prefix: true, fuzzy: 0.2 },
-    });
-    index.addAll(docs);
+    index = docs;
+    return index;
+  }
+
+  function query(q) {
+    const qTokens = tokenize(q || '');
+    if (!index) {
+      docs = buildDocs();
+      index = docs;
+    }
+    if (!qTokens.length) return [...docs];
+    return [...index]
+      .map((doc) => ({ ...doc, score: scoreDoc(doc, qTokens) }))
+      .filter((doc) => doc.score > 0)
+      .sort((a, b) => b.score - a.score || a.num - b.num);
   }
 
   function highlight(text, query) {
-    if (!query) return text;
+    text = String(text || '');
+    if (!query) return escapeHtml(text);
     const re = new RegExp('(' + query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
-    return text.replace(re, '<mark>$1</mark>');
+    let out = '';
+    let last = 0;
+    let match;
+    while ((match = re.exec(text))) {
+      out += escapeHtml(text.slice(last, match.index));
+      out += '<mark>' + escapeHtml(match[0]) + '</mark>';
+      last = match.index + match[0].length;
+    }
+    return out + escapeHtml(text.slice(last));
   }
 
   function renderResults(items, query) {
     currentResults = items;
+    currentFocus = 0;
     if (!items.length) {
       resultsEl.innerHTML = '<li class="premium-search-result" style="opacity:0.5">No matches</li>';
       return;
@@ -60,7 +146,6 @@
         '<div style="flex:1"><div class="premium-search-result__title">' + title + '</div>' +
         '<div class="premium-search-result__body">' + body + '</div></div></li>';
     }).join('');
-    currentFocus = 0;
   }
 
   function open() {
@@ -101,7 +186,7 @@
   function update(q) {
     if (!index) return;
     if (!q) { renderResults(docs, ''); return; }
-    const items = index.search(q);
+    const items = query(q);
     renderResults(items, q);
   }
 
@@ -114,7 +199,12 @@
 
   function onKey(e) {
     if (e.key === 'Escape') { e.preventDefault(); close(); return; }
-    if (e.key === 'Enter') { e.preventDefault(); jump(currentResults[currentFocus]?.id ?? 0); return; }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const item = currentResults[currentFocus];
+      if (item) jump(item.id);
+      return;
+    }
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
       const dir = e.key === 'ArrowDown' ? 1 : -1;
@@ -148,5 +238,5 @@
     init();
   }
 
-  window.PremiumSearch = { open, close, rebuild };
+  window.PremiumSearch = { open, close, rebuild, query };
 })();

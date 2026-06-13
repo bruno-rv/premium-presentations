@@ -165,6 +165,65 @@ class BundleFlowTests(unittest.TestCase):
                          "(CSS comment text must not trigger false positive)")
 
 
+class BundlePortableMetaTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.bundler = load_bundler()
+
+    def _bundle(self, html: str) -> str:
+        deck_dir = ROOT / "assets" / "decks" / "_test_bundle_tmp"
+        deck_dir.mkdir(parents=True, exist_ok=True)
+        path = deck_dir / "deck.html"
+        try:
+            path.write_text(html, encoding="utf-8")
+            return bundle_string(self.bundler, html, path)
+        finally:
+            path.unlink(missing_ok=True)
+            try:
+                deck_dir.rmdir()
+            except OSError:
+                pass
+
+    def test_default_og_cover_meta_is_removed(self) -> None:
+        html = _make_minimal_deck(
+            extra_head='<meta property="og:image" content="og-cover.png">'
+        )
+        bundled = self._bundle(html)
+        self.assertNotIn("og-cover.png", bundled)
+
+    def test_rebundle_standalone_deck_does_not_duplicate_runtime_blocks(self) -> None:
+        first = self._bundle(_make_minimal_deck())
+        second = self.bundler.bundle_html(first, ROOT / "assets" / "decks" / "_test_bundle_tmp" / "deck.html")
+
+        self.assertEqual(second.count("/* --- premium-controls.js --- */"), 1)
+        self.assertEqual(second.count("/* --- slide-engine.js --- */"), 1)
+
+    def test_remote_font_links_are_removed_from_old_decks(self) -> None:
+        html = _make_minimal_deck(
+            extra_head=(
+                '<link rel="preconnect" href="https://fonts.googleapis.com">'
+                '<link rel="preconnect" href="//fonts.gstatic.com" crossorigin>'
+                '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=X">'
+            )
+        )
+        bundled = self._bundle(html)
+
+        self.assertNotIn("fonts.googleapis", bundled)
+        self.assertNotIn("fonts.gstatic", bundled)
+
+    def test_unsafe_theme_visual_overrides_are_removed_from_bundled_decks(self) -> None:
+        html = _make_visual_deck().replace(
+            "<html lang=\"en\">",
+            '<html lang="en" data-theme-visual-editorial-hero="https://example.com/hero.webp" '
+            'data-theme-fonts-editorial="//fonts.googleapis.com/css2?family=X">',
+        )
+        bundled = self._bundle(html)
+
+        self.assertNotIn("https://example.com/hero.webp", bundled)
+        self.assertNotIn("//fonts.googleapis.com", bundled)
+        self.assertIn(_EMBED_MARKER, bundled)
+
+
 class WantsMatcher_Tests(unittest.TestCase):
     """Unit tests for the wants_* predicate functions."""
 
@@ -328,18 +387,15 @@ class BundleThemeVisualsEmbedTests(unittest.TestCase):
             return bundled, result.returncode
 
     # ------------------------------------------------------------------
-    # Test 1: inlined premium-controls.js contains fixed passthrough regex
+    # Test 1: inlined premium-controls.js rejects remote theme visual URLs
     # ------------------------------------------------------------------
 
-    def test_controls_js_passthrough_includes_data_uri_scheme(self) -> None:
-        """Bundled output's inlined premium-controls.js contains 'data:' in the
-        themeVisualSrc passthrough pattern (PLAN Approach §1)."""
+    def test_controls_js_rejects_remote_theme_visual_urls(self) -> None:
+        """Bundled output's inlined premium-controls.js must not bless remote
+        theme visual overrides."""
         bundled = self._bundle(_make_visual_deck())
-        # The fixed pattern is: /^(?:https?:|data:|blob:|file:|\/|\.\/|\.\.\/)/.test(file)
-        # The key substring that proves the fix landed:
-        self.assertIn("(?:https?:|data:|blob:|file:", bundled,
-                      "Inlined premium-controls.js must contain the fixed passthrough regex "
-                      "with 'data:' and 'blob:' schemes")
+        self.assertIn("function safeThemeVisualValue", bundled)
+        self.assertNotIn("(?:https?:|data:|blob:|file:", bundled)
 
     # ------------------------------------------------------------------
     # Test 2: embed block present with all themes × roles from manifest

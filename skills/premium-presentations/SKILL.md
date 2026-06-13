@@ -56,6 +56,8 @@ table lives in `references/runtime.md`. Conditional additions:
 
 Runtime 3D modes (`off/ambient/tilt/depth`) cycle with the `3` key; author a
 deck default with `data-3d="<mode>"` on `<html>` — see `references/runtime.md`.
+Generated decks are portable standalone HTML: do not add CDN scripts, remote
+font links, or runtime `http(s)` asset dependencies.
 
 Run `./scripts/validate_runtime_contract.py` after template, theme, bundler,
 or shared runtime edits.

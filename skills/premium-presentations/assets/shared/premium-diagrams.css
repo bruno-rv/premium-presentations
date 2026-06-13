@@ -1,7 +1,5 @@
 /* Diagram slides — Excalidraw-style canvas + centered stage */
 
-@import url('https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap');
-
 html[data-theme="editorial"] {
   --diagram-canvas: #fffef9;
   --diagram-canvas-border: #364fc7;
@@ -128,7 +126,7 @@ html[data-theme="red"] {
 .mermaid-wrap svg .label,
 .mermaid-wrap svg .nodeLabel,
 .mermaid-wrap svg .edgeLabel {
-  font-family: 'Patrick Hand', 'Segoe Print', cursive !important;
+  font-family: 'Segoe Print', 'Bradley Hand', cursive !important;
 }
 
 .diagram-viewport {

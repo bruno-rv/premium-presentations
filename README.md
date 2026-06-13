@@ -53,6 +53,18 @@ For local validation scripts that use Node dependencies:
 npm --prefix skills/premium-presentations/scripts ci
 ```
 
+For browser-rendering checks, install the Python validation dependency and its
+managed Chromium once:
+
+```bash
+python3 -m pip install -r skills/premium-presentations/scripts/requirements.txt
+python3 -m playwright install chromium
+```
+
+`scripts/og-cover.sh` uses a system Chrome/Chromium binary (`chromium`,
+`google-chrome`, or macOS Google Chrome). Install one of those if you need the
+sidecar `og-cover.png` helper.
+
 ## Use
 
 List available themes:
@@ -80,6 +92,16 @@ python3 skills/premium-presentations/scripts/validate_deck.py \
   skills/premium-presentations/assets/decks/my-talk/my-talk-slides.html \
   skills/premium-presentations/assets/decks/my-talk/my-talk-slide-spec.md
 ```
+
+Generate an optional social/cover image next to the deck:
+
+```bash
+./skills/premium-presentations/scripts/og-cover.sh \
+  skills/premium-presentations/assets/decks/my-talk/my-talk-slides.html
+```
+
+The cover is a sidecar file. The standalone deck HTML does not reference it
+automatically.
 
 Open the studio:
 
@@ -109,8 +131,11 @@ premium-presentations/          ← repo root
 ```
 
 `assets/` contains bundled resources used by generated output: runtime CSS/JS,
-theme visuals, templates, snippets, and the studio page. The key committed
-paths are `assets/shared/`, `assets/studio/`, and `assets/templates/`.
+theme visuals, templates, snippets, and the studio page. Generated decks are
+portable standalone HTML bundles: runtime search, diagrams, PNG export,
+presenter mode, controls, and theme assets do not require CDNs or remote fonts.
+The key committed paths are `assets/shared/`, `assets/studio/`, and
+`assets/templates/`.
 
 `assets/decks/` is generated output from `scripts/new-deck.sh`. It is ignored
 by git and should stay out of the package unless a user explicitly asks to

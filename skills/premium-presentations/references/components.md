@@ -142,7 +142,8 @@ Example row:
 
 | Need | Use |
 |------|-----|
-| Flowchart / sequence / ER | `slide--diagram` + Mermaid (`premium-mermaid.js`) |
+| Simple flowchart | `slide--diagram` + portable Mermaid fallback (`premium-mermaid.js`) |
+| Sequence / ER / class / state diagram | Full Mermaid preloaded locally as `window.mermaid`, or custom SVG |
 | Branded journey / neon nodes / metaphor | Custom SVG (P14, P9) |
 | Tabular metrics | `stats-row`, `bar-chart`, or `data-table` |
 

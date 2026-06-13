@@ -314,17 +314,43 @@
     return 'shared/assets/theme-visuals/';
   }
 
+  function isStandaloneBundle() {
+    return !!(
+      window.PremiumBundle?.standalone ||
+      document.documentElement.dataset.premiumStandalone === 'true' ||
+      !SCRIPT_SRC
+    );
+  }
+
+  function isRemoteUrl(value) {
+    return /^(?:https?:|\/\/|file:)/i.test(value || '');
+  }
+
+  function isPortableImageUrl(value) {
+    return /^(?:data:image\/|blob:)/i.test(value || '');
+  }
+
+  function safeThemeVisualValue(value) {
+    if (!value) return '';
+    if (isStandaloneBundle()) return isPortableImageUrl(value) ? value : '';
+    if (isRemoteUrl(value)) return '';
+    return value;
+  }
+
   function themeVisualSrc(theme, role) {
     const root = document.documentElement;
     const normalized = normalizeTheme(theme || root.dataset.theme || discoverThemes()[0]);
-    const fromAttr =
+    const fromAttr = safeThemeVisualValue(
       root.getAttribute('data-theme-visual-' + normalized + '-' + role) ||
-      root.getAttribute('data-theme-visual-' + normalized);
-    const fromGlobal = window.PremiumThemeVisuals &&
+      root.getAttribute('data-theme-visual-' + normalized)
+    );
+    const fromGlobal = safeThemeVisualValue(window.PremiumThemeVisuals &&
       window.PremiumThemeVisuals[normalized] &&
-      (window.PremiumThemeVisuals[normalized][role] || window.PremiumThemeVisuals[normalized].hero);
-    const file = fromAttr || fromGlobal || (normalized + '-' + role + '.webp');
-    if (/^(?:https?:|data:|blob:|file:|\/|\.\/|\.\.\/)/.test(file)) return file;
+      (window.PremiumThemeVisuals[normalized][role] || window.PremiumThemeVisuals[normalized].hero));
+    if (fromAttr) return fromAttr;
+    if (fromGlobal) return fromGlobal;
+    if (isStandaloneBundle()) return '';
+    const file = normalized + '-' + role + '.webp';
     return themeVisualBase() + file;
   }
 
@@ -335,6 +361,11 @@
       const img = visual.querySelector('.theme-visual__image');
       if (!img) return;
       const src = themeVisualSrc(normalized, role);
+      if (!src) {
+        visual.hidden = true;
+        img.removeAttribute('src');
+        return;
+      }
       visual.hidden = false;
       img.dataset.themeVisualFallback = '';
       if (img.getAttribute('src') !== src) img.setAttribute('src', src);
@@ -627,8 +658,17 @@
 
   function syncFonts(name) {
     const href = document.documentElement.getAttribute('data-theme-fonts-' + name);
-    if (!href) return;
     const id = 'premium-theme-fonts';
+    const existing = document.getElementById(id);
+    if (!href) {
+      existing?.remove();
+      return;
+    }
+    if (!/^data:text\/css[,;]/i.test(href)) {
+      existing?.remove();
+      console.warn('[Premium Presentations] Ignoring non-portable theme font stylesheet:', href);
+      return;
+    }
     let link = document.getElementById(id);
     if (!link) {
       link = document.createElement('link');

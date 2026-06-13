@@ -11,19 +11,38 @@
  */
 (function () {
   const RED_THEMES = ['red'];
-  const MARK_SRC = '../../shared/assets/red-mark.svg';
-  const MARK_SRC_LIGHT = '../../shared/assets/red-mark.svg';
+  const RED_MARK_SVG =
+    '<svg class="red-mark {{CLASS}}" width="48" height="48" viewBox="0 0 48 48" ' +
+    'xmlns="http://www.w3.org/2000/svg" {{ARIA}}>' +
+    '<rect x="0" y="0" width="48" height="48" rx="10" ry="10" fill="#FF0230"></rect>' +
+    '<rect x="16" y="16" width="16" height="16" rx="2" ry="2" fill="#FFFFFF"></rect>' +
+    '</svg>';
 
   function markImg(className, alt, src) {
+    if (isPortableImageSrc(src)) {
+      return (
+        '<img class="red-mark ' +
+        className +
+        '" src="' +
+        escapeHtml(src) +
+        '" width="48" height="48" alt="' +
+        escapeHtml(alt) +
+        '" decoding="async" />'
+      );
+    }
+
+    const aria = alt
+      ? 'role="img" aria-label="' + escapeHtml(alt) + '"'
+      : 'aria-hidden="true" focusable="false"';
     return (
-      '<img class="red-mark ' +
-      className +
-      '" src="' +
-      (src || MARK_SRC) +
-      '" width="48" height="48" alt="' +
-      escapeHtml(alt) +
-      '" decoding="async" />'
+      RED_MARK_SVG
+        .replace('{{CLASS}}', escapeHtml(className))
+        .replace('{{ARIA}}', aria)
     );
+  }
+
+  function isPortableImageSrc(src) {
+    return /^data:image\//i.test(src || '');
   }
 
   function isRedTheme() {
@@ -36,12 +55,12 @@
 
   function resolveMarkSrc() {
     const custom = document.documentElement.dataset.redMarkSrc;
-    if (custom) return custom;
+    if (isPortableImageSrc(custom)) return custom;
     const bar = document.querySelector('.red-brand-bar img.red-mark');
-    if (bar?.getAttribute('src')) return bar.getAttribute('src');
+    if (isPortableImageSrc(bar?.getAttribute('src'))) return bar.getAttribute('src');
     const sample = document.querySelector('img.red-mark[src]');
-    if (sample?.getAttribute('src')) return sample.getAttribute('src');
-    return MARK_SRC;
+    if (isPortableImageSrc(sample?.getAttribute('src'))) return sample.getAttribute('src');
+    return '';
   }
 
   /** Title slides: mark in the chosen chrome variant. */
@@ -49,7 +68,7 @@
     if (document.documentElement.dataset.redHeroMark === 'header') {
       return resolveMarkSrc();
     }
-    return MARK_SRC_LIGHT;
+    return '';
   }
 
   function mountBrandBar() {
@@ -68,9 +87,7 @@
 
     const startHtml = showMark
       ? '<div class="red-brand-bar__start">' +
-        '<img class="red-mark red-mark--sm" src="' +
-        escapeHtml(src) +
-        '" width="32" height="32" alt="" decoding="async" />' +
+        markImg('red-mark--sm', '', src) +
         '</div>'
       : '';
 

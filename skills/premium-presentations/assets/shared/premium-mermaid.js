@@ -1,5 +1,5 @@
 /**
- * Premium Presentations — Excalidraw-style Mermaid (hand-drawn look + theme sync).
+ * Premium Presentations — portable Excalidraw-style diagrams (theme sync).
  *
  * Usage in deck:
  * <link rel="stylesheet" href="../../shared/premium-diagrams.css">
@@ -12,10 +12,7 @@
  * <\/script>
  */
 
-const MERMAID_CDN_ESM =
-  'https://cdn.jsdelivr.net/npm/mermaid@11.4.0/dist/mermaid.esm.min.mjs';
-const MERMAID_CDN_UMD =
-  'https://cdn.jsdelivr.net/npm/mermaid@11.4.0/dist/mermaid.min.js';
+const SVG_NS = 'http://www.w3.org/2000/svg';
 
 function deckTheme() {
   const t = document.documentElement.dataset.theme;
@@ -24,44 +21,200 @@ function deckTheme() {
   return 'warm';
 }
 
-/** @returns {Promise<import('mermaid').default>} */
 async function loadMermaid() {
   if (globalThis.__premiumMermaid?.run) return globalThis.__premiumMermaid;
   if (globalThis.mermaid?.run) {
     globalThis.__premiumMermaid = globalThis.mermaid;
     return globalThis.__premiumMermaid;
   }
+  globalThis.__premiumMermaid = createPortableMermaid();
+  return globalThis.__premiumMermaid;
+}
 
-  try {
-    const mod = await import(/* @vite-ignore */ MERMAID_CDN_ESM);
-    globalThis.__premiumMermaid = mod.default ?? mod;
-    return globalThis.__premiumMermaid;
-  } catch (esmErr) {
-    console.warn(
-      '[Premium Presentations] Mermaid ESM import failed; loading UMD build.',
-      esmErr
-    );
-    await new Promise((resolve, reject) => {
-      const existing = document.querySelector('script[data-premium-mermaid-umd]');
-      if (existing) {
-        if (globalThis.mermaid) return resolve();
-        existing.addEventListener('load', () => resolve(), { once: true });
-        existing.addEventListener('error', reject, { once: true });
-        return;
-      }
-      const script = document.createElement('script');
-      script.src = MERMAID_CDN_UMD;
-      script.dataset.premiumMermaidUmd = '1';
-      script.onload = () => resolve();
-      script.onerror = reject;
-      document.head.appendChild(script);
-    });
-    if (!globalThis.mermaid?.run) {
-      throw new Error('Mermaid UMD failed to load');
-    }
-    globalThis.__premiumMermaid = globalThis.mermaid;
-    return globalThis.__premiumMermaid;
+function createSvg(tag) {
+  return document.createElementNS(SVG_NS, tag);
+}
+
+function parsePortableNode(raw) {
+  const text = String(raw || '').trim().replace(/\|[^|]*\|/g, '').trim();
+  const match = text.match(/^([A-Za-z0-9_:.~-]+)\s*(?:\[(.*?)\]|\((.*?)\)|\{(.*?)\})?$/);
+  if (!match) return { id: text, label: text };
+  const label = match[2] || match[3] || match[4] || match[1];
+  return { id: match[1], label: label.replace(/^"|"$/g, '') };
+}
+
+function parsePortableDiagram(source) {
+  const lines = String(source || '')
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('%%'));
+  const direction = /\b(?:graph|flowchart)\s+LR\b/i.test(lines[0] || '') ? 'LR' : 'TD';
+  const nodes = new Map();
+  const edges = [];
+
+  function addEdge(fromRaw, toRaw) {
+    const from = parsePortableNode(fromRaw);
+    const to = parsePortableNode(toRaw);
+    nodes.set(from.id, from);
+    nodes.set(to.id, to);
+    edges.push({ from: from.id, to: to.id });
   }
+
+  for (const line of lines) {
+    if (/^(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|erDiagram)\b/i.test(line)) continue;
+    const parts = [];
+    const connectors = [];
+    const re = /\s*(-->|---|==>|-.->)\s*/g;
+    let last = 0;
+    let match;
+    while ((match = re.exec(line))) {
+      parts.push(line.slice(last, match.index).trim());
+      connectors.push(match[1]);
+      last = re.lastIndex;
+    }
+    if (!connectors.length) continue;
+    parts.push(line.slice(last).trim());
+    for (let i = 0; i < parts.length - 1; i++) {
+      if (parts[i] && parts[i + 1]) addEdge(parts[i], parts[i + 1]);
+    }
+  }
+
+  if (!nodes.size) {
+    lines.slice(1).forEach((line, i) => {
+      const node = { id: 'line' + i, label: line.replace(/^[-*]\s*/, '') };
+      nodes.set(node.id, node);
+    });
+  }
+
+  return { direction, nodes: [...nodes.values()], edges };
+}
+
+function wrapText(text, maxChars = 22) {
+  const words = String(text || '').split(/\s+/).filter(Boolean);
+  const lines = [];
+  let current = '';
+  for (const word of words) {
+    const next = current ? current + ' ' + word : word;
+    if (next.length > maxChars && current) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = next;
+    }
+  }
+  if (current) lines.push(current);
+  return lines.slice(0, 3);
+}
+
+function renderPortableDiagram(node, config) {
+  const source = node.dataset.mermaidSrc || node.textContent || '';
+  const parsed = parsePortableDiagram(source);
+  const boxW = 220;
+  const boxH = 70;
+  const gap = 90;
+  const margin = 40;
+  const horizontal = parsed.direction === 'LR';
+  const count = Math.max(1, parsed.nodes.length);
+  const width = horizontal ? margin * 2 + count * boxW + (count - 1) * gap : 860;
+  const height = horizontal ? 240 : margin * 2 + count * boxH + (count - 1) * gap;
+  const accent = config?.themeVariables?.primaryBorderColor || '#364fc7';
+  const fill = config?.themeVariables?.primaryColor || '#dbeafe';
+  const text = config?.themeVariables?.primaryTextColor || '#1e1e1e';
+  const positions = new Map();
+
+  const svg = createSvg('svg');
+  svg.setAttribute('viewBox', '0 0 ' + width + ' ' + height);
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', 'Diagram');
+  svg.classList.add('mermaid');
+
+  const defs = createSvg('defs');
+  const marker = createSvg('marker');
+  const markerId = 'premium-mermaid-arrow-' + Math.random().toString(16).slice(2);
+  marker.setAttribute('id', markerId);
+  marker.setAttribute('markerWidth', '10');
+  marker.setAttribute('markerHeight', '8');
+  marker.setAttribute('refX', '9');
+  marker.setAttribute('refY', '4');
+  marker.setAttribute('orient', 'auto');
+  const arrow = createSvg('path');
+  arrow.setAttribute('d', 'M0,0 L10,4 L0,8 Z');
+  arrow.setAttribute('fill', accent);
+  marker.appendChild(arrow);
+  defs.appendChild(marker);
+  svg.appendChild(defs);
+
+  parsed.nodes.forEach((item, i) => {
+    const x = horizontal ? margin + i * (boxW + gap) : (width - boxW) / 2;
+    const y = horizontal ? (height - boxH) / 2 : margin + i * (boxH + gap);
+    positions.set(item.id, { x, y });
+  });
+
+  parsed.edges.forEach((edge) => {
+    const a = positions.get(edge.from);
+    const b = positions.get(edge.to);
+    if (!a || !b) return;
+    const path = createSvg('path');
+    const startX = horizontal ? a.x + boxW : a.x + boxW / 2;
+    const startY = horizontal ? a.y + boxH / 2 : a.y + boxH;
+    const endX = horizontal ? b.x : b.x + boxW / 2;
+    const endY = horizontal ? b.y + boxH / 2 : b.y;
+    const c1x = horizontal ? startX + gap * 0.45 : startX;
+    const c1y = horizontal ? startY : startY + gap * 0.45;
+    const c2x = horizontal ? endX - gap * 0.45 : endX;
+    const c2y = horizontal ? endY : endY - gap * 0.45;
+    path.setAttribute('d', 'M' + startX + ',' + startY + ' C' + c1x + ',' + c1y + ' ' + c2x + ',' + c2y + ' ' + endX + ',' + endY);
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', accent);
+    path.setAttribute('stroke-width', '3');
+    path.setAttribute('marker-end', 'url(#' + markerId + ')');
+    svg.appendChild(path);
+  });
+
+  parsed.nodes.forEach((item) => {
+    const pos = positions.get(item.id);
+    const group = createSvg('g');
+    const rect = createSvg('rect');
+    rect.setAttribute('x', pos.x);
+    rect.setAttribute('y', pos.y);
+    rect.setAttribute('width', boxW);
+    rect.setAttribute('height', boxH);
+    rect.setAttribute('rx', '14');
+    rect.setAttribute('fill', fill);
+    rect.setAttribute('stroke', accent);
+    rect.setAttribute('stroke-width', '3');
+    group.appendChild(rect);
+
+    wrapText(item.label).forEach((line, i, arr) => {
+      const t = createSvg('text');
+      t.setAttribute('x', pos.x + boxW / 2);
+      t.setAttribute('y', pos.y + boxH / 2 + (i - (arr.length - 1) / 2) * 18 + 6);
+      t.setAttribute('text-anchor', 'middle');
+      t.setAttribute('font-family', config?.themeVariables?.fontFamily || 'system-ui, sans-serif');
+      t.setAttribute('font-size', '16');
+      t.setAttribute('font-weight', '700');
+      t.setAttribute('fill', text);
+      t.textContent = line;
+      group.appendChild(t);
+    });
+    svg.appendChild(group);
+  });
+
+  node.setAttribute('data-processed', 'true');
+  node.replaceWith(svg);
+}
+
+function createPortableMermaid() {
+  let config = getMermaidConfig();
+  return {
+    initialize(nextConfig) {
+      config = nextConfig || config;
+    },
+    async run(options = {}) {
+      const nodes = options.nodes || getMermaidNodes();
+      [...nodes].forEach((node) => renderPortableDiagram(node, config));
+    },
+  };
 }
 
 function getMermaidNodes() {
@@ -164,7 +317,7 @@ export function getMermaidConfig(theme = deckTheme()) {
     themeVariables: {
       darkMode: false,
       background: 'transparent',
-      fontFamily: '"Patrick Hand", "Segoe Print", cursive',
+      fontFamily: '"Segoe Print", "Bradley Hand", cursive',
       fontSize: '16px',
       primaryColor: accentSoft,
       primaryTextColor: '#1e1e1e',

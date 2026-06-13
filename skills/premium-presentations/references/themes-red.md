@@ -6,7 +6,7 @@ The Red theme is the framework's clean white-ground identity for broadcast-style
 
 | Theme | `data-theme` | Use for |
 |-------|--------------|---------|
-| **Red** | `red` | White-ground decks with sharp red accents, silver UI surfaces, and Barlow typography |
+| **Red** | `red` | White-ground decks with sharp red accents, silver UI surfaces, and portable broadcast sans typography |
 
 ## Tokens
 
@@ -21,16 +21,16 @@ The Red theme is the framework's clean white-ground identity for broadcast-style
 
 | Role | Font |
 |------|------|
-| Display | Barlow Condensed |
-| Body | Barlow |
-| Mono | IBM Plex Mono |
+| Display | Arial Narrow / system condensed sans |
+| Body | Arial / system sans |
+| Mono | system monospace |
 
 ## Visual Patterns
 
 | Pattern | Class / component |
 |---------|-------------------|
 | Red header bar + mark | `premium-red-chrome.js`, `premium-red-brand.css` |
-| Red mark SVG | `assets/shared/assets/red-mark.svg` |
+| Red mark | Inline SVG rendered by `premium-red-chrome.js` |
 | Title accent | `.shimmer-gold` renders as flat `var(--accent)` |
 | Focus Frame | `.focus-frame` |
 | Mermaid | White canvas, red border |
