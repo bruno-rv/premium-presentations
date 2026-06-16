@@ -1,17 +1,19 @@
 /**
- * Premium Presentations — theme switch + runtime 3D modes (off/ambient/tilt/depth).
+ * Premium Presentations — theme switch + runtime 3D modes (off/ambient/tilt/depth/card).
  * Usage: <html data-theme="warm" data-3d="off">
  *   <link rel="stylesheet" href=".../premium-themes.css">
  *   <script src=".../premium-controls.js" defer><\/script>
  * Press 3 / Shift+3 to cycle 3D modes. Author default via data-3d="<mode>";
  * legacy data-parallax="on" maps to ambient. The old unscoped localStorage
  * parallax key is intentionally ignored (never migrated).
+ *
+ * card mode: each component tilts independently on pointer hover (ball-on-table).
  */
 (function () {
   const STORAGE_THEME = 'premium-theme';
   const STORAGE_3D = 'premium-3d';
   const STORAGE_CONTROLS_HIDDEN = 'premium-controls-hidden';
-  const MODES_3D = ['off', 'ambient', 'tilt', 'depth'];
+  const MODES_3D = ['off', 'ambient', 'tilt', 'depth', 'card'];
   // Slide chrome that must stay a direct child of .slide (containing block
   // and direct-child CSS rules depend on it) — never moved into the 3D frame.
   const FRAME_CHROME_SELECTOR =
@@ -125,6 +127,8 @@
     }
     refresh3dSelect();
     syncMotion();
+    if (mode === 'card') mountCardTilt();
+    else unmountCardTilt();
     root.dispatchEvent(new CustomEvent('premium-3d-change', { detail: { mode } }));
   }
 
@@ -314,43 +318,17 @@
     return 'shared/assets/theme-visuals/';
   }
 
-  function isStandaloneBundle() {
-    return !!(
-      window.PremiumBundle?.standalone ||
-      document.documentElement.dataset.premiumStandalone === 'true' ||
-      !SCRIPT_SRC
-    );
-  }
-
-  function isRemoteUrl(value) {
-    return /^(?:https?:|\/\/|file:)/i.test(value || '');
-  }
-
-  function isPortableImageUrl(value) {
-    return /^(?:data:image\/|blob:)/i.test(value || '');
-  }
-
-  function safeThemeVisualValue(value) {
-    if (!value) return '';
-    if (isStandaloneBundle()) return isPortableImageUrl(value) ? value : '';
-    if (isRemoteUrl(value)) return '';
-    return value;
-  }
-
   function themeVisualSrc(theme, role) {
     const root = document.documentElement;
     const normalized = normalizeTheme(theme || root.dataset.theme || discoverThemes()[0]);
-    const fromAttr = safeThemeVisualValue(
+    const fromAttr =
       root.getAttribute('data-theme-visual-' + normalized + '-' + role) ||
-      root.getAttribute('data-theme-visual-' + normalized)
-    );
-    const fromGlobal = safeThemeVisualValue(window.PremiumThemeVisuals &&
+      root.getAttribute('data-theme-visual-' + normalized);
+    const fromGlobal = window.PremiumThemeVisuals &&
       window.PremiumThemeVisuals[normalized] &&
-      (window.PremiumThemeVisuals[normalized][role] || window.PremiumThemeVisuals[normalized].hero));
-    if (fromAttr) return fromAttr;
-    if (fromGlobal) return fromGlobal;
-    if (isStandaloneBundle()) return '';
-    const file = normalized + '-' + role + '.webp';
+      (window.PremiumThemeVisuals[normalized][role] || window.PremiumThemeVisuals[normalized].hero);
+    const file = fromAttr || fromGlobal || (normalized + '-' + role + '.webp');
+    if (/^(?:https?:|data:|blob:|file:|\/|\.\/|\.\.\/)/.test(file)) return file;
     return themeVisualBase() + file;
   }
 
@@ -361,11 +339,6 @@
       const img = visual.querySelector('.theme-visual__image');
       if (!img) return;
       const src = themeVisualSrc(normalized, role);
-      if (!src) {
-        visual.hidden = true;
-        img.removeAttribute('src');
-        return;
-      }
       visual.hidden = false;
       img.dataset.themeVisualFallback = '';
       if (img.getAttribute('src') !== src) img.setAttribute('src', src);
@@ -658,17 +631,8 @@
 
   function syncFonts(name) {
     const href = document.documentElement.getAttribute('data-theme-fonts-' + name);
+    if (!href) return;
     const id = 'premium-theme-fonts';
-    const existing = document.getElementById(id);
-    if (!href) {
-      existing?.remove();
-      return;
-    }
-    if (!/^data:text\/css[,;]/i.test(href)) {
-      existing?.remove();
-      console.warn('[Premium Presentations] Ignoring non-portable theme font stylesheet:', href);
-      return;
-    }
     let link = document.getElementById(id);
     if (!link) {
       link = document.createElement('link');
@@ -677,6 +641,64 @@
       document.head.appendChild(link);
     }
     if (link.href !== href) link.href = href;
+  }
+
+  // ---------- card mode: per-element tilt (ball-on-table) ----------
+  // Each tiltable component tracks the pointer relative to its own center,
+  // writes --card-rx / --card-ry / --card-glare CSS vars, and lets CSS
+  // handle perspective + transition. No RAF needed — each element is independent.
+  const CARD_TILT_TARGETS = [
+    '.stat-card', '.glass-card', '.compare-panel', '.stage-card',
+    '.code-window', '.terminal-window', '.flow-node', '.kpi',
+    '.setup-step', '.pipeline-stage', '.checklist-item',
+    '.tl-col', '.aside-card', '.why-panel'
+  ].join(',');
+  const CARD_MAX_TILT = 14; // degrees
+  let cardTiltBound = false;
+
+  // CSS transitions don't re-fire on var() changes without @property registration.
+  // Set style.transform directly: instant tracking on move, eased return on leave.
+  function onCardPointerMove(e) {
+    const el = e.currentTarget;
+    const r = el.getBoundingClientRect();
+    const nx = (e.clientX - (r.left + r.width * 0.5)) / (r.width * 0.5);
+    const ny = (e.clientY - (r.top + r.height * 0.5)) / (r.height * 0.5);
+    const rx = (-ny * CARD_MAX_TILT).toFixed(2);
+    const ry = (nx * CARD_MAX_TILT).toFixed(2);
+    el.style.transition = 'none';
+    el.style.transform = 'perspective(700px) rotateX(' + rx + 'deg) rotateY(' + ry + 'deg) translateZ(2px)';
+    el.style.setProperty('--card-glare', ((nx * 0.5 + 0.5) * 100).toFixed(1) + '%');
+  }
+
+  function onCardPointerLeave(e) {
+    const el = e.currentTarget;
+    // Force reflow so the browser captures the current transform as "from" state,
+    // then re-enable transition for the eased return to flat.
+    el.offsetHeight; // eslint-disable-line no-unused-expressions
+    el.style.transition = 'transform 0.35s ease-out';
+    el.style.transform = '';
+    el.style.removeProperty('--card-glare');
+  }
+
+  function mountCardTilt() {
+    if (cardTiltBound || reducedMotionQuery.matches || !finePointerQuery.matches) return;
+    cardTiltBound = true;
+    document.querySelectorAll(CARD_TILT_TARGETS).forEach(function (el) {
+      el.addEventListener('pointermove', onCardPointerMove, { passive: true });
+      el.addEventListener('pointerleave', onCardPointerLeave, { passive: true });
+    });
+  }
+
+  function unmountCardTilt() {
+    if (!cardTiltBound) return;
+    cardTiltBound = false;
+    document.querySelectorAll(CARD_TILT_TARGETS).forEach(function (el) {
+      el.removeEventListener('pointermove', onCardPointerMove);
+      el.removeEventListener('pointerleave', onCardPointerLeave);
+      el.style.removeProperty('transition');
+      el.style.removeProperty('transform');
+      el.style.removeProperty('--card-glare');
+    });
   }
 
   // ---------- 3D motion engine ----------

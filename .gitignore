@@ -9,6 +9,7 @@ __pycache__/
 .env
 .env.*
 assets/decks/
+**/assets/decks/
 .agents/
 .claude/
 .codex/

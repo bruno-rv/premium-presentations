@@ -73,14 +73,21 @@ plus `premium-flow.js` when a file contains `.live-flow` markup.
 
 **Theme visuals:** `.slide--title` receives a `hero` visual; `.slide--divider` receives a `map` visual. Default linked-mode assets follow `assets/shared/assets/theme-visuals/<theme>-<role>.webp`; bundled standalone decks embed those images as `data:` URIs. Override with `data-theme-visual-<theme>-<role>` or `window.PremiumThemeVisuals` only when the value is a `data:image/...` URI in standalone output; unsafe remote or sidecar paths are ignored. Disable per slide with `data-theme-visual="off"`.
 
-**3D modes:** **`3`** cycles `off → ambient → tilt → depth` (`Shift+3` backward; handled
+**3D modes:** **`3`** cycles `off → ambient → tilt → depth → card` (`Shift+3` backward; handled
 via `e.code === 'Digit3'`, layout-safe). `data-3d="<mode>"` on `<html>` is the source
 of truth; the controls panel has a `3D` select (`#premium-3d`) and a transient toast
 names the mode on every change. Modes: `ambient` = cursor parallax on the background
 canvas (the old `data-parallax="on"`); `tilt` = cursor-tracked tilt of the active
 slide's `.slide-3d-frame` (JS-injected wrapper — the scroll-snap `.slide` is never
 transformed); `depth` = auto-elevated `translateZ` tiers on the component vocabulary
-inside a slide perspective, opt out per element with `data-flat`. Resolution order:
+inside a slide perspective, opt out per element with `data-flat`; `card` = per-element
+cursor-tracked tilt ("ball on table") — each `.stat-card`, `.glass-card`, `.flow-node`,
+`.kpi`, `.compare-panel`, `.setup-step`, `.pipeline-stage`, `.code-window`,
+`.terminal-window`, `.checklist-item`, `.tl-col`, `.aside-card`, `.why-panel` tilts
+independently up to 14° based on cursor position relative to its own center; a glare
+highlight shifts via `--card-glare` CSS var on hover; smooth spring-back on
+`pointerleave` via CSS transition; only mounts for fine-pointer (mouse/stylus), no-op
+under `prefers-reduced-motion`; opt out per element with `data-flat`. Resolution order:
 stored pref (scoped key `premium-3d:<path>`) → author `data-3d` → legacy author
 `data-parallax="on"` (→ `ambient`) → `off`. The old unscoped localStorage parallax
 key is intentionally ignored. API: `PremiumPresentations.set3dMode('<mode>')`,

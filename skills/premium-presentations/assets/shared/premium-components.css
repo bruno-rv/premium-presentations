@@ -1308,3 +1308,92 @@ html[data-3d="depth"] [data-flat] * { transform: none !important; }
   }
   html[data-3d="depth"] .slide { perspective: none; }
 }
+
+/* --- card: per-element cursor-tracked tilt ("ball on table") ---
+   JS (premium-controls.js) writes --card-rx / --card-ry / --card-glare
+   on each element via pointermove. CSS owns perspective + transition.
+   No RAF — each element is independent. */
+
+html[data-3d="card"] .stat-card,
+html[data-3d="card"] .glass-card,
+html[data-3d="card"] .compare-panel,
+html[data-3d="card"] .stage-card,
+html[data-3d="card"] .code-window,
+html[data-3d="card"] .terminal-window,
+html[data-3d="card"] .flow-node,
+html[data-3d="card"] .kpi,
+html[data-3d="card"] .setup-step,
+html[data-3d="card"] .pipeline-stage,
+html[data-3d="card"] .checklist-item,
+html[data-3d="card"] .tl-col,
+html[data-3d="card"] .aside-card,
+html[data-3d="card"] .why-panel {
+  position: relative;
+  will-change: transform;
+}
+
+/* glass-card hover lift is handled by JS composing translateY into the inline transform */
+html[data-3d="card"] .glass-card:hover {
+  transform: none; /* JS inline style owns the transform in card mode */
+}
+
+/* Glare highlight: follows cursor X via --card-glare, fades in on hover */
+html[data-3d="card"] .stat-card::after,
+html[data-3d="card"] .glass-card::after,
+html[data-3d="card"] .compare-panel::after,
+html[data-3d="card"] .stage-card::after,
+html[data-3d="card"] .code-window::after,
+html[data-3d="card"] .terminal-window::after,
+html[data-3d="card"] .flow-node::after,
+html[data-3d="card"] .aside-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    ellipse 80% 60% at var(--card-glare, 50%) 25%,
+    rgba(255, 255, 255, 0.13) 0%,
+    transparent 70%
+  );
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  z-index: 1;
+}
+
+html[data-3d="card"] .stat-card:hover::after,
+html[data-3d="card"] .glass-card:hover::after,
+html[data-3d="card"] .compare-panel:hover::after,
+html[data-3d="card"] .stage-card:hover::after,
+html[data-3d="card"] .code-window:hover::after,
+html[data-3d="card"] .terminal-window:hover::after,
+html[data-3d="card"] .flow-node:hover::after,
+html[data-3d="card"] .aside-card:hover::after {
+  opacity: 1;
+}
+
+/* Per-element opt-out */
+html[data-3d="card"] [data-flat],
+html[data-3d="card"] [data-flat] * { transform: none !important; }
+
+/* Reduced motion: JS won't mount card tilt (mountCardTilt guards reducedMotionQuery),
+   but guard here too in case data-3d="card" is authored on the html element. */
+@media (prefers-reduced-motion: reduce) {
+  html[data-3d="card"] .stat-card,
+  html[data-3d="card"] .glass-card,
+  html[data-3d="card"] .compare-panel,
+  html[data-3d="card"] .stage-card,
+  html[data-3d="card"] .code-window,
+  html[data-3d="card"] .terminal-window,
+  html[data-3d="card"] .flow-node,
+  html[data-3d="card"] .kpi,
+  html[data-3d="card"] .setup-step,
+  html[data-3d="card"] .pipeline-stage,
+  html[data-3d="card"] .checklist-item,
+  html[data-3d="card"] .tl-col,
+  html[data-3d="card"] .aside-card,
+  html[data-3d="card"] .why-panel {
+    transform: none !important;
+    will-change: auto;
+  }
+}
