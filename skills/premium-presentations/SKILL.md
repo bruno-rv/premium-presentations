@@ -31,16 +31,43 @@ Themes come from `html[data-theme="..."]` selectors in
 
 ## Create A Deck
 
+**Step 1 — Content-First Brief (required before any slide work)**
+
+Before scaffolding or writing slides, fill the Content-First Brief in the spec:
+- Topic archetype (abstract concept / process / data story / historical / debate)
+- Hero moment: the one slide the audience must carry out + which component surfaces it
+- Audience's wrong assumption at entry (drives the opening hook)
+- Exclusion list: 2–3 components that would feel forced on this topic
+- Narrative arc type (linear / before→after / exploration→synthesis / problem→solution)
+- Color semantics budget: each accent color gets one semantic role for this deck only
+
+Do not assign components to slides until this brief is complete. The routing table in
+`references/components.md` is a tool that serves the brief — not a starting point.
+
+**Step 2 — Scaffold and spec**
+
 ```bash
 ./scripts/new-deck.sh <theme> <slug> "<title>" <slide_count>
+```
+
+For 8+ slides, use the generated slide spec as the contract. Derive act structure
+from the topic's natural phases (Narrative Arc section in the spec) — not from a
+default intro/body/conclusion rhythm. Divider slides mark act boundaries.
+
+If the hero moment requires a visual that no catalog pattern covers, invent one:
+name it, describe its structure in Design Directives > Signature visual, and flag
+it for catalog addition after review. Forcing a poor-fit catalog pattern is worse.
+
+**Step 3 — Validate**
+
+```bash
 python3 scripts/validate_deck.py assets/decks/<slug>/<slug>-slides.html assets/decks/<slug>/<slug>-slide-spec.md
 ```
 
 Use lowercase hyphenated slugs. For unspecified themes, use the first theme
 returned by `list-themes.py` unless the topic clearly calls for another
-discovered theme. For 8+ slides, use the generated slide spec as the contract.
-`assets/decks/` is generated output and ignored by git; commit a finished deck
-only when the user explicitly asks.
+discovered theme. `assets/decks/` is generated output and ignored by git; commit
+a finished deck only when the user explicitly asks.
 
 ## Runtime Contract
 

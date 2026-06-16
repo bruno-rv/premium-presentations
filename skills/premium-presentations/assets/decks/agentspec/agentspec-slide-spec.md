@@ -1,6 +1,6 @@
-# {CODE} — Slide Generation Spec
+# AGENTSPEC — Slide Generation Spec
 
-> Read BEFORE generating `{code}-slides.html`.
+> Read BEFORE generating `agentspec-slides.html`.
 
 ---
 
@@ -8,12 +8,12 @@
 
 | Field | Value |
 |-------|-------|
-| **Code** | {CODE} |
-| **Title** | {Full title} |
+| **Code** | AGENTSPEC |
+| **Title** | AgentSpec: Spec-Driven Development |
 | **Title (Split)** | Line 1: "…" / Line 2: "…" (shimmer on line 2) |
 | **Subtitle** | {One line under title} |
 | **Module** | {NN — Module name} |
-| **Duration** | {N} min |
+| **Duration** | 15 min |
 | **Instructor** | {Name} |
 | **Layer** | {N — Layer name} |
 | **Mode** | Self-Paced \| Live |
@@ -52,11 +52,11 @@ Derive acts from the topic's natural phases — not from a generic "intro → bo
 
 | Act | Title | Time range | What the audience experiences |
 |-----|-------|------------|-------------------------------|
-| 0 | Hook | 00:00–{N}:{N} | {Opening emotion / wrong assumption challenged} |
-| 1 | {Act name} | {N}:{N}–{N}:{N} | {What shifts in the audience's mental model} |
-| 2 | {Act name} | {N}:{N}–{N}:{N} | … |
+| 0 | Hook | 00:00–15:15 | {Opening emotion / wrong assumption challenged} |
+| 1 | {Act name} | 15:15–15:15 | {What shifts in the audience's mental model} |
+| 2 | {Act name} | 15:15–15:15 | … |
 | … | … | … | … |
-| N | Close | {N}:{N}–end | {Anchor phrase repeated; call to action or takeaway} |
+| N | Close | 15:15–end | {Anchor phrase repeated; call to action or takeaway} |
 
 Divider slides mark act boundaries. Acts must reflect the topic's content phases, not template slots.
 

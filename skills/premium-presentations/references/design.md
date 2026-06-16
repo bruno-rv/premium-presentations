@@ -2,6 +2,23 @@
 
 Use these principles when creating or revising Premium Presentations decks.
 
+## Content-First Rule
+
+**Before drafting the Slide Map, complete the Content-First Brief in the spec.** This is not optional.
+
+The routing table in `components.md` (content-type → component) is a tool, not a starting point. It fires only after the narrative arc, hero moment, audience assumption, exclusion list, and arc type are locked. Skipping the brief produces structurally identical decks regardless of topic — the same skeleton in different clothes.
+
+Checklist before opening the Slide Map:
+
+- [ ] Topic archetype named (abstract concept / process / data story / historical / debate)
+- [ ] Hero moment identified — the one slide the audience must carry out, and which component best surfaces it
+- [ ] Audience's wrong assumption at entry written out
+- [ ] Exclusion list set — 2–3 components that would feel forced on this topic
+- [ ] Narrative arc type chosen — acts reflect the topic's content phases, not the default "intro → body → conclusion" rhythm
+- [ ] Color semantics budget set — each accent color has one semantic role for this deck
+
+---
+
 ## Audience
 
 Presentation authors and technical speakers use this skill to build polished
