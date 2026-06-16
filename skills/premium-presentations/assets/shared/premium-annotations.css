@@ -192,6 +192,9 @@ html[data-laser="on"] .deck ::-moz-selection {
 html[data-laser="on"] .deck {
   cursor: none;
 }
+html[data-laser="on"] .deck a[href] {
+  pointer-events: none;
+}
 html[data-laser="on"] .premium-controls-shell,
 html[data-laser="on"] .premium-controls-shell * {
   cursor: default;
