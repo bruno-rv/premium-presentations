@@ -27,6 +27,15 @@ html[data-theme="red"] {
   --laser-ring: rgba(255, 2, 48, 0.18);
 }
 
+html[data-theme="cupertino"] {
+  --mark-bg: rgba(0, 102, 204, 0.15);
+  --mark-text: #0a1929;
+  --mark-border: rgba(0, 102, 204, 0.3);
+  --laser-core: #ff3b30;
+  --laser-glow: rgba(255, 59, 48, 0.55);
+  --laser-ring: rgba(255, 59, 48, 0.22);
+}
+
 /* Live selection (marker mode on) */
 html[data-marker="on"] .deck ::selection {
   background: var(--mark-bg);
