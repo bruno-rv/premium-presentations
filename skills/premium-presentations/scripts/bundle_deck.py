@@ -23,6 +23,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _common import JS_BUNDLE_ORDER as JS_ORDER
+from _common import REQUIRED_CSS
 from _common import REQUIRED_JS
 from _common import ROOT, SHARED
 
@@ -74,6 +75,37 @@ def inline_stylesheets(html: str, html_path: Path) -> str:
         return f"<style>\n/* --- {css_path.name} --- */\n{css}\n</style>"
 
     return re.sub(pattern, repl, html, flags=re.I)
+
+
+def has_stylesheet_module(html: str, name: str) -> bool:
+    marker = r"/\*\s*---\s*" + re.escape(name) + r"(?:\s+\w+)?\s*---\s*\*/"
+    if re.search(marker, html, re.I):
+        return True
+    link = r"<link\b(?=[^>]*\brel=[\"']stylesheet[\"'])(?=[^>]*\bhref=[\"'][^\"']*" + re.escape(name) + r")[^>]*>"
+    return bool(re.search(link, html, re.I))
+
+
+def build_missing_required_styles(html: str) -> str:
+    chunks = []
+    for name in REQUIRED_CSS:
+        if has_stylesheet_module(html, name):
+            continue
+        css_path = SHARED / name
+        if not css_path.is_file():
+            raise FileNotFoundError(f"Required stylesheet not found: {css_path}")
+        css = escape_for_html_script(read_text(css_path))
+        chunks.append(f"<style>\n/* --- {name} --- */\n{css}\n</style>")
+    return "\n".join(chunks)
+
+
+def inject_required_styles(html: str) -> str:
+    styles = build_missing_required_styles(html)
+    if not styles:
+        return html
+    head_end = html.lower().find("</head>")
+    if head_end == -1:
+        return styles + "\n" + html
+    return html[:head_end] + styles + "\n" + html[head_end:]
 
 
 def collect_script_srcs(html: str, html_path: Path) -> list[tuple[str, Path]]:
@@ -526,6 +558,7 @@ def bundle_html(html: str, html_path: Path, *, embed_visuals: bool = True) -> st
     use_embed = embed_visuals and has_visual_slides(html)
 
     html = inline_stylesheets(html, html_path)
+    html = inject_required_styles(html)
     scripts = collect_script_srcs(html, html_path)
     html = remove_local_script_tags(html)
     html = remove_mermaid_module(html)

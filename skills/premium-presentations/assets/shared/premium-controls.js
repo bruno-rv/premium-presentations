@@ -318,17 +318,29 @@
     return 'shared/assets/theme-visuals/';
   }
 
+  function safeThemeVisualValue(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    if (/^data:image\//i.test(raw)) return raw;
+    if (/^blob:/i.test(raw)) return raw;
+    if (/^[a-z0-9][a-z0-9-]*-(?:hero|map)\.(?:webp|png|jpg|jpeg|gif|svg)$/i.test(raw)) {
+      return raw;
+    }
+    return '';
+  }
+
   function themeVisualSrc(theme, role) {
     const root = document.documentElement;
     const normalized = normalizeTheme(theme || root.dataset.theme || discoverThemes()[0]);
     const fromAttr =
-      root.getAttribute('data-theme-visual-' + normalized + '-' + role) ||
-      root.getAttribute('data-theme-visual-' + normalized);
+      safeThemeVisualValue(root.getAttribute('data-theme-visual-' + normalized + '-' + role)) ||
+      safeThemeVisualValue(root.getAttribute('data-theme-visual-' + normalized));
     const fromGlobal = window.PremiumThemeVisuals &&
       window.PremiumThemeVisuals[normalized] &&
-      (window.PremiumThemeVisuals[normalized][role] || window.PremiumThemeVisuals[normalized].hero);
+      (safeThemeVisualValue(window.PremiumThemeVisuals[normalized][role]) ||
+        safeThemeVisualValue(window.PremiumThemeVisuals[normalized].hero));
     const file = fromAttr || fromGlobal || (normalized + '-' + role + '.webp');
-    if (/^(?:https?:|data:|blob:|file:|\/|\.\/|\.\.\/)/.test(file)) return file;
+    if (/^data:image\//i.test(file) || /^blob:/i.test(file)) return file;
     return themeVisualBase() + file;
   }
 

@@ -41,10 +41,26 @@
   let discoverTimer = 0;
   let popupTimerInterval = 0;
   let popupTimerState = null;
+  let rehearsalInterval = 0;
   let fallbackPrompt = null;
   let openingTimer = 0;
   let postTransportInstalled = false;
   let autoOpenDone = false;
+
+  const presenterState = {
+    index: 0,
+    total: 0,
+    titles: [],
+  };
+
+  const rehearsalState = {
+    active: false,
+    currentIndex: 0,
+    currentSince: 0,
+    elapsedMs: 0,
+    slideMs: [],
+    visited: [],
+  };
 
   // Monotonic seq counter shared with timer and any future modules.
   let _seq = 0;
@@ -429,6 +445,13 @@
           <div class="premium-presenter__notes-body" id="pp-notes"></div>
         </div>
       </section>
+      <section class="premium-presenter__timeline" id="pp-timeline-panel" aria-label="Presenter timeline">
+        <div class="premium-presenter__timeline-head">
+          <span>Timeline</span>
+          <span id="pp-rehearsal-status">Rehearsal off</span>
+        </div>
+        <ol class="premium-presenter__timeline-list" id="pp-timeline"></ol>
+      </section>
       <nav class="premium-presenter__rail" id="pp-rail" aria-label="Slide navigation" data-open="false">
         <button type="button" class="premium-presenter__rail-close" id="pp-rail-close" aria-label="Close slide list">✕</button>
         <div class="premium-presenter__rail-label">Slides</div>
@@ -444,6 +467,8 @@
         <div class="premium-presenter__timer-pace" id="pp-timer-pace">—</div>
         <button type="button" id="pp-timer-startstop" class="pp-timer-btn">Start</button>
         <button type="button" id="pp-timer-reset" class="pp-timer-btn">Reset</button>
+        <button type="button" id="pp-rehearsal-toggle" class="pp-timer-btn">Start rehearsal</button>
+        <button type="button" id="pp-rehearsal-reset" class="pp-timer-btn">Clear</button>
       </div>
       <div class="premium-presenter__timer-settings" id="pp-timer-settings" hidden>
         <label>Mode
@@ -534,6 +559,17 @@
   }
 
   function bindPopupEvents() {
+    // Timeline jump list.
+    const timeline = document.getElementById('pp-timeline');
+    if (timeline) {
+      timeline.addEventListener('click', (e) => {
+        const li = e.target.closest('li[data-index]');
+        if (!li) return;
+        const idx = parseInt(li.dataset.index, 10);
+        if (Number.isInteger(idx)) sendControl('jump', { index: idx });
+      });
+    }
+
     // Rail jump list.
     document.getElementById('pp-list').addEventListener('click', (e) => {
       const li = e.target.closest('li[data-index]');
@@ -567,6 +603,11 @@
     const resetBtn = document.getElementById('pp-timer-reset');
     if (startStopBtn) startStopBtn.addEventListener('click', () => sendControl('timer.toggle'));
     if (resetBtn) resetBtn.addEventListener('click', () => sendControl('timer.reset'));
+
+    const rehearsalToggle = document.getElementById('pp-rehearsal-toggle');
+    const rehearsalReset = document.getElementById('pp-rehearsal-reset');
+    if (rehearsalToggle) rehearsalToggle.addEventListener('click', toggleRehearsal);
+    if (rehearsalReset) rehearsalReset.addEventListener('click', resetRehearsal);
 
     // Timer settings inputs.
     const minutesInput = document.getElementById('pp-minutes');
@@ -651,9 +692,170 @@
         sendControl('mode3d.cycle', { dir: e.shiftKey ? -1 : 1 });
         return;
       }
+      if (key === 'r' && e.shiftKey) { e.preventDefault(); resetRehearsal(); return; }
+      if (key === 'r') { e.preventDefault(); toggleRehearsal(); return; }
       if (key === 't' && e.shiftKey) { e.preventDefault(); sendControl('timer.toggle'); return; }
       if (key === 't') { e.preventDefault(); sendControl('theme.cycle'); return; }
     });
+  }
+
+  function ensureRehearsalSize(total) {
+    const n = Math.max(0, total || presenterState.total || 0);
+    while (rehearsalState.slideMs.length < n) rehearsalState.slideMs.push(0);
+    while (rehearsalState.visited.length < n) rehearsalState.visited.push(false);
+    if (rehearsalState.slideMs.length > n) rehearsalState.slideMs.length = n;
+    if (rehearsalState.visited.length > n) rehearsalState.visited.length = n;
+  }
+
+  function hasRehearsalData() {
+    return rehearsalState.elapsedMs > 0 || rehearsalState.slideMs.some((ms) => ms > 0);
+  }
+
+  function currentSlideElapsedMs(index) {
+    ensureRehearsalSize();
+    let ms = rehearsalState.slideMs[index] || 0;
+    if (rehearsalState.active && rehearsalState.currentIndex === index && rehearsalState.currentSince) {
+      ms += Math.max(0, Date.now() - rehearsalState.currentSince);
+    }
+    return ms;
+  }
+
+  function totalRehearsalElapsedMs() {
+    let total = rehearsalState.elapsedMs || 0;
+    if (rehearsalState.active && rehearsalState.currentSince) {
+      total += Math.max(0, Date.now() - rehearsalState.currentSince);
+    }
+    return total;
+  }
+
+  function commitCurrentRehearsalSegment(now) {
+    if (!rehearsalState.active || !rehearsalState.currentSince) return;
+    ensureRehearsalSize();
+    const delta = Math.max(0, now - rehearsalState.currentSince);
+    const idx = rehearsalState.currentIndex;
+    rehearsalState.elapsedMs += delta;
+    rehearsalState.slideMs[idx] = (rehearsalState.slideMs[idx] || 0) + delta;
+    rehearsalState.visited[idx] = true;
+    rehearsalState.currentSince = now;
+  }
+
+  function startRehearsal() {
+    ensureRehearsalSize();
+    if (rehearsalState.active) return;
+    rehearsalState.active = true;
+    rehearsalState.currentIndex = presenterState.index || 0;
+    rehearsalState.currentSince = Date.now();
+    rehearsalState.visited[rehearsalState.currentIndex] = true;
+    if (!rehearsalInterval) {
+      rehearsalInterval = setInterval(renderTimeline, 1000);
+    }
+    renderTimeline();
+  }
+
+  function pauseRehearsal() {
+    if (!rehearsalState.active) return;
+    commitCurrentRehearsalSegment(Date.now());
+    rehearsalState.active = false;
+    rehearsalState.currentSince = 0;
+    if (rehearsalInterval) {
+      clearInterval(rehearsalInterval);
+      rehearsalInterval = 0;
+    }
+    renderTimeline();
+  }
+
+  function toggleRehearsal() {
+    if (rehearsalState.active) pauseRehearsal();
+    else startRehearsal();
+  }
+
+  function resetRehearsal() {
+    if (rehearsalInterval) {
+      clearInterval(rehearsalInterval);
+      rehearsalInterval = 0;
+    }
+    rehearsalState.active = false;
+    rehearsalState.currentIndex = presenterState.index || 0;
+    rehearsalState.currentSince = 0;
+    rehearsalState.elapsedMs = 0;
+    rehearsalState.slideMs = [];
+    rehearsalState.visited = [];
+    ensureRehearsalSize();
+    renderTimeline();
+  }
+
+  function onPresenterSlideIndex(index, total) {
+    presenterState.index = Number.isInteger(index) ? index : 0;
+    presenterState.total = Number.isInteger(total) && total > 0 ? total : presenterState.total;
+    ensureRehearsalSize();
+    if (rehearsalState.active && presenterState.index !== rehearsalState.currentIndex) {
+      commitCurrentRehearsalSegment(Date.now());
+      rehearsalState.currentIndex = presenterState.index;
+      rehearsalState.currentSince = Date.now();
+      rehearsalState.visited[presenterState.index] = true;
+    } else if (rehearsalState.active) {
+      rehearsalState.visited[presenterState.index] = true;
+    }
+    renderTimeline();
+  }
+
+  function formatDuration(ms) {
+    const totalSec = Math.max(0, Math.floor((ms || 0) / 1000));
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    if (h > 0) return h + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+    return m + ':' + String(s).padStart(2, '0');
+  }
+
+  function getPlannedSlideMs() {
+    const s = derivePopupTimerState() || popupTimerState;
+    const total = presenterState.total || 0;
+    if (!s || !Number.isFinite(s.totalMs) || s.totalMs <= 0 || total <= 0) return 0;
+    return s.totalMs / total;
+  }
+
+  function renderTimeline() {
+    const list = document.getElementById('pp-timeline');
+    const status = document.getElementById('pp-rehearsal-status');
+    const toggle = document.getElementById('pp-rehearsal-toggle');
+    if (!list) return;
+
+    const total = presenterState.total || presenterState.titles.length || 0;
+    ensureRehearsalSize(total);
+    const plannedMs = getPlannedSlideMs();
+    const titles = presenterState.titles.length ? presenterState.titles : Array.from({ length: total }, (_, i) => 'Slide ' + (i + 1));
+
+    list.innerHTML = titles.map((title, i) => {
+      const state = i === presenterState.index ? 'current' : (i < presenterState.index ? 'past' : 'upcoming');
+      const actualMs = currentSlideElapsedMs(i);
+      let rehearsal = 'idle';
+      if (rehearsalState.active && i === rehearsalState.currentIndex) rehearsal = 'active';
+      else if (rehearsalState.visited[i] || actualMs > 0) rehearsal = 'visited';
+      const meta = actualMs > 0
+        ? 'actual ' + formatDuration(actualMs)
+        : (plannedMs > 0 ? 'plan ' + formatDuration(plannedMs) : 'not timed');
+      return '<li data-index="' + i + '" data-state="' + state + '" data-rehearsal="' + rehearsal + '">' +
+        '<button type="button">' +
+          '<span class="pp-timeline__num">' + String(i + 1).padStart(2, '0') + '</span>' +
+          '<span class="pp-timeline__title">' + escapeHtml(title) + '</span>' +
+          '<span class="pp-timeline__meta">' + escapeHtml(meta) + '</span>' +
+        '</button>' +
+      '</li>';
+    }).join('');
+
+    if (status) {
+      if (rehearsalState.active) {
+        status.textContent = 'Rehearsing · total ' + formatDuration(totalRehearsalElapsedMs());
+      } else if (hasRehearsalData()) {
+        status.textContent = 'Paused · total ' + formatDuration(totalRehearsalElapsedMs());
+      } else {
+        status.textContent = plannedMs > 0 ? 'Rehearsal off · plan ' + formatDuration(plannedMs) + '/slide' : 'Rehearsal off';
+      }
+    }
+    if (toggle) {
+      toggle.textContent = rehearsalState.active ? 'Pause rehearsal' : (hasRehearsalData() ? 'Resume rehearsal' : 'Start rehearsal');
+    }
   }
 
   // Resolve content for a slide index.
@@ -735,6 +937,8 @@
 
     const counter = document.getElementById('pp-counter');
     if (counter) counter.textContent = (d.index + 1) + ' / ' + d.total;
+    presenterState.titles = Array.isArray(d.titles) ? d.titles.slice() : [];
+    onPresenterSlideIndex(d.index, d.total);
     const list = document.getElementById('pp-list');
     if (list && d.titles) {
       list.innerHTML = d.titles.map((t, i) =>
@@ -759,6 +963,7 @@
 
     const counter = document.getElementById('pp-counter');
     if (counter) counter.textContent = (d.index + 1) + ' / ' + d.total;
+    onPresenterSlideIndex(d.index, d.total);
     const list = document.getElementById('pp-list');
     if (list) {
       [...list.querySelectorAll('li')].forEach((li, i) => {
@@ -898,11 +1103,13 @@
       });
       paintTimer(derivePopupTimerState());
       syncPopupTimerLoop();
+      renderTimeline();
       return;
     }
     popupTimerState = null;
     paintTimer(null);
     syncPopupTimerLoop();
+    renderTimeline();
   }
 
   function onPopupMessage(e) {
@@ -916,6 +1123,7 @@
         slideSeq = 0;
         timerSeq = 0;
         popupTimerState = null;
+        resetRehearsal();
         renderTimer(null);
         sendReady();
       }
@@ -952,6 +1160,7 @@
   }
 
   function onPopupUnload() {
+    if (rehearsalInterval) clearInterval(rehearsalInterval);
     postToPeer({ type: 'presenter.closing', sessionId: getSessionId() });
   }
 
@@ -1035,6 +1244,10 @@
     openPopup,
     isInPopup,
     sessionId: () => getSessionId(),
+    getRehearsalState: () => Object.assign({}, rehearsalState, {
+      elapsedMs: totalRehearsalElapsedMs(),
+      slideMs: rehearsalState.slideMs.map((_, i) => currentSlideElapsedMs(i)),
+    }),
   };
   window.PremiumPresenter = Object.assign(window.PremiumPresenter || {}, {
     postToPeer,

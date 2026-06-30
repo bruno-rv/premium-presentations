@@ -370,7 +370,21 @@ html[data-theme="cupertino"] .theme-visual::after {
 .kpi-val { font-family: var(--font-mono); font-size: 1.1rem; font-weight: 600; color: var(--accent-strong); }
 .kpi-lbl { font-size: 0.78rem; color: var(--text-dim); margin-top: 0.35rem; line-height: 1.35; }
 
-.slide--split .split { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(16px, 2.5vw, 28px); margin-top: 1rem; }
+.slide-3d-frame > .split,
+.slide > .split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: clamp(16px, 2.5vw, 28px);
+  align-items: start;
+  width: 100%;
+  max-width: min(100%, 1120px);
+  margin-top: 1rem;
+}
+.slide-3d-frame > .split > *,
+.slide > .split > * {
+  min-width: 0;
+}
+.slide--split .split { max-width: none; }
 .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1.25rem; }
 .panel h3 { font-size: 1.1rem; margin-bottom: 0.5rem; }
 .panel p, .panel ul { font-size: 0.92rem; color: var(--text-dim); line-height: 1.5; }
@@ -389,6 +403,13 @@ html[data-theme="cupertino"] .theme-visual::after {
 .data-table code {
   font-family: var(--font-mono); font-size: 0.75rem;
   background: var(--code-bg); color: var(--code-text); padding: 0.1rem 0.35rem; border-radius: 4px;
+}
+
+@media (max-width: 900px) {
+  .slide-3d-frame > .split,
+  .slide > .split {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 768px) {

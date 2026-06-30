@@ -24,6 +24,9 @@ Portable patterns for Premium Presentations decks. Use with `assets/shared/premi
 | **TERM** | Terminal window | CLI demos, commands, logs | `assets/templates/components/terminal-window.snippet.html` |
 | **RAIL** | Accent rail | Left-edge gradient rail on text-leaning content slides | CSS-only: `slide--rail` modifier |
 | **GLOSS** | Glossary term links | Inline term buttons with definition popup — use when a slide deck introduces many specialized terms (requires `premium-glossary.js`) | `assets/templates/components/glossary.snippet.html` |
+| **DP-LAY** | Design Power layouts | Executive summary, evidence wall, process ladder, decision matrix, before/after | `PremiumDesignPower.layouts.render(...)` |
+| **DP-VIZ** | Data visualization | Line, scatter, waterfall, funnel, heatmap, Sankey-style flow, KPI trend | `PremiumDesignPower.dataViz.render(...)` |
+| **DP-COMP** | Design Power components | Runtime-rendered checklist, stats, compare, timeline, code blocks | `PremiumDesignPower.components.render(...)` |
 
 ## Routing: content type → component
 
@@ -44,6 +47,8 @@ not yet used on the previous two slides.
 | Roadmap / curriculum / phases | **P14** journey path |
 | Readiness, closure checklist | **CHK** checklist grid |
 | Data / comparison matrix | `data-table` in `table-scroll` |
+| Data story / trend / funnel / matrix / flow volume | **DP-VIZ** data visualization |
+| Deck design decision / tradeoff / prioritized roadmap | **DP-LAY** decision matrix or evidence wall |
 | Text-leaning slide with aside | `content-grid` + `aside-card`, add **RAIL** |
 | Single takeaway / implication | **WHY** why panel (appended after the main visual) |
 
@@ -57,6 +62,22 @@ not yet used on the previous two slides.
 | `kpi-row` / `kpi` / `kpi-val` / `kpi-lbl` | Lightweight 3-up KPI grid (lighter than STAT) |
 | `table-scroll` + `data-table` | Scrollable themed data table |
 | `why-panel` | Bordered takeaway block with uppercase lead label and short body |
+
+## Visual Design Power (`premium-design-power.css/js`)
+
+Use `window.PremiumDesignPower` when a deck or the Studio needs generated,
+portable visual blocks rather than hand-authored markup.
+
+| API | Provides |
+|-----|----------|
+| `themeComposer.buildThemeCss(config)` | Sanitized `html[data-theme="..."]` CSS token block |
+| `themeComposer.applyTheme(config, document)` | Injects the token block and switches the active deck theme |
+| `components.render(name, data)` | Checklist, stats, compare, timeline, and code snippets |
+| `layouts.render(name, data)` | Executive summary, evidence wall, process ladder, before/after, decision matrix |
+| `density.analyzeSlide(slide)` | Word/reveal/card metrics plus density warnings |
+| `motionProfiles.apply(name, document)` | Deck-level motion variables and 3D defaults |
+| `dataViz.render(type, data)` | Line, scatter, waterfall, funnel, heatmap, Sankey-style flow, KPI trend |
+| `assets.audit(documentOrElement)` | Portable visual-asset inventory and warnings |
 
 ## Shared utilities (CSS only)
 

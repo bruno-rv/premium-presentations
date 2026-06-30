@@ -39,6 +39,23 @@ COMPONENT_MARKERS = (
     "aside-card",
     "data-table",
     "mermaid",
+    "dp-layout",
+    "dp-component",
+    "dp-viz",
+    "dp-layout--decision-matrix",
+    "dp-layout--evidence-wall",
+    "dp-layout--executive-summary",
+    "dp-layout--process-ladder",
+    "dp-component--checklist",
+    "dp-component--stats",
+    "dp-component--compare",
+    "dp-viz--line",
+    "dp-viz--scatter",
+    "dp-viz--waterfall",
+    "dp-viz--funnel",
+    "dp-viz--heatmap",
+    "dp-viz--sankey",
+    "dp-viz--kpi-trend",
 )
 
 # Slide-type modifiers that are exempt from the bare-slide rule.

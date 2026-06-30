@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="editorial" data-parallax="off" data-3d="off" data-motion-profile="cinematic" data-density-auto="on" data-theme-composer-preset="studio-focus">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Design Power Preview</title>
+<link rel="stylesheet" href="../shared/premium-themes.css">
+<link rel="stylesheet" href="../shared/premium-deck.css">
+<link rel="stylesheet" href="../shared/premium-components.css">
+<link rel="stylesheet" href="../shared/premium-design-power.css">
+<link rel="stylesheet" href="../shared/premium-diagrams.css">
+<link rel="stylesheet" href="../shared/premium-annotations.css">
+<link rel="stylesheet" href="../shared/premium-extras.css">
+<style>
+  .design-swatch-row {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+    width: min(100%, 720px);
+    margin-top: 22px;
+  }
+  .design-swatch {
+    min-height: 86px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--swatch);
+  }
+  .design-viz-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+    align-items: start;
+    margin-top: 20px;
+  }
+  .design-viz-grid .dp-viz {
+    width: 100%;
+  }
+  .asset-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 16px;
+  }
+  .asset-strip div {
+    min-height: 72px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background:
+      linear-gradient(135deg, color-mix(in srgb, var(--accent), transparent 72%), transparent),
+      var(--surface);
+  }
+</style>
+</head>
+<body>
+<div class="deck" id="deck">
+  <section class="slide slide--title" data-nav-title="Design Power">
+    <p class="slide__subtitle reveal">Visual Design Power</p>
+    <h1 class="slide__display reveal">Design system controls<br><span class="accent">inside the deck runtime</span></h1>
+    <p class="slide__body reveal" style="margin-top:1rem;max-width:42rem">Theme composer tokens, motion profiles, density signals, and portable asset rules now share one browser API.</p>
+    <div class="design-swatch-row reveal" aria-label="Theme composer swatches">
+      <div class="design-swatch" style="--swatch:#101820"></div>
+      <div class="design-swatch" style="--swatch:#182838"></div>
+      <div class="design-swatch" style="--swatch:#4a9eff"></div>
+      <div class="design-swatch" style="--swatch:#f7fafc"></div>
+      <div class="design-swatch" style="--swatch:#6ce5b1"></div>
+    </div>
+    <aside class="notes">Open with the promise: design power is now runtime-backed, not a pile of copied snippets.</aside>
+  </section>
+
+  <section class="slide" data-nav-title="Layouts">
+    <p class="slide__label reveal">Layouts + components</p>
+    <h2 class="slide__heading reveal">Reusable structure for design decisions</h2>
+    <div class="split reveal">
+      <div class="dp-layout dp-layout--decision-matrix">
+        <h3>Choose the next enhancement</h3>
+        <table>
+          <thead>
+            <tr><th>Option</th><th>Impact</th><th>Risk</th><th>Effort</th></tr>
+          </thead>
+          <tbody>
+            <tr><th>Theme composer</th><td>High</td><td>Low</td><td>Medium</td></tr>
+            <tr><th>Component lab</th><td>High</td><td>Low</td><td>Medium</td></tr>
+            <tr><th>Presenter polish</th><td>Medium</td><td>Low</td><td>Low</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="dp-component dp-component--checklist">
+        <h3>Visual gate</h3>
+        <ul>
+          <li><span aria-hidden="true"></span>Theme tokens are portable</li>
+          <li><span aria-hidden="true"></span>Motion profile is explicit</li>
+          <li><span aria-hidden="true"></span>Density check is low or medium</li>
+        </ul>
+      </div>
+    </div>
+    <aside class="notes">Use this slide to show the component playground output: a decision matrix paired with a checklist.</aside>
+  </section>
+
+  <section class="slide" data-nav-title="Data and assets">
+    <p class="slide__label reveal">Data visualization + assets</p>
+    <h2 class="slide__heading reveal">Charts and asset checks share the same vocabulary</h2>
+    <div class="design-viz-grid reveal">
+      <figure class="dp-viz dp-viz--line" role="img" aria-label="Design system adoption line chart">
+        <figcaption>Adoption</figcaption>
+        <svg viewBox="0 0 320 150" aria-hidden="true"><polyline points="0,130 106,92 213,48 320,12"></polyline></svg>
+      </figure>
+      <figure class="dp-viz dp-viz--funnel">
+        <figcaption>Pipeline</figcaption>
+        <ol>
+          <li style="--w:100%"><span>Ideas</span><strong>100</strong></li>
+          <li style="--w:64%"><span>Decks</span><strong>64</strong></li>
+          <li style="--w:33%"><span>Talks</span><strong>33</strong></li>
+        </ol>
+      </figure>
+      <figure class="dp-viz dp-viz--heatmap">
+        <figcaption>Fit</figcaption>
+        <div>
+          <section><strong>A</strong><span style="--heat:.20">1</span><span style="--heat:.60">3</span><span style="--heat:.80">4</span></section>
+          <section><strong>B</strong><span style="--heat:.40">2</span><span style="--heat:.90">5</span><span style="--heat:.60">3</span></section>
+        </div>
+      </figure>
+      <figure class="dp-viz dp-viz--sankey">
+        <figcaption>Flow</figcaption>
+        <div>
+          <span style="--weight:5"><b>Idea</b><i></i><b>Slide</b></span>
+          <span style="--weight:3"><b>Slide</b><i></i><b>Rehearsal</b></span>
+        </div>
+      </figure>
+    </div>
+    <div class="asset-strip reveal">
+      <div data-visual-asset="hero" data-asset-src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E"></div>
+      <div data-visual-asset="chart" data-asset-src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E"></div>
+      <div data-visual-asset="cover" data-asset-src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E"></div>
+    </div>
+    <aside class="notes">Close by showing that charts, generated visuals, and asset portability all surface through one design system.</aside>
+  </section>
+</div>
+<script src="../shared/premium-controller.js" defer></script>
+<script src="../shared/premium-design-power.js" defer></script>
+<script src="../shared/premium-controls.js" defer></script>
+<script src="../shared/premium-annotations.js" defer></script>
+<script src="../shared/premium-timer.js" defer></script>
+<script src="../shared/premium-tts.js" defer></script>
+<script src="../shared/premium-search.js" defer></script>
+<script src="../shared/premium-clicker.js" defer></script>
+<script src="../shared/premium-og-cover.js" defer></script>
+<script src="../shared/premium-slide-content.js" defer></script>
+<script src="../shared/premium-presenter.js" defer></script>
+<script src="../shared/slide-engine.js" defer></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    new SlideEngine();
+  });
+</script>
+</body>
+</html>

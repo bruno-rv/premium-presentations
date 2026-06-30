@@ -19,6 +19,7 @@ REQUIRED_CSS = (
     "premium-themes.css",
     "premium-deck.css",
     "premium-components.css",
+    "premium-design-power.css",
     "premium-diagrams.css",
     "premium-annotations.css",
     "premium-extras.css",
@@ -26,6 +27,7 @@ REQUIRED_CSS = (
 
 REQUIRED_JS = (
     "premium-controller.js",
+    "premium-design-power.js",
     "premium-controls.js",
     "premium-annotations.js",
     "premium-timer.js",

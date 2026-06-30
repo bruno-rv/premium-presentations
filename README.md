@@ -14,7 +14,7 @@ This repo is the Claude Code plugin package and the skill source. `SKILL.md` is 
 
 ![Content slide](docs/screenshot-slide.png)
 
-**Presenter view** — Dual-pane popup with current/next slide preview, expanded speaker notes, and a configurable countdown timer (set any duration from the tool panel, or define a default in deck settings):
+**Presenter view** — Dual-pane popup with current/next slide preview, expanded speaker notes, presenter timeline, rehearsal mode, and a configurable countdown timer (set any duration from the tool panel, or define a default in deck settings):
 
 ![Presenter view](docs/screenshot-presenter.png)
 
@@ -109,6 +109,14 @@ Open the studio:
 open skills/premium-presentations/assets/studio/index.html
 ```
 
+The Studio includes a Design Lab for theme composition, layout/component
+snippets, density checks, motion profiles, data visualizations, and visual
+asset audits. A three-slide feature preview lives at:
+
+```text
+skills/premium-presentations/assets/templates/preview-design-power.html
+```
+
 ## Layout
 
 ```text
@@ -133,7 +141,8 @@ premium-presentations/          ← repo root
 `assets/` contains bundled resources used by generated output: runtime CSS/JS,
 theme visuals, templates, snippets, and the studio page. Generated decks are
 portable standalone HTML bundles: runtime search, diagrams, PNG export,
-presenter mode, controls, and theme assets do not require CDNs or remote fonts.
+presenter mode, design-power components, controls, and theme assets do not
+require CDNs or remote fonts.
 The key committed paths are `assets/shared/`, `assets/studio/`, and
 `assets/templates/`.
 

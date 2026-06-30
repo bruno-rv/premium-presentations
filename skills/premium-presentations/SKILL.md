@@ -80,9 +80,13 @@ table lives in `references/runtime.md`. Conditional additions:
 - Mermaid diagram slides also include `premium-mermaid.js` and
   `premium-diagrams.css` handling.
 - Red decks also include `premium-red-brand.css` and `premium-red-chrome.js`.
+- Visual Design Power decks carry `premium-design-power.css/js` for theme
+  composer output, layout variants, density checks, motion profiles,
+  data visualization blocks, and visual asset audits.
 
 Runtime 3D modes (`off/ambient/tilt/depth`) cycle with the `3` key; author a
 deck default with `data-3d="<mode>"` on `<html>` — see `references/runtime.md`.
+Motion profile defaults can also be authored with `data-motion-profile="<name>"`.
 Generated decks are portable standalone HTML: do not add CDN scripts, remote
 font links, or runtime `http(s)` asset dependencies.
 

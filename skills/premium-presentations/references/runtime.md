@@ -22,6 +22,7 @@ at the bottom of each table.
 | `premium-themes.css` | `html[data-theme="..."]` CSS variables only; source of truth for discovered themes |
 | `premium-deck.css` | Deck structure, slide typography, tables, KPIs, scroll chrome, controls panel, 3D parallax background |
 | `premium-components.css` | Creative slide blocks: shimmer, compare-split, timeline, glass/code, journey SVG, bars, setup-flow, divider — see [components.md](components.md) |
+| `premium-design-power.css` | Theme-composer output, layout variants, design-power components, data-visualization blocks, motion-profile tokens, and density badges |
 | `premium-diagrams.css` | Diagram slide layout, Excalidraw-style canvas, zoom/pan viewport, Mermaid error panel |
 | `premium-annotations.css` | Marker tool and laser pointer styles |
 | `premium-extras.css` | Runtime chrome beyond layout: curtain, PDF export, embed mode, speaker timer pill, presenter popup UI, clicker status toast |
@@ -33,6 +34,7 @@ at the bottom of each table.
 |------|------|
 | `slide-engine.js` | `SlideEngine` — scroll-snap navigation and the `window.PremiumDeckControls` API; progress bar, dots (labels from heading/blockquote/cite/`data-nav-title`), counter, hints, keyboard/touch, `IntersectionObserver` for `.visible`/`.reveal`; dots auto-hide after 5s |
 | `premium-controller.js` | Two-window focus-ownership state machine (`deck`/`popup`/`none`) exposed as `window.PremiumController`; presenter/clicker windows coordinate through it |
+| `premium-design-power.js` | Visual Design Power API: theme composer, component playground renderers, layout variants, density analysis, motion profiles, data-viz renderers, and visual-asset audit |
 | `premium-controls.js` | Theme `<select>` + live switching, theme visual injection, 3D background, curtain, controls panel DOM, non-nav keyboard shortcuts |
 | `premium-annotations.js` | Marker tool + laser pointer |
 | `premium-timer.js` | Speaker countdown timer, pace tracking, alerts |
@@ -41,7 +43,7 @@ at the bottom of each table.
 | `premium-clicker.js` | WebHID clicker support + Shift+C keyboard binding |
 | `premium-og-cover.js` | PNG slide export for OG covers |
 | `premium-slide-content.js` | Pure functions over slide DOM: `getTitle(slide, i)`, `getNotesHtml(slide)`, `getSummaryHtml(slide)`; shared between deck and popup |
-| `premium-presenter.js` | Presenter popup lifecycle, BroadcastChannel/postMessage/localStorage bridge, presenter UI DOM |
+| `premium-presenter.js` | Presenter popup lifecycle, BroadcastChannel/postMessage/localStorage bridge, presenter UI DOM, timeline, and rehearsal tracking |
 | `premium-mermaid.js` | Conditional (Mermaid markup): portable local renderer with optional preloaded full Mermaid support, auto-fit, clip detection, zoom/pan, theme re-render |
 | `premium-journey.js` | Conditional (`.journey-stage` markup): SVG path journey animation |
 | `premium-flow.js` | Conditional (`.live-flow` markup): phase spotlight cycling over `.flow-node`/`.flow-arrow` ids from `data-flow-phases` JSON, shimmer arrow animation, banner label; pauses off-screen, static under reduced motion |
@@ -97,6 +99,18 @@ stays mirrored (`on` when mode ≠ `off`). All modes flatten under
 `prefers-reduced-motion` and in print/PDF.
 
 **Panel:** **`H`** hide/show; unhide pins panel open (`is-open`). **`3`** cycles 3D mode.
+
+**Presenter rehearsal:** the popup renders a horizontal timeline from the deck
+snapshot. Timeline items are clickable slide jumps, show planned per-slide time
+from the active timer, and switch to actual per-slide dwell while rehearsal is
+running. `R` toggles rehearsal; `Shift+R` clears the rehearsal session.
+
+**Design power:** `window.PremiumDesignPower` exposes seven authoring helpers:
+`themeComposer`, `components`, `layouts`, `density`, `motionProfiles`,
+`dataViz`, and `assets`. Decks can set `data-motion-profile="calm|cinematic|technical|workshop|pitch"`
+on `<html>`; the module applies timing CSS variables and a matching 3D default.
+Set `data-density-auto="on"` to annotate slides with `data-density-level`.
+Studio uses the same API for live snippet generation.
 
 ## Theme Extension Pattern
 
