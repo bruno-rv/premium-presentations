@@ -15,8 +15,8 @@ import sys
 from pathlib import Path
 
 TABLE_HEADER = (
-    "| # | Type | Title | Key Content | Visual Pattern | Why Panel | Speaker Notes |\n"
-    "|---|------|-------|-------------|----------------|-----------|--------------|"
+    "| # | Act | Type | Title | Key Content | Visual Pattern | Why Panel | Voiceover Beat | Speaker Notes |\n"
+    "|---|-----|------|-------|-------------|----------------|-----------|----------------|---------------|"
 )
 
 # Concrete component IDs rotated through content slides so every slot ships
@@ -78,9 +78,20 @@ def is_content_slide(i: int, count: int) -> bool:
     return not (i in (4, 8, 12) and count >= 12)
 
 
+def slide_act(i: int, count: int) -> int:
+    if i in (1, 2):
+        return 0
+    if count < 12:
+        return 1
+    # Dividers at 4/8/12 open the next act; slides before the first divider are act 1.
+    return 1 + sum(1 for d in (4, 8, 12) if i >= d)
+
+
 def slide_row(i: int, count: int, content_ordinal: int = 0) -> str:
+    beat = "TBD"
     if i == 1:
         title, typ, pattern = "Title", "Title", "slide--title"
+        beat = '"Welcome — here is what you will be able to do by the end."'
         notes = (
             "Welcome the audience and state the lesson goal in one sentence. "
             "Give a brief orientation: what they'll be able to do by the end. "
@@ -88,6 +99,7 @@ def slide_row(i: int, count: int, content_ordinal: int = 0) -> str:
         )
     elif i == 2:
         title, typ, pattern = "Hook", "Hook Quote", "slide--quote"
+        beat = '"Let this quote sit for a moment before we unpack it."'
         notes = (
             "Read the quote slowly — let it land before you comment on it. "
             "Share one sentence on why this quote frames the entire lesson. "
@@ -95,6 +107,7 @@ def slide_row(i: int, count: int, content_ordinal: int = 0) -> str:
         )
     elif i == count:
         title, typ, pattern = "Closing", "Closing Quote", "slide--quote"
+        beat = '"One takeaway above everything else — here it is."'
         notes = (
             "Read the closing quote aloud, then pause for three seconds. "
             "Restate the single most important takeaway from the session in your own words. "
@@ -102,6 +115,7 @@ def slide_row(i: int, count: int, content_ordinal: int = 0) -> str:
         )
     elif i in (4, 8, 12) and count >= 12:
         title, typ, pattern = f"Act break {i}", "Divider", "DIV+ divider-act"
+        beat = '"Quick breath — next act opens with a new question."'
         notes = (
             f"Signal the transition explicitly: 'We've covered Act {i // 4}, now into Act {i // 4 + 1}.' "
             "Take a breath here — let the audience absorb what came before. "
@@ -113,7 +127,8 @@ def slide_row(i: int, count: int, content_ordinal: int = 0) -> str:
         title, typ = f"Slide {i}", "Content"
         pattern = f"{suggestion} {PATTERN_NOTE}"
         notes = PATTERN_SPEAKER_NOTES[idx]
-    return f"| {i} | {typ} | {title} | TBD | {pattern} | TBD | {notes} |"
+    act = slide_act(i, count)
+    return f"| {i} | {act} | {typ} | {title} | TBD | {pattern} | TBD | {beat} | {notes} |"
 
 
 def slide_rows(count: int) -> list[str]:
@@ -134,7 +149,7 @@ def generate_spec(text: str, slug: str, title: str, count: int) -> str:
 
     table = TABLE_HEADER + "\n" + "\n".join(slide_rows(count))
     return re.sub(
-        r"\| # \| Type \| Title \| Key Content \| Visual Pattern \| Why Panel[^\n]*\n"
+        r"\| # \| Act \| Type \| Title \| Key Content \| Visual Pattern \| Why Panel[^\n]*\n"
         r"\|---\|[^\n]*\n"
         r"(?:\|[^\n]*\n)*",
         table.replace("\\", "\\\\") + "\n",

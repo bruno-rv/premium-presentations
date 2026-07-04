@@ -30,7 +30,15 @@ class SpecGeneratorTests(unittest.TestCase):
 
     def map_rows(self, spec: str) -> dict[int, str]:
         rows: dict[int, str] = {}
+        in_map = False
         for line in spec.splitlines():
+            if line.startswith("| # | Act |"):
+                in_map = True
+                continue
+            if not in_map:
+                continue
+            if not line.startswith("|"):
+                break
             match = re.match(r"^\|\s*(\d+)\s*\|", line)
             if match:
                 rows[int(match.group(1))] = line
@@ -48,7 +56,7 @@ class SpecGeneratorTests(unittest.TestCase):
         patterns = set()
         for row in content_rows:
             cells = [c.strip() for c in row.strip("|").split("|")]
-            pattern = cells[4]
+            pattern = cells[5]
             self.assertIn(self.gen.PATTERN_NOTE, pattern)
             patterns.add(pattern.replace(self.gen.PATTERN_NOTE, "").strip())
         self.assertGreaterEqual(len(patterns), 4)
@@ -77,8 +85,8 @@ class SpecGeneratorTests(unittest.TestCase):
         rows = self.map_rows(self.spec_14)
         for i, row in rows.items():
             cells = [c.strip() for c in row.strip("|").split("|")]
-            self.assertGreaterEqual(len(cells), 7, f"Row {i} has fewer than 7 cells")
-            notes_cell = cells[6]
+            self.assertGreaterEqual(len(cells), 9, f"Row {i} has fewer than 9 cells")
+            notes_cell = cells[8]
             self.assertTrue(
                 len(notes_cell) > 10,
                 f"Row {i} speaker notes cell is empty or too short: {notes_cell!r}",
@@ -90,7 +98,7 @@ class SpecGeneratorTests(unittest.TestCase):
             if not self.gen.is_content_slide(i, 14):
                 continue
             cells = [c.strip() for c in row.strip("|").split("|")]
-            notes_cell = cells[6]
+            notes_cell = cells[8]
             self.assertNotEqual(notes_cell, "TBD", f"Row {i} notes is still TBD")
             self.assertNotIn("add notes here", notes_cell.lower(), f"Row {i} has generic placeholder")
 
@@ -98,7 +106,7 @@ class SpecGeneratorTests(unittest.TestCase):
         rows = self.map_rows(self.spec_14)
         for fixed_slot in (1, 2, 14):
             cells = [c.strip() for c in rows[fixed_slot].strip("|").split("|")]
-            notes_cell = cells[6]
+            notes_cell = cells[8]
             self.assertTrue(len(notes_cell) > 10, f"Slot {fixed_slot} notes too short: {notes_cell!r}")
             self.assertNotIn("add notes here", notes_cell.lower())
 
