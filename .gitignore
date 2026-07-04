@@ -15,3 +15,6 @@ assets/decks/
 .codex/
 .cursor/
 .playwright-mcp/
+
+# Internal dev-planning artifacts — not part of the distributed plugin
+PLAN-*.md
