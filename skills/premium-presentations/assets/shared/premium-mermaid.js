@@ -263,6 +263,8 @@ function clearDiagramZoomBinding(wrap) {
   delete wrap._diagramZoomState;
   delete wrap._diagramZoomReset;
   delete wrap._diagramZoomStep;
+  delete wrap._diagramZoomPane;
+  delete wrap._diagramZoomResetBtn;
 }
 
 function isDiagramSlideActive(wrap) {
@@ -569,14 +571,14 @@ function syncZoomChrome(wrap, state) {
   wrap.dataset.diagramZoom = String(Math.round(state.zoom * 100) / 100);
   wrap.dataset.diagramZoomActive =
     state.zoom !== 1 || state.panX !== 0 || state.panY !== 0 ? '1' : '0';
-  const resetBtn = wrap.querySelector('[data-zoom="reset"]');
+  const resetBtn = wrap._diagramZoomResetBtn;
   if (resetBtn) {
     resetBtn.textContent = Math.round(state.zoom * 100) + '%';
   }
 }
 
 function applyDiagramTransform(wrap, state) {
-  const pane = wrap.querySelector('.diagram-zoom-pane');
+  const pane = wrap._diagramZoomPane;
   if (!pane) return;
   pane.style.transform =
     'translate(' + state.panX + 'px,' + state.panY + 'px) scale(' + state.zoom + ')';
@@ -602,6 +604,8 @@ function zoomDiagramAt(wrap, state, nextZoom, clientX, clientY) {
 function bindOneDiagramZoom(wrap) {
   const viewport = wrap.querySelector('.diagram-viewport');
   const toolbar = wrap.querySelector('.diagram-zoom-toolbar');
+  const pane = wrap.querySelector('.diagram-zoom-pane');
+  const resetBtn = wrap.querySelector('[data-zoom="reset"]');
   if (!viewport) {
     clearDiagramZoomBinding(wrap);
     return;
@@ -609,6 +613,8 @@ function bindOneDiagramZoom(wrap) {
 
   clearDiagramZoomBinding(wrap);
   wrap.dataset.diagramZoomBound = '1';
+  wrap._diagramZoomPane = pane;
+  wrap._diagramZoomResetBtn = resetBtn;
 
   const ac = new AbortController();
   wrap._diagramZoomAbort = ac;

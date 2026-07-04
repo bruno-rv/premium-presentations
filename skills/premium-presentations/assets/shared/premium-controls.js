@@ -291,8 +291,13 @@
     select.value = current;
   }
 
+  let bgCanvas = null;
+
   function mountBackground() {
-    if (document.querySelector('.premium-bg-3d')) return;
+    if (document.querySelector('.premium-bg-3d')) {
+      if (!bgCanvas) bgCanvas = document.querySelector('.premium-bg-3d__canvas');
+      return;
+    }
     const wrap = document.createElement('div');
     wrap.className = 'premium-bg-3d';
     wrap.setAttribute('aria-hidden', 'true');
@@ -303,6 +308,7 @@
       '<div class="premium-bg-3d__grid"></div>' +
       '</div>';
     document.body.prepend(wrap);
+    bgCanvas = wrap.firstElementChild;
   }
 
   function themeVisualBase() {
@@ -763,8 +769,7 @@
     if (raf) cancelAnimationFrame(raf);
     raf = 0;
     targetX = targetY = currentX = currentY = 0;
-    const canvas = document.querySelector('.premium-bg-3d__canvas');
-    if (canvas) canvas.style.transform = '';
+    if (bgCanvas) bgCanvas.style.transform = '';
     clearFrameVars(activeFrame);
   }
 
@@ -793,6 +798,7 @@
     targetX = (e.clientX / window.innerWidth - 0.5) * 2;
     targetY = (e.clientY / window.innerHeight - 0.5) * 2;
     settling = false;
+    retargetFrame();
     // The settle path stops the loop but keeps this listener attached so the
     // pointer returning revives motion without re-binding.
     if (!raf && motionAllowed()) {
@@ -806,17 +812,15 @@
     currentX += (targetX - currentX) * 0.08;
     currentY += (targetY - currentY) * 0.08;
     const mode = get3dMode();
-    const canvas = document.querySelector('.premium-bg-3d__canvas');
-    if (canvas && mode !== 'off') {
+    if (bgCanvas && mode !== 'off') {
       const rotY = currentX * 6;
       const rotX = -currentY * 5;
       const tx = currentX * 18;
       const ty = currentY * 12;
-      canvas.style.transform =
+      bgCanvas.style.transform =
         'perspective(1200px) rotateX(' + rotX + 'deg) rotateY(' + rotY + 'deg) translate3d(' + tx + 'px,' + ty + 'px,0)';
     }
     if (mode === 'tilt' || mode === 'depth') {
-      retargetFrame();
       if (activeFrame) {
         // ≤4° — small angles limit text rasterization blur.
         activeFrame.style.setProperty('--tilt-x', (-currentY * 4).toFixed(3) + 'deg');

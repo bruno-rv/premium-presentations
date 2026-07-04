@@ -41,6 +41,8 @@
   let audioCtx = null;
   let bellAt = new Set();
   let panel = null;
+  let timeEl = null;
+  let paceEl = null;
   let channel = null;
   let paceStatus = 'on-pace';
   let flashTimer = 0;
@@ -114,8 +116,8 @@
   function updatePanel() {
     if (!panel) return;
     const s = getState();
-    panel.querySelector('.premium-timer__time').textContent = fmt(s.remainingMs);
-    panel.querySelector('.premium-timer__pace').textContent = paceStatus.replace('-', ' ');
+    timeEl.textContent = fmt(s.remainingMs);
+    paceEl.textContent = paceStatus.replace('-', ' ');
     let state = 'ok';
     if (s.remainingMs < 30 * 1000) state = 'critical';
     else if (s.remainingMs < 2 * 60 * 1000) state = 'red';
@@ -192,6 +194,8 @@
     if (isInPopup()) return;
     if (panel || document.getElementById('premium-timer-panel')) {
       panel = document.getElementById('premium-timer-panel');
+      timeEl = panel.querySelector('.premium-timer__time');
+      paceEl = panel.querySelector('.premium-timer__pace');
       return;
     }
     panel = document.createElement('div');
@@ -202,6 +206,8 @@
       '<div class="premium-timer__time">--:--</div>' +
       '<div class="premium-timer__pace">ready</div>';
     document.body.appendChild(panel);
+    timeEl = panel.querySelector('.premium-timer__time');
+    paceEl = panel.querySelector('.premium-timer__pace');
     panel.addEventListener('click', () => running ? pause() : start());
   }
 

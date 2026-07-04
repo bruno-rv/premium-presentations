@@ -16,7 +16,6 @@ import argparse
 import base64
 import json
 import re
-import subprocess
 import sys
 from pathlib import Path
 
@@ -747,14 +746,17 @@ def main() -> int:
         return 0
 
     if re.search(r"<pre\s+class=[\"']mermaid[\"']", bundled, re.I):
-        result = subprocess.run(
-            [sys.executable, str(ROOT / "scripts" / "validate_deck.py"), str(out_path)],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            print(result.stdout, file=sys.stderr)
-            print(result.stderr, file=sys.stderr)
+        import contextlib
+        import io
+
+        from validate_deck import validate as validate_deck
+
+        out_buf, err_buf = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out_buf), contextlib.redirect_stderr(err_buf):
+            returncode = validate_deck(out_path)
+        if returncode != 0:
+            print(out_buf.getvalue(), file=sys.stderr)
+            print(err_buf.getvalue(), file=sys.stderr)
             print("Bundle wrote file but diagram validation failed.", file=sys.stderr)
             return 1
 

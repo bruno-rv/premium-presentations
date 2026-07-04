@@ -125,7 +125,7 @@ def validate_deck_variety(text: str) -> tuple[list[str], int]:
 
 
 def load_bundle(html_path: Path, text: str) -> str:
-    bundle = text
+    parts = [text]
     for href in re.findall(
         r'<link[^>]+rel=["\']stylesheet["\'][^>]+href=["\']([^"\']+)["\']',
         text,
@@ -133,11 +133,12 @@ def load_bundle(html_path: Path, text: str) -> str:
     ):
         css_path = (html_path.parent / href).resolve()
         if css_path.is_file():
-            bundle += "\n" + css_path.read_text(encoding="utf-8", errors="replace")
+            parts.append(css_path.read_text(encoding="utf-8", errors="replace"))
     for src in re.findall(r'<script[^>]+src=["\']([^"\']+)["\']', text, re.I):
         js_path = (html_path.parent / src).resolve()
         if js_path.is_file():
-            bundle += "\n" + js_path.read_text(encoding="utf-8", errors="replace")
+            parts.append(js_path.read_text(encoding="utf-8", errors="replace"))
+    bundle = "\n".join(parts)
     return augment_bundle_for_diagrams(text, bundle, html_path)
 
 
