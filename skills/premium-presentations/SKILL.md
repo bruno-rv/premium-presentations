@@ -58,11 +58,17 @@ If the hero moment requires a visual that no catalog pattern covers, invent one:
 name it, describe its structure in Design Directives > Signature visual, and flag
 it for catalog addition after review. Forcing a poor-fit catalog pattern is worse.
 
-**Step 3 — Validate**
+**Step 3 — Validate (hard gate)**
 
 ```bash
-python3 scripts/validate_deck.py assets/decks/<slug>/<slug>-slides.html assets/decks/<slug>/<slug>-slide-spec.md
+python3 scripts/deck_doctor.py assets/decks/<slug>/<slug>-slides.html assets/decks/<slug>/<slug>-slide-spec.md
 ```
+
+Exit 1 → fix the reported issues in deck or spec, re-bundle if the fix touched
+`assets/shared/` or `assets/templates/`, re-run. Repeat until exit 0. A deck is
+not done until deck doctor exits 0 — never deliver a deck with failing
+validation. `scripts/validate_deck.py` and `./scripts/validate_runtime_contract.py`
+stay available for isolated debugging of one check.
 
 Use lowercase hyphenated slugs. For unspecified themes, use the first theme
 returned by `list-themes.py` unless the topic clearly calls for another
@@ -128,21 +134,17 @@ Load only the reference needed for the current task.
 
 ## Validate
 
-These commands verify generated deck output (skill-package CI checks live in
-`README.md`). Before completion, run the checks that match the change:
-
-```bash
-./scripts/validate_runtime_contract.py
-python3 scripts/validate_deck.py assets/decks/<slug>/<slug>-slides.html assets/decks/<slug>/<slug>-slide-spec.md
-git diff --check
-```
-
-For shared runtime or template edits, re-bundle affected generated HTML files:
+Before completion, run the gate — see Step 3. For shared runtime or template
+edits, re-bundle affected generated HTML files first, then re-run the gate:
 
 ```bash
 python3 scripts/bundle_deck.py assets/decks/<slug>/<slug>-slides.html --in-place --force
-./scripts/validate_runtime_contract.py
+python3 scripts/deck_doctor.py assets/decks/<slug>/<slug>-slides.html assets/decks/<slug>/<slug>-slide-spec.md
 ```
+
+Fallback/debugging only, one check at a time: `./scripts/validate_runtime_contract.py`,
+`python3 scripts/validate_deck.py <deck.html> <spec.md>`, `git diff --check`
+(skill-package CI checks live in `README.md`).
 
 When changing browser behavior, run a browser smoke test for navigation, theme
 visuals, and controls.
