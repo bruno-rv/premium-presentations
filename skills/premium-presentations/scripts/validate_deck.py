@@ -305,8 +305,11 @@ def validate(html_path: Path, spec_path: str = "", strict_variety: bool = False)
         # spec has no "## Slide Map" heading at all, fall back to the old
         # ungated behavior so legacy specs without the heading still parse.
         # Heading match is case-insensitive so "## slide map" is still gated
-        # instead of silently dropping to the ungated legacy path.
-        has_slide_map_heading = bool(re.search(r"(?m)^##\s*Slide Map", spec, re.IGNORECASE))
+        # instead of silently dropping to the ungated legacy path. The `\b`
+        # after "Map" requires a boundary (end of heading, whitespace, or
+        # punctuation like "(") so "## Slide Map (draft)" still matches but
+        # "## Slide Mapping Notes" does not get misclassified as the section.
+        has_slide_map_heading = bool(re.search(r"(?m)^##\s*Slide Map\b", spec, re.IGNORECASE))
         in_map = False
         in_slide_map_section = False
         map_rows = []
@@ -318,7 +321,7 @@ def validate(html_path: Path, spec_path: str = "", strict_variety: bool = False)
             heading_match = re.match(r"^##(?!#)\s*(.*)", line)
             if heading_match:
                 entering_slide_map = bool(
-                    re.match(r"Slide Map", heading_match.group(1), re.IGNORECASE)
+                    re.match(r"Slide Map\b", heading_match.group(1), re.IGNORECASE)
                 )
                 if entering_slide_map:
                     # If a spec has more than one heading starting with

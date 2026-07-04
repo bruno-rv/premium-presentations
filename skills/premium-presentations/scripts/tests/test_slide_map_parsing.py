@@ -12,6 +12,12 @@ Also covers Codex round-3 findings on the "## Slide Map" section gate: a
 "###"+ subheading nested inside the section must not reset it, and the
 heading match must be case-insensitive so "## slide map" stays gated instead
 of falling back to the ungated legacy path.
+
+Also covers a Codex round-4 finding: the heading match was an unbounded
+prefix, so "## Slide Mapping Notes" wrongly matched as a "## Slide Map"
+section. Fixed by requiring a `\\b` boundary after "Map" (end of heading,
+whitespace, or punctuation), so "## Slide Map (draft)" still matches but
+"## Slide Mapping Notes" does not.
 """
 from __future__ import annotations
 
@@ -149,6 +155,44 @@ EARLY_HASH_TABLE_THEN_LOWERCASE_SLIDE_MAP = """## Evidence Data
 """
 
 
+SLIDE_MAPPING_NOTES_ONLY = """## Slide Mapping Notes
+
+| # | Note |
+|---|------|
+| 1 | ... |
+| 2 | ... |
+| 3 | ... |
+"""
+
+
+REAL_SLIDE_MAP_THEN_MAPPING_NOTES = """## Slide Map
+
+| # | Act | Type | Title | Key Content | Visual Pattern | Why Panel | Voiceover Beat | Speaker Notes |
+|---|-----|------|-------|--------------|-----------------|-----------|-----------------|-----------------|
+| 1 | I | title | Intro | ... | ... | ... | ... | ... |
+| 2 | I | content | A | ... | ... | ... | ... | ... |
+
+## Slide Mapping Notes
+
+| # | Note |
+|---|------|
+| 1 | ... |
+| 2 | ... |
+| 3 | ... |
+"""
+
+
+SLIDE_MAP_DRAFT_HEADING = """## Slide Map (draft)
+
+| # | Act | Type | Title | Key Content | Visual Pattern | Why Panel | Voiceover Beat | Speaker Notes |
+|---|-----|------|-------|--------------|-----------------|-----------|-----------------|-----------------|
+| 1 | I | title | Intro | ... | ... | ... | ... | ... |
+| 2 | III | closing | End | ... | ... | ... | ... | ... |
+
+## Next section
+"""
+
+
 class SlideMapHeaderParsingTests(unittest.TestCase):
     def test_new_9col_format_mismatch_fails(self) -> None:
         """New-format (9-col) spec claiming 5 slides vs. a 2-slide deck must FAIL,
@@ -194,6 +238,54 @@ class SlideMapHeaderParsingTests(unittest.TestCase):
         self.assertEqual(rc, 0, f"Expected clean pass, not a false slide-count mismatch:\n{out}")
         mismatch_lines = [l for l in out.splitlines() if "Slide count mismatch" in l]
         self.assertEqual([], mismatch_lines, f"Earlier table rows must not be counted:\n{out}")
+        self.assertIn("Spec expects: 2", out)
+
+    def test_slide_mapping_notes_heading_not_treated_as_slide_map_section(self) -> None:
+        """"## Slide Mapping Notes" must not match the "## Slide Map" heading
+        gate (Codex round-4: unbounded prefix match wrongly classified it as
+        a slide-map section). This spec has no real "## Slide Map" heading
+        anywhere, so has_slide_map_heading is correctly False and the
+        pre-existing *ungated legacy fallback* (see validate_deck.py ~line
+        304-306) takes over: any "| # |" table in the doc is still treated
+        as the slide map, exactly as it would be for any other legacy spec
+        that never adopted the "## Slide Map" heading convention. So the
+        mismatch here (5 slides vs. 3 parsed rows) is the correct, intended
+        fallback outcome — NOT evidence that "Mapping Notes" was
+        misclassified as a Slide Map section. Contrast with
+        test_slide_mapping_notes_after_real_slide_map_not_overwritten below,
+        which is where the heading-boundary fix actually changes the
+        outcome."""
+        html = _make_deck_html(slide_count=5)
+        rc, out = run_validate(html, SLIDE_MAPPING_NOTES_ONLY)
+        self.assertEqual(rc, 1, f"Expected the ungated legacy fallback to still catch the table:\n{out}")
+        self.assertIn("Spec expects: 3", out)
+        fail_lines = [l for l in out.splitlines() if "FAIL" in l and "Slide count mismatch" in l]
+        self.assertGreater(len(fail_lines), 0, f"Expected a slide count mismatch FAIL:\n{out}")
+
+    def test_slide_mapping_notes_after_real_slide_map_not_overwritten(self) -> None:
+        """A real "## Slide Map" section (2 rows, matching the 2-slide deck)
+        followed by an unrelated "## Slide Mapping Notes" section (3 rows)
+        must not let the "last heading wins" reset logic overwrite the real
+        section's rows — that requires "Slide Mapping Notes" to NOT be
+        classified as entering a Slide Map section. Before the round-4 fix,
+        the unbounded prefix match misclassified "Slide Mapping Notes" as a
+        second Slide Map section, so its rows replaced the real 2-row map
+        and produced a false "HTML has 2, spec slide map has 3" mismatch."""
+        html = _make_deck_html(slide_count=2)
+        rc, out = run_validate(html, REAL_SLIDE_MAP_THEN_MAPPING_NOTES)
+        self.assertEqual(rc, 0, f"Expected clean pass, not a false slide-count mismatch:\n{out}")
+        mismatch_lines = [l for l in out.splitlines() if "Slide count mismatch" in l]
+        self.assertEqual([], mismatch_lines, f"Mapping Notes rows must not overwrite the real slide map:\n{out}")
+        self.assertIn("Spec expects: 2", out)
+
+    def test_slide_map_draft_heading_still_matches(self) -> None:
+        """Quick sanity check for the round-4 boundary fix: "## Slide Map
+        (draft)" must still be recognized as a Slide Map heading — the
+        word-boundary requirement after "Map" must not be so strict that it
+        rejects trailing punctuation/parentheses."""
+        html = _make_deck_html(slide_count=2)
+        rc, out = run_validate(html, SLIDE_MAP_DRAFT_HEADING)
+        self.assertEqual(rc, 0, f"Expected '## Slide Map (draft)' to still be recognized:\n{out}")
         self.assertIn("Spec expects: 2", out)
 
 
