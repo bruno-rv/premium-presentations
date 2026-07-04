@@ -3,8 +3,8 @@
   "id": "premium-presentations",
   "name": "premium-presentations",
   "metadata": {
-    "description": "Generate magazine-quality dual-theme HTML slide decks with cursor-tracked 3D effects, click-to-expand modals, and a runtime depth slider.",
-    "version": "1.0.2"
+    "description": "Generate magazine-quality themed HTML slide decks with runtime theme switching, cursor-tracked 3D modes, presenter view with rehearsal, and offline diagrams.",
+    "version": "1.1.0"
   },
   "owner": {
     "name": "Bruno Rodrigues Veloso",
@@ -13,7 +13,7 @@
   "plugins": [
     {
       "name": "premium-presentations",
-      "description": "Premium HTML slide decks: dual themes, 3D tilt, expandable modals, self-contained single-file output.",
+      "description": "Premium HTML slide decks: theme switching, 3D tilt, presenter view with rehearsal, self-contained single-file output.",
       "source": "./",
       "category": "productivity"
     }
