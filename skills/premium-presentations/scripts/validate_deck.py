@@ -302,7 +302,12 @@ def validate(html_path: Path, spec_path: str = "", strict_variety: bool = False)
         in_map = False
         map_rows = []
         for line in spec.splitlines():
-            if "| # | Type |" in line or "| # | Type | Title |" in line:
+            # Slide-map header: "| # | Type | ... |" (legacy 5/7-col) or
+            # "| # | Act | Type | ... |" (current 9-col, see spec_generator.py
+            # and references/slide-spec-template.md). Match on the leading
+            # "| # |" column rather than a fixed full-header string so both
+            # layouts are recognized regardless of column count.
+            if re.match(r"^\|\s*#\s*\|", line):
                 in_map = True
                 continue
             if in_map and line.startswith("|") and re.match(r"^\|\s*\d+\s*\|", line):
