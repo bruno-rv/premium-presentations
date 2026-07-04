@@ -4,6 +4,26 @@ Claude skill for generating polished, browser-rendered HTML presentation decks.
 
 This repo is the Claude Code plugin package and the skill source. `SKILL.md` is the agent entry point; `README.md` is human-facing orientation only.
 
+## What You Get
+
+- **Portable HTML decks:** generated decks bundle runtime CSS/JS, theme assets,
+  search, diagrams, presenter mode, export helpers, and interaction controls
+  without CDN or remote-font dependencies.
+- **Presenter workflow:** press `Shift+P` to open the presenter popup with
+  current/next slide previews, speaker notes, a slide timeline, rehearsal mode,
+  timer controls, and a slide rail.
+- **Rehearsal tools:** the presenter timeline shows planned per-slide time from
+  the active timer, tracks actual dwell time while rehearsing, and lets speakers
+  jump directly to any slide.
+- **Visual Design Power:** the Studio and runtime expose theme composition,
+  layout variants, reusable design-power components, density checks, motion
+  profiles, data visualization blocks, and visual-asset audits.
+- **Speaker controls:** decks include keyboard/touch navigation, Cmd+K search,
+  annotations, laser pointer, curtain mode, TTS read-aloud, WebHID clicker
+  support, 3D modes, Mermaid/diagram helpers, and PNG/OG-cover export.
+- **Validation tooling:** deterministic scripts scaffold, bundle, validate,
+  and smoke-test decks and the shared runtime contract.
+
 ## Preview
 
 **Title slide** — Editorial dark theme with ambient 3D visual, slide rail, and tool panel:
@@ -117,6 +137,19 @@ asset audits. A three-slide feature preview lives at:
 skills/premium-presentations/assets/templates/preview-design-power.html
 ```
 
+Use presenter mode:
+
+```text
+Shift+P  open presenter popup
+R        start/pause/resume rehearsal in the popup
+Shift+R  clear rehearsal timings
+G        open/close the popup slide rail
+```
+
+The presenter popup is local to the speaker. Audience slides stay focused on
+the deck content while the popup handles notes, current/next previews, timeline
+jumps, rehearsal timing, and timer settings.
+
 ## Layout
 
 ```text
@@ -165,6 +198,7 @@ These commands test the skill package itself (deck-output validation lives in
 ```bash
 python3 skills/premium-presentations/scripts/tests/test_skill_layout.py
 python3 skills/premium-presentations/scripts/tests/test_runtime_contract.py
+python3 skills/premium-presentations/scripts/tests/test_design_power_contract.py
 python3 skills/premium-presentations/scripts/validate_runtime_contract.py
 npm --prefix skills/premium-presentations/scripts test
 npm --prefix skills/premium-presentations/scripts run test:presenter

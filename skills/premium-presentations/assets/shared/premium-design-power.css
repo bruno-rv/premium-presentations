@@ -1,12 +1,10 @@
 :root {
   --motion-reveal-ms: 420ms;
-  --motion-stagger-ms: 55ms;
   --motion-depth: 0.55;
 }
 
 html[data-motion-profile] .slide .reveal {
   transition-duration: var(--motion-reveal-ms);
-  transition-delay: calc(var(--reveal-index, 0) * var(--motion-stagger-ms));
 }
 
 html[data-motion-profile="cinematic"] .slide {
@@ -300,5 +298,15 @@ html[data-motion-profile="cinematic"] .slide {
   html[data-motion-profile] .slide .reveal {
     transition-duration: 1ms;
     transition-delay: 0ms;
+  }
+}
+
+@media (max-width: 768px) {
+  .dp-component--compare {
+    grid-template-columns: 1fr;
+  }
+
+  .dp-viz--heatmap section {
+    grid-template-columns: 48px repeat(3, minmax(0, 1fr));
   }
 }

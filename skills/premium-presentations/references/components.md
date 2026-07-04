@@ -24,7 +24,7 @@ Portable patterns for Premium Presentations decks. Use with `assets/shared/premi
 | **TERM** | Terminal window | CLI demos, commands, logs | `assets/templates/components/terminal-window.snippet.html` |
 | **RAIL** | Accent rail | Left-edge gradient rail on text-leaning content slides | CSS-only: `slide--rail` modifier |
 | **GLOSS** | Glossary term links | Inline term buttons with definition popup — use when a slide deck introduces many specialized terms (requires `premium-glossary.js`) | `assets/templates/components/glossary.snippet.html` |
-| **DP-LAY** | Design Power layouts | Executive summary, evidence wall, process ladder, decision matrix, before/after | `PremiumDesignPower.layouts.render(...)` |
+| **DP-LAY** | Design Power layouts | Executive summary, evidence wall, quote-proof, split-argument, teardown, architecture map, process ladder, case study, before/after, decision matrix (alias: benchmark table) | `PremiumDesignPower.layouts.render(...)` |
 | **DP-VIZ** | Data visualization | Line, scatter, waterfall, funnel, heatmap, Sankey-style flow, KPI trend | `PremiumDesignPower.dataViz.render(...)` |
 | **DP-COMP** | Design Power components | Runtime-rendered checklist, stats, compare, timeline, code blocks | `PremiumDesignPower.components.render(...)` |
 
@@ -73,7 +73,7 @@ portable visual blocks rather than hand-authored markup.
 | `themeComposer.buildThemeCss(config)` | Sanitized `html[data-theme="..."]` CSS token block |
 | `themeComposer.applyTheme(config, document)` | Injects the token block and switches the active deck theme |
 | `components.render(name, data)` | Checklist, stats, compare, timeline, and code snippets |
-| `layouts.render(name, data)` | Executive summary, evidence wall, process ladder, before/after, decision matrix |
+| `layouts.render(name, data)` | Executive summary, evidence wall, quote-proof, split-argument, teardown, architecture map, process ladder, case study, before/after, decision matrix (alias: benchmark table) |
 | `density.analyzeSlide(slide)` | Word/reveal/card metrics plus density warnings |
 | `motionProfiles.apply(name, document)` | Deck-level motion variables and 3D defaults |
 | `dataViz.render(type, data)` | Line, scatter, waterfall, funnel, heatmap, Sankey-style flow, KPI trend |

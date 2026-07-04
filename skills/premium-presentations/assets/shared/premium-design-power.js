@@ -5,35 +5,30 @@
     calm: {
       label: 'Calm',
       revealMs: 420,
-      staggerMs: 55,
       depth: 0.55,
       default3d: 'off',
     },
     cinematic: {
       label: 'Cinematic',
       revealMs: 760,
-      staggerMs: 95,
       depth: 1.35,
       default3d: 'depth',
     },
     technical: {
       label: 'Technical',
       revealMs: 280,
-      staggerMs: 35,
       depth: 0.35,
       default3d: 'tilt',
     },
     workshop: {
       label: 'Workshop',
       revealMs: 360,
-      staggerMs: 45,
       depth: 0.2,
       default3d: 'off',
     },
     pitch: {
       label: 'Pitch',
       revealMs: 540,
-      staggerMs: 70,
       depth: 0.95,
       default3d: 'card',
     },
@@ -148,7 +143,6 @@
     var root = doc.documentElement;
     root.setAttribute('data-motion-profile', profileName);
     root.style.setProperty('--motion-reveal-ms', profile.revealMs + 'ms');
-    root.style.setProperty('--motion-stagger-ms', profile.staggerMs + 'ms');
     root.style.setProperty('--motion-depth', String(profile.depth));
     if (MOTION_3D_MODES[profile.default3d]) {
       root.setAttribute('data-3d', profile.default3d);

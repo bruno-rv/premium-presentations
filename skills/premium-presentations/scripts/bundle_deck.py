@@ -53,6 +53,11 @@ def escape_for_html_script(content: str) -> str:
     return re.sub(r"</script>", r"<\\/script>", content, flags=re.I)
 
 
+def escape_for_html_style(content: str) -> str:
+    """Prevent `</style>` in a stylesheet from breaking out of the HTML style element."""
+    return re.sub(r"</style", r"<\\/style", content, flags=re.I)
+
+
 def strip_usage_docblock(content: str) -> str:
     """Remove leading /** ... */ blocks (often contain </script> in examples)."""
     return re.sub(r"^/\*\*[\s\S]*?\*/\s*\n", "", content, count=1)
@@ -71,7 +76,7 @@ def inline_stylesheets(html: str, html_path: Path) -> str:
             return match.group(0)
         if not css_path.is_file():
             raise FileNotFoundError(f"Stylesheet not found: {css_path}")
-        css = escape_for_html_script(read_text(css_path))
+        css = escape_for_html_style(read_text(css_path))
         return f"<style>\n/* --- {css_path.name} --- */\n{css}\n</style>"
 
     return re.sub(pattern, repl, html, flags=re.I)
@@ -85,6 +90,20 @@ def has_stylesheet_module(html: str, name: str) -> bool:
     return bool(re.search(link, html, re.I))
 
 
+def has_script_module(html: str, name: str) -> bool:
+    marker = r"<script>\s*/\*\s*---\s*" + re.escape(name) + r"\s*---\s*\*/"
+    if re.search(marker, html, re.I):
+        return True
+    src = r"<script\b[^>]*\bsrc=[\"'][^\"']*" + re.escape(name) + r"[\"'][^>]*>"
+    return bool(re.search(src, html, re.I))
+
+
+def missing_required_modules(html: str) -> list[str]:
+    missing = [name for name in REQUIRED_CSS if not has_stylesheet_module(html, name)]
+    missing += [name for name in REQUIRED_JS if not has_script_module(html, name)]
+    return missing
+
+
 def build_missing_required_styles(html: str) -> str:
     chunks = []
     for name in REQUIRED_CSS:
@@ -93,7 +112,7 @@ def build_missing_required_styles(html: str) -> str:
         css_path = SHARED / name
         if not css_path.is_file():
             raise FileNotFoundError(f"Required stylesheet not found: {css_path}")
-        css = escape_for_html_script(read_text(css_path))
+        css = escape_for_html_style(read_text(css_path))
         chunks.append(f"<style>\n/* --- {name} --- */\n{css}\n</style>")
     return "\n".join(chunks)
 
@@ -518,31 +537,55 @@ def bundle_html(html: str, html_path: Path, *, embed_visuals: bool = True) -> st
         and "/* --- slide-engine.js --- */" in html
     )
     has_embed = "/* --- theme-visuals-embed --- */" in html
-    if is_standalone and (has_embed or not embed_visuals):
-        return html  # already fully bundled
+    if is_standalone:
+        needs_embed = embed_visuals and not has_embed
+        missing = missing_required_modules(html)
+        if not needs_embed and not missing:
+            return html  # already fully bundled
 
-    if is_standalone and embed_visuals and not has_embed:
-        # Already-bundled deck that predates the embed step: inject the embed
-        # block now without touching the rest of the inlined content.  This
-        # mirrors the REQUIRED_JS auto-inject-on-re-bundle pattern.
-        warn_relative_visual_overrides(html)
-        embed_block = build_theme_visuals_embed(html)
-        if embed_block:
-            controls_marker = "/* --- premium-controls.js --- */"
-            idx = html.find(controls_marker)
-            if idx != -1:
-                # Back up to the start of the <script> tag that contains the marker.
-                script_start = html.rfind("<script>", 0, idx)
-                if script_start == -1:
-                    script_start = idx
-                html = html[:script_start] + embed_block + "\n" + html[script_start:]
-            else:
-                # premium-controls.js block not found; inject before </body>.
+        # Already-bundled deck that predates the embed step and/or a required
+        # module added after initial generation: retrofit only what's missing,
+        # without touching the rest of the already-inlined content (re-running
+        # the full pipeline below would re-append modules that are already
+        # inlined, since collect_script_srcs() finds no <script src> to mark
+        # them "seen").
+        if needs_embed:
+            warn_relative_visual_overrides(html)
+            embed_block = build_theme_visuals_embed(html)
+            if embed_block:
+                controls_marker = "/* --- premium-controls.js --- */"
+                idx = html.find(controls_marker)
+                if idx != -1:
+                    # Back up to the start of the <script> tag that contains the marker.
+                    script_start = html.rfind("<script>", 0, idx)
+                    if script_start == -1:
+                        script_start = idx
+                    html = html[:script_start] + embed_block + "\n" + html[script_start:]
+                else:
+                    # premium-controls.js block not found; inject before </body>.
+                    idx_body = html.lower().rfind("</body>")
+                    if idx_body == -1:
+                        html = html + "\n" + embed_block
+                    else:
+                        html = html[:idx_body] + embed_block + "\n" + html[idx_body:]
+
+        if missing:
+            html = inject_required_styles(html)
+            missing_js = [name for name in REQUIRED_JS if not has_script_module(html, name)]
+            if missing_js:
+                js_paths = []
+                for name in missing_js:
+                    p = SHARED / name
+                    if not p.is_file():
+                        raise FileNotFoundError(f"Required script not found: {p}")
+                    js_paths.append(p)
+                inline_js = build_classic_scripts(js_paths)
                 idx_body = html.lower().rfind("</body>")
                 if idx_body == -1:
-                    html = html + "\n" + embed_block
+                    html = html + "\n" + inline_js
                 else:
-                    html = html[:idx_body] + embed_block + "\n" + html[idx_body:]
+                    html = html[:idx_body] + inline_js + "\n" + html[idx_body:]
+
         return html
 
     # Capture conditional-module decisions from the ORIGINAL html BEFORE
@@ -587,9 +630,12 @@ def bundle_html(html: str, html_path: Path, *, embed_visuals: bool = True) -> st
     # Inject any REQUIRED_JS modules absent from old bundles (added after initial generation).
     for name in REQUIRED_JS:
         req_path = SHARED / name
-        if req_path.is_file() and req_path not in seen_paths:
-            seen_paths.add(req_path)
-            script_paths.append(req_path)
+        if req_path in seen_paths:
+            continue
+        if not req_path.is_file():
+            raise FileNotFoundError(f"Required script not found: {req_path}")
+        seen_paths.add(req_path)
+        script_paths.append(req_path)
     inline_js = build_classic_scripts(script_paths) if script_paths else ""
 
     # Warn about relative-path data-theme-visual-* overrides (non-fatal).

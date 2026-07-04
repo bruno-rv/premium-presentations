@@ -654,5 +654,71 @@ with patch.object(_common, 'SHARED', fake_shared), \\
         )
 
 
+class BundleStandaloneRetrofitTests(unittest.TestCase):
+    """A standalone deck bundled before a REQUIRED_CSS/REQUIRED_JS entry existed
+    must be retrofit with exactly the missing modules on a plain re-bundle
+    (no --force) — never silently skipped, never duplicated."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.bundler = load_bundler()
+
+    def _bundle(self, html: str) -> str:
+        deck_dir = ROOT / "assets" / "decks" / "_test_bundle_tmp"
+        deck_dir.mkdir(parents=True, exist_ok=True)
+        path = deck_dir / "deck.html"
+        try:
+            path.write_text(html, encoding="utf-8")
+            return bundle_string(self.bundler, html, path)
+        finally:
+            path.unlink(missing_ok=True)
+            try:
+                deck_dir.rmdir()
+            except OSError:
+                pass
+
+    def test_missing_required_module_is_retrofit_exactly_once(self) -> None:
+        fully_bundled = self._bundle(_make_minimal_deck())
+        stale = fully_bundled.replace(
+            "/* --- premium-design-power.js --- */",
+            "/* --- premium-design-power.js --- REMOVED FOR TEST --- */",
+        )
+        # Sanity: the marker regex used by has_script_module() must no longer match.
+        self.assertNotIn("/* --- premium-design-power.js --- */", stale)
+
+        retrofit = self.bundler.bundle_html(stale, ROOT / "assets" / "decks" / "_test_bundle_tmp" / "deck.html")
+
+        self.assertEqual(
+            retrofit.count("/* --- premium-design-power.js --- */"), 1,
+            "Missing required module must be injected exactly once on plain re-bundle",
+        )
+        for name in self.bundler.REQUIRED_JS:
+            self.assertEqual(
+                retrofit.count(f"/* --- {name} --- */"), 1,
+                f"{name} must appear exactly once after retrofit (no duplication)",
+            )
+
+    def test_already_complete_standalone_deck_is_unchanged(self) -> None:
+        fully_bundled = self._bundle(_make_minimal_deck())
+        retrofit = self.bundler.bundle_html(
+            fully_bundled, ROOT / "assets" / "decks" / "_test_bundle_tmp" / "deck.html"
+        )
+        self.assertEqual(retrofit, fully_bundled)
+
+
+class EscapeForHtmlStyleTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.bundler = load_bundler()
+
+    def test_style_close_tag_is_neutralized(self) -> None:
+        malicious = "body{color:red}/* </style><script>alert(1)</script> */"
+        escaped = self.bundler.escape_for_html_style(malicious)
+        self.assertNotIn("</style", escaped)
+
+    def test_case_insensitive(self) -> None:
+        escaped = self.bundler.escape_for_html_style("</STYLE>")
+        self.assertNotIn("</style", escaped.lower())
+
+
 if __name__ == "__main__":
     unittest.main()

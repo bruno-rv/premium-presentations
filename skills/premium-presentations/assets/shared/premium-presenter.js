@@ -826,7 +826,7 @@
     const plannedMs = getPlannedSlideMs();
     const titles = presenterState.titles.length ? presenterState.titles : Array.from({ length: total }, (_, i) => 'Slide ' + (i + 1));
 
-    list.innerHTML = titles.map((title, i) => {
+    const timelineItemState = (i) => {
       const state = i === presenterState.index ? 'current' : (i < presenterState.index ? 'past' : 'upcoming');
       const actualMs = currentSlideElapsedMs(i);
       let rehearsal = 'idle';
@@ -835,14 +835,34 @@
       const meta = actualMs > 0
         ? 'actual ' + formatDuration(actualMs)
         : (plannedMs > 0 ? 'plan ' + formatDuration(plannedMs) : 'not timed');
-      return '<li data-index="' + i + '" data-state="' + state + '" data-rehearsal="' + rehearsal + '">' +
-        '<button type="button">' +
-          '<span class="pp-timeline__num">' + String(i + 1).padStart(2, '0') + '</span>' +
-          '<span class="pp-timeline__title">' + escapeHtml(title) + '</span>' +
-          '<span class="pp-timeline__meta">' + escapeHtml(meta) + '</span>' +
-        '</button>' +
-      '</li>';
-    }).join('');
+      return { state, rehearsal, meta };
+    };
+
+    // Update existing <li> nodes in place when the slide count is unchanged —
+    // a full innerHTML rebuild every second (during rehearsal) resets scroll
+    // position and drops focus/hover on the timeline list.
+    const existing = list.querySelectorAll('li');
+    if (existing.length === titles.length) {
+      titles.forEach((_, i) => {
+        const li = existing[i];
+        const { state, rehearsal, meta } = timelineItemState(i);
+        li.dataset.state = state;
+        li.dataset.rehearsal = rehearsal;
+        const metaEl = li.querySelector('.pp-timeline__meta');
+        if (metaEl) metaEl.textContent = meta;
+      });
+    } else {
+      list.innerHTML = titles.map((title, i) => {
+        const { state, rehearsal, meta } = timelineItemState(i);
+        return '<li data-index="' + i + '" data-state="' + state + '" data-rehearsal="' + rehearsal + '">' +
+          '<button type="button">' +
+            '<span class="pp-timeline__num">' + String(i + 1).padStart(2, '0') + '</span>' +
+            '<span class="pp-timeline__title">' + escapeHtml(title) + '</span>' +
+            '<span class="pp-timeline__meta">' + escapeHtml(meta) + '</span>' +
+          '</button>' +
+        '</li>';
+      }).join('');
+    }
 
     if (status) {
       if (rehearsalState.active) {
