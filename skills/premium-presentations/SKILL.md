@@ -97,7 +97,10 @@ Generated decks are portable standalone HTML: do not add CDN scripts, remote
 font links, or runtime `http(s)` asset dependencies.
 
 Run `./scripts/validate_runtime_contract.py` after template, theme, bundler,
-or shared runtime edits.
+or shared runtime edits — required, not optional: it checks the repo-wide
+contract (templates + every deck under `assets/`), which `deck_doctor.py`
+does not, since doctor only scopes runtime-contract checks to the one deck
+passed on its command line.
 
 ## Reference Files
 
@@ -134,17 +137,20 @@ Load only the reference needed for the current task.
 
 ## Validate
 
-Before completion, run the gate — see Step 3. For shared runtime or template
-edits, re-bundle affected generated HTML files first, then re-run the gate:
+Before completion, run the gate — see Step 3. For shared runtime, theme, or
+template edits, re-bundle affected generated HTML files first (so bundled
+decks carry the new runtime, not a stale one), then run
+`./scripts/validate_runtime_contract.py` (repo-wide; see Runtime Contract) —
+a required pass for those edits, not a fallback — then re-run the gate:
 
 ```bash
 python3 scripts/bundle_deck.py assets/decks/<slug>/<slug>-slides.html --in-place --force
+./scripts/validate_runtime_contract.py
 python3 scripts/deck_doctor.py assets/decks/<slug>/<slug>-slides.html assets/decks/<slug>/<slug>-slide-spec.md
 ```
 
-Fallback/debugging only, one check at a time: `./scripts/validate_runtime_contract.py`,
-`python3 scripts/validate_deck.py <deck.html> <spec.md>`, `git diff --check`
-(skill-package CI checks live in `README.md`).
+Debugging only, one check at a time: `python3 scripts/validate_deck.py <deck.html> <spec.md>`,
+`git diff --check` (skill-package CI checks live in `README.md`).
 
 When changing browser behavior, run a browser smoke test for navigation, theme
 visuals, and controls.

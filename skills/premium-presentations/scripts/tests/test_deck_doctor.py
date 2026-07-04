@@ -88,6 +88,19 @@ class DeckDoctorTests(unittest.TestCase):
         self.assertIn("[✗] validate_deck", out)
         self.assertIn("issue(s)", out)
 
+    def test_nonexistent_spec_path_exits_one_with_error(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            html_path = Path(tmp) / "deck.html"
+            html_path.write_text(_make_deck_html(2), encoding="utf-8")
+            bogus_spec = Path(tmp) / "typo-spec.md"
+            buf = io.StringIO()
+            with contextlib.redirect_stderr(buf):
+                rc = deck_doctor.main([str(html_path), str(bogus_spec)])
+            err = buf.getvalue()
+        self.assertEqual(rc, 1, f"Expected exit 1 for missing spec:\n{err}")
+        self.assertIn("Spec not found", err)
+        self.assertIn(str(bogus_spec), err)
+
 
 if __name__ == "__main__":
     unittest.main()

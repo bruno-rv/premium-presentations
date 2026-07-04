@@ -23,6 +23,30 @@ usage() {
 
 SRC="$(cd "$(dirname "$SRC")" && pwd)/$(basename "$SRC")"
 
+serve_lan_fallback() {
+  DIR="$(dirname "$SRC")"
+  FILE="$(basename "$SRC")"
+  IP="$(ipconfig getifaddr en0 2>/dev/null || hostname -I 2>/dev/null | awk '{print $1}' || hostname)"
+
+  PORT=""
+  for candidate in 8000 8001 8002 8003 8004 8005 8006 8007 8008 8009 8010; do
+    if ! python3 -c "import socket,sys; s=socket.socket(); s.settimeout(0.2); sys.exit(0 if s.connect_ex(('127.0.0.1', int(sys.argv[1]))) else 1)" "$candidate"; then
+      continue
+    fi
+    PORT="$candidate"
+    break
+  done
+  if [[ -z "$PORT" ]]; then
+    echo "No free port in range 8000-8010 on localhost." >&2
+    exit 1
+  fi
+
+  echo "Serving $DIR on your local network."
+  echo "Share this URL (same Wi-Fi only): http://$IP:$PORT/$FILE"
+  echo "Press Ctrl-C to stop."
+  cd "$DIR" && exec python3 -m http.server "$PORT"
+}
+
 if command -v vercel >/dev/null 2>&1; then
   TMPDIR="$(mktemp -d)"
   trap 'rm -rf "$TMPDIR"' EXIT
@@ -35,7 +59,8 @@ if command -v vercel >/dev/null 2>&1; then
     else
       echo "$OUTPUT" >&2
     fi
-    exit 1
+    echo "Falling back to local network sharing." >&2
+    serve_lan_fallback
   fi
 
   URL="$(grep -Eo 'https://[a-zA-Z0-9.-]+\.vercel\.app' <<<"$OUTPUT" | tail -1)"
@@ -49,12 +74,4 @@ if command -v vercel >/dev/null 2>&1; then
 fi
 
 echo "vercel CLI not found; falling back to local network sharing."
-DIR="$(dirname "$SRC")"
-FILE="$(basename "$SRC")"
-IP="$(ipconfig getifaddr en0 2>/dev/null || hostname -I 2>/dev/null | awk '{print $1}' || hostname)"
-PORT=8000
-
-echo "Serving $DIR on your local network."
-echo "Share this URL (same Wi-Fi only): http://$IP:$PORT/$FILE"
-echo "Press Ctrl-C to stop."
-cd "$DIR" && exec python3 -m http.server "$PORT"
+serve_lan_fallback

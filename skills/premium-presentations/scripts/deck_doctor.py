@@ -50,6 +50,9 @@ def main(argv: list[str]) -> int:
     if not html_path.is_file():
         print(f"Not found: {html_path}", file=sys.stderr)
         return 1
+    if spec_path and not Path(spec_path).is_file():
+        print(f"Spec not found: {spec_path}", file=sys.stderr)
+        return 1
 
     text = html_path.read_text(encoding="utf-8", errors="replace")
     bundle = validate_deck.load_bundle(html_path, text)
