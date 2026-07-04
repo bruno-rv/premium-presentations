@@ -90,6 +90,25 @@ NEW_FORMAT_5_ROWS = """## Slide Map
 """
 
 
+EARLY_HASH_TABLE_THEN_SLIDE_MAP = """## Evidence Data
+
+| # | Fact |
+|---|------|
+| 1 | Some fact |
+| 2 | Another fact |
+| 3 | Third fact |
+
+## Slide Map
+
+| # | Act | Type | Title | Key Content | Visual Pattern | Why Panel | Voiceover Beat | Speaker Notes |
+|---|-----|------|-------|--------------|-----------------|-----------|-----------------|-----------------|
+| 1 | I | title | Intro | ... | ... | ... | ... | ... |
+| 2 | III | closing | End | ... | ... | ... | ... | ... |
+
+## Next section
+"""
+
+
 class SlideMapHeaderParsingTests(unittest.TestCase):
     def test_new_9col_format_mismatch_fails(self) -> None:
         """New-format (9-col) spec claiming 5 slides vs. a 2-slide deck must FAIL,
@@ -101,6 +120,18 @@ class SlideMapHeaderParsingTests(unittest.TestCase):
         self.assertGreater(len(fail_lines), 0, f"Expected a slide count mismatch FAIL:\n{out}")
         no_rows_warn = [l for l in out.splitlines() if "no slide map rows parsed" in l]
         self.assertEqual([], no_rows_warn, f"Slide map rows should have parsed:\n{out}")
+
+    def test_earlier_hash_table_not_counted_as_slide_map(self) -> None:
+        """An earlier table with a "| # |" header column (e.g. "| # | Fact |" in
+        an Evidence Data section) must not flip in_map early — only the real
+        "## Slide Map" section's rows should count toward the expected slide
+        count. A 2-slide deck matching the real 2-row slide map must PASS."""
+        html = _make_deck_html(slide_count=2)
+        rc, out = run_validate(html, EARLY_HASH_TABLE_THEN_SLIDE_MAP)
+        self.assertEqual(rc, 0, f"Expected clean pass, not a false slide-count mismatch:\n{out}")
+        mismatch_lines = [l for l in out.splitlines() if "Slide count mismatch" in l]
+        self.assertEqual([], mismatch_lines, f"Earlier table rows must not be counted:\n{out}")
+        self.assertIn("Spec expects: 2", out)
 
 
 if __name__ == "__main__":

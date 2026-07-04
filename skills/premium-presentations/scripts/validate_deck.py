@@ -299,21 +299,32 @@ def validate(html_path: Path, spec_path: str = "", strict_variety: bool = False)
     expected = None
     if spec_path and Path(spec_path).is_file():
         spec = Path(spec_path).read_text(encoding="utf-8", errors="replace")
+        # Scope the "| # |" header match to the "## Slide Map" section so an
+        # earlier unrelated table with a "#" first column (e.g. "| # | Fact |")
+        # can't flip in_map early and have its rows miscounted as slides. If a
+        # spec has no "## Slide Map" heading at all, fall back to the old
+        # ungated behavior so legacy specs without the heading still parse.
+        has_slide_map_heading = bool(re.search(r"(?m)^##\s*Slide Map", spec))
         in_map = False
+        in_slide_map_section = False
         map_rows = []
         for line in spec.splitlines():
+            heading_match = re.match(r"^##\s*(.*)", line)
+            if heading_match:
+                in_slide_map_section = bool(re.match(r"Slide Map", heading_match.group(1)))
+                in_map = False
+                continue
             # Slide-map header: "| # | Type | ... |" (legacy 5/7-col) or
             # "| # | Act | Type | ... |" (current 9-col, see spec_generator.py
             # and references/slide-spec-template.md). Match on the leading
             # "| # |" column rather than a fixed full-header string so both
             # layouts are recognized regardless of column count.
             if re.match(r"^\|\s*#\s*\|", line):
-                in_map = True
+                if not has_slide_map_heading or in_slide_map_section:
+                    in_map = True
                 continue
             if in_map and line.startswith("|") and re.match(r"^\|\s*\d+\s*\|", line):
                 map_rows.append(line)
-            elif in_map and line.startswith("## ") and "Slide Map" not in line:
-                break
         if map_rows:
             expected = len(map_rows)
             if expected != slides:
