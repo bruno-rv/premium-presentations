@@ -304,14 +304,29 @@ def validate(html_path: Path, spec_path: str = "", strict_variety: bool = False)
         # can't flip in_map early and have its rows miscounted as slides. If a
         # spec has no "## Slide Map" heading at all, fall back to the old
         # ungated behavior so legacy specs without the heading still parse.
-        has_slide_map_heading = bool(re.search(r"(?m)^##\s*Slide Map", spec))
+        # Heading match is case-insensitive so "## slide map" is still gated
+        # instead of silently dropping to the ungated legacy path.
+        has_slide_map_heading = bool(re.search(r"(?m)^##\s*Slide Map", spec, re.IGNORECASE))
         in_map = False
         in_slide_map_section = False
         map_rows = []
         for line in spec.splitlines():
-            heading_match = re.match(r"^##\s*(.*)", line)
+            # `(?!#)` restricts this to exact-depth "##" headings — a "###"+
+            # subheading nested inside "## Slide Map" (e.g. "### Act 1") must
+            # not match here and reset in_slide_map_section, or the whole
+            # section's rows silently stop being counted.
+            heading_match = re.match(r"^##(?!#)\s*(.*)", line)
             if heading_match:
-                in_slide_map_section = bool(re.match(r"Slide Map", heading_match.group(1)))
+                entering_slide_map = bool(
+                    re.match(r"Slide Map", heading_match.group(1), re.IGNORECASE)
+                )
+                if entering_slide_map:
+                    # If a spec has more than one heading starting with
+                    # "Slide Map" (e.g. a leftover "## Slide Map (draft)"
+                    # before the real one), only the last such section's rows
+                    # count — earlier ones are discarded here.
+                    map_rows = []
+                in_slide_map_section = entering_slide_map
                 in_map = False
                 continue
             # Slide-map header: "| # | Type | ... |" (legacy 5/7-col) or

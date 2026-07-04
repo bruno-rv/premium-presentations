@@ -7,6 +7,11 @@ references/slide-spec-template.md emit a 9-column slide-map header
 legacy 5/7-column layout ("| # | Type | ... |"). Against a new-format spec,
 zero map rows parsed and a real deck/spec slide-count mismatch silently
 degraded from a FAIL to a "no slide map rows parsed" WARN.
+
+Also covers Codex round-3 findings on the "## Slide Map" section gate: a
+"###"+ subheading nested inside the section must not reset it, and the
+heading match must be case-insensitive so "## slide map" stays gated instead
+of falling back to the ungated legacy path.
 """
 from __future__ import annotations
 
@@ -109,6 +114,41 @@ EARLY_HASH_TABLE_THEN_SLIDE_MAP = """## Evidence Data
 """
 
 
+SUBHEADING_INSIDE_SLIDE_MAP = """## Slide Map
+
+### Act 1
+
+| # | Act | Type | Title | Key Content | Visual Pattern | Why Panel | Voiceover Beat | Speaker Notes |
+|---|-----|------|-------|--------------|-----------------|-----------|-----------------|-----------------|
+| 1 | I | title | Intro | ... | ... | ... | ... | ... |
+
+### Act 2
+
+| 2 | III | closing | End | ... | ... | ... | ... | ... |
+
+## Next section
+"""
+
+
+EARLY_HASH_TABLE_THEN_LOWERCASE_SLIDE_MAP = """## Evidence Data
+
+| # | Fact |
+|---|------|
+| 1 | Some fact |
+| 2 | Another fact |
+| 3 | Third fact |
+
+## slide map
+
+| # | Act | Type | Title | Key Content | Visual Pattern | Why Panel | Voiceover Beat | Speaker Notes |
+|---|-----|------|-------|--------------|-----------------|-----------|-----------------|-----------------|
+| 1 | I | title | Intro | ... | ... | ... | ... | ... |
+| 2 | III | closing | End | ... | ... | ... | ... | ... |
+
+## Next section
+"""
+
+
 class SlideMapHeaderParsingTests(unittest.TestCase):
     def test_new_9col_format_mismatch_fails(self) -> None:
         """New-format (9-col) spec claiming 5 slides vs. a 2-slide deck must FAIL,
@@ -128,6 +168,29 @@ class SlideMapHeaderParsingTests(unittest.TestCase):
         count. A 2-slide deck matching the real 2-row slide map must PASS."""
         html = _make_deck_html(slide_count=2)
         rc, out = run_validate(html, EARLY_HASH_TABLE_THEN_SLIDE_MAP)
+        self.assertEqual(rc, 0, f"Expected clean pass, not a false slide-count mismatch:\n{out}")
+        mismatch_lines = [l for l in out.splitlines() if "Slide count mismatch" in l]
+        self.assertEqual([], mismatch_lines, f"Earlier table rows must not be counted:\n{out}")
+        self.assertIn("Spec expects: 2", out)
+
+    def test_subheading_inside_slide_map_not_broken(self) -> None:
+        """A "###" subheading nested inside "## Slide Map" (e.g. "### Act 1")
+        must not reset in_slide_map_section — it's content within the
+        section, not a sibling section. Both rows across both subheadings
+        must still be counted."""
+        html = _make_deck_html(slide_count=2)
+        rc, out = run_validate(html, SUBHEADING_INSIDE_SLIDE_MAP)
+        self.assertEqual(rc, 0, f"Expected clean pass, not a false slide-count mismatch:\n{out}")
+        no_rows_warn = [l for l in out.splitlines() if "no slide map rows parsed" in l]
+        self.assertEqual([], no_rows_warn, f"Slide map rows should have parsed:\n{out}")
+        self.assertIn("Spec expects: 2", out)
+
+    def test_lowercase_slide_map_heading_honored(self) -> None:
+        """A lowercase "## slide map" heading must still be recognized as the
+        Slide Map heading (case-insensitive), keeping the gate active so an
+        earlier unrelated "| # | Fact |" table isn't counted alongside it."""
+        html = _make_deck_html(slide_count=2)
+        rc, out = run_validate(html, EARLY_HASH_TABLE_THEN_LOWERCASE_SLIDE_MAP)
         self.assertEqual(rc, 0, f"Expected clean pass, not a false slide-count mismatch:\n{out}")
         mismatch_lines = [l for l in out.splitlines() if "Slide count mismatch" in l]
         self.assertEqual([], mismatch_lines, f"Earlier table rows must not be counted:\n{out}")
