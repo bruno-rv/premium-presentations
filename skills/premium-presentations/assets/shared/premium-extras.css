@@ -466,6 +466,16 @@ body.premium-presenter-popup #deck {
 }
 .premium-presenter__no-notes { color: #a8a29e; font-style: italic; }
 
+/* ── teleprompter / distance-reading mode (R2.4) ───────────────────────────── */
+.premium-presenter__notes-body.pp-notes--teleprompter {
+  font-size: clamp(1.6rem, 3.2vw, 2.6rem);
+  line-height: 1.7;
+  letter-spacing: 0.01em;
+  color: #fff;
+}
+/* Reclaim the previews pane while distance-reading (optional, R2.4 SHOULD). */
+.premium-presenter-popup:has(.pp-notes--teleprompter) .pp-previews { display: none; }
+
 /* ── rail — overlay drawer ─────────────────────────────────────────────────── */
 .premium-presenter__rail {
   position: fixed;
@@ -536,9 +546,9 @@ body.premium-presenter-popup #deck {
 .premium-presenter__timeline {
   grid-area: timeline;
   min-height: 0;
-  max-height: 96px;
+  max-height: 190px;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 6px;
   background: #fff;
   border: 1px solid #e7e5e4;
@@ -630,6 +640,17 @@ body.premium-presenter-popup #deck {
   font-size: 10px;
   line-height: 1.2;
 }
+.pp-timeline__delta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #a8a29e;
+  font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  font-size: 10px;
+  line-height: 1.2;
+}
+.pp-timeline__delta:empty { display: none; }
 .premium-presenter__timeline-list li[data-state="current"] button {
   background: #1c1917;
   border-color: #1c1917;
@@ -638,7 +659,8 @@ body.premium-presenter-popup #deck {
 .premium-presenter__timeline-list li[data-state="current"] .pp-timeline__title {
   color: #fafaf9;
 }
-.premium-presenter__timeline-list li[data-state="current"] .pp-timeline__meta {
+.premium-presenter__timeline-list li[data-state="current"] .pp-timeline__meta,
+.premium-presenter__timeline-list li[data-state="current"] .pp-timeline__delta {
   color: #d6d3d1;
 }
 .premium-presenter__timeline-list li[data-state="past"] button {
@@ -649,6 +671,56 @@ body.premium-presenter-popup #deck {
 }
 .premium-presenter__timeline-list li[data-rehearsal="visited"]:not([data-state="current"]) button {
   box-shadow: inset 0 -3px 0 #ca8a04;
+}
+
+/* ── suggested-budget block (R1.4/R1.5, ADR-5) ────────────────────────────── */
+.premium-presenter__budgets {
+  min-width: 0;
+  border-top: 1px solid #e7e5e4;
+  padding-top: 6px;
+  overflow: hidden;
+}
+.pp-budget__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #78716c;
+  font-weight: 600;
+}
+.pp-budget__copy {
+  border: 1px solid #d6d3d1;
+  border-radius: 6px;
+  background: #fafaf9;
+  color: #44403c;
+  font: inherit;
+  text-transform: none;
+  letter-spacing: normal;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+.pp-budget__copy:hover {
+  background: #f5f5f4;
+  border-color: #a8a29e;
+}
+.premium-presenter__budgets pre {
+  margin: 4px 0 0;
+  max-height: 72px;
+  overflow: auto;
+  font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  font-size: 10px;
+  line-height: 1.4;
+  color: #44403c;
+  white-space: pre;
+}
+.premium-presenter__budgets[data-empty="true"] pre {
+  color: #a8a29e;
+  font-style: italic;
+  white-space: normal;
 }
 
 /* ── timer bar ─────────────────────────────────────────────────────────────── */

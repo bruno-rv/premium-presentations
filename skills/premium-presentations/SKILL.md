@@ -157,6 +157,59 @@ Debugging only, one check at a time: `python3 scripts/validate_deck.py <deck.htm
 When changing browser behavior, run a browser smoke test for navigation, theme
 visuals, and controls.
 
+## Partial Regeneration (editing an existing deck)
+
+The only sanctioned editing path is regenerating from an edited spec — never a
+WYSIWYG-style hand-edit of the bundled HTML. When a spec change is small
+(one or a few Slide Map rows), regenerate only the affected
+`<section class="slide">` blocks instead of rebuilding the whole deck.
+
+**Step 1 — Identity.** A slide's identity is its Slide Map row **index,
+confirmed by title** (no stable `data-slide-id`; none exists in this repo).
+Diff the edited spec against the prior spec to find which row(s) changed,
+then confirm by title that the row at that index in the current deck HTML is
+the same slide before touching it.
+
+**Step 2 — Regenerate only the changed sections.** Re-emit just the
+`<section class="slide" id="slide-N">…</section>` block(s) for the changed
+row(s), following the same spec → deck markup contract used to generate the
+deck originally (components table, speaker notes as the last child, etc. —
+see Build Guidance). Leave every other `<section>` byte-for-byte untouched.
+
+**Step 3 — Re-bundle only if shared runtime was touched.** A content-only
+edit (Key Content, copy, a chart's data) never touches
+`assets/shared/` or `assets/templates/`, so no re-bundle is needed. If the
+edit also required a shared runtime or template change, re-bundle per
+Validate above before gating.
+
+**Step 4 — Gate (the safety net).** Slide-count parity (Slide Map rows ==
+`<section class="slide">` count, checked by `validate_deck.py`) plus a full
+`deck_doctor.py` exit 0 are what make a partial regen safe without stable
+IDs or a diff script:
+
+```bash
+python3 scripts/deck_doctor.py assets/decks/<slug>/<slug>-slides.html assets/decks/<slug>/<slug>-slide-spec.md
+```
+
+Non-zero exit → the partial edit broke something; fix and re-gate. Do not
+ship a partial regen with a failing gate — same standard as a full build.
+
+**Worked example (`assets/examples/rag-vector-graph/`):** Slide Map row 15 is
+"Retrieval benchmark" (Content, BAR bar-chart — keyword vs vector vs hybrid
+recall@10). Editing only that row's Key Content in
+`rag-vector-graph-slide-spec.md` and applying this workflow means: locate row
+15 by index, confirm the title on the 15th `<section class="slide">` block in
+`rag-vector-graph-slides.html` matches "Retrieval benchmark", regenerate only
+that section, skip the re-bundle (a Key Content edit does not touch shared
+runtime), then run `deck_doctor.py` on the deck/spec pair — the HTML diff is
+confined to the 15th `<section>`, slide-count parity holds (20 == 20), and
+the gate exits 0.
+
+**Revisit trigger:** if partial regens become frequent enough to justify an
+automated diff script, a stable `data-slide-id` attribute becomes a
+prerequisite for that script — until then, index+title is sufficient and
+adding IDs now would be premature (YAGNI).
+
 ## Distribute (PDF, OG cover, handout)
 
 Three CLI scripts turn a bundled, gate-passing deck into shareable artifacts.

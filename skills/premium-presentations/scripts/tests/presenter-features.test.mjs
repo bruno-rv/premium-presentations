@@ -125,6 +125,17 @@ test('rehearsal mode tracks elapsed time per slide in the presenter timeline', a
   reset.click();
   assert.equal(toggle.textContent, 'Start rehearsal');
   assert.match(status.textContent, /Rehearsal off/);
+  // v1.3: "Clear" only wipes the in-memory current run — pauseRehearsal
+  // already persisted it, so the read path (ADR-2) restores it from
+  // localStorage and the timeline keeps showing the last completed run.
+  firstItem = popup.window.document.querySelector('#pp-timeline li[data-index="0"]');
+  assert.match(firstItem.textContent, /actual 1:01/);
+
+  // "Clear history" (new, distinct button) wipes the persisted runs too —
+  // only then does the timeline fall back to no actual data.
+  const clearHistory = popup.window.document.getElementById('pp-rehearsal-clear-history');
+  assert.ok(clearHistory, 'clear-history button should be mounted');
+  clearHistory.click();
   firstItem = popup.window.document.querySelector('#pp-timeline li[data-index="0"]');
   assert.doesNotMatch(firstItem.textContent, /actual/);
 });

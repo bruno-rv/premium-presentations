@@ -42,6 +42,7 @@
   let popupTimerInterval = 0;
   let popupTimerState = null;
   let rehearsalInterval = 0;
+  let rehearsalRunTs = 0;   // identity of the in-progress run; 0 = none open
   let fallbackPrompt = null;
   let openingTimer = 0;
   let postTransportInstalled = false;
@@ -451,6 +452,11 @@
           <span id="pp-rehearsal-status">Rehearsal off</span>
         </div>
         <ol class="premium-presenter__timeline-list" id="pp-timeline"></ol>
+        <div class="premium-presenter__budgets" id="pp-budget-block" data-empty="true">
+          <div class="pp-budget__head">Suggested budgets (median of your runs)
+            <button type="button" class="pp-budget__copy">Copy</button></div>
+          <pre></pre>
+        </div>
       </section>
       <nav class="premium-presenter__rail" id="pp-rail" aria-label="Slide navigation" data-open="false">
         <button type="button" class="premium-presenter__rail-close" id="pp-rail-close" aria-label="Close slide list">✕</button>
@@ -469,6 +475,8 @@
         <button type="button" id="pp-timer-reset" class="pp-timer-btn">Reset</button>
         <button type="button" id="pp-rehearsal-toggle" class="pp-timer-btn">Start rehearsal</button>
         <button type="button" id="pp-rehearsal-reset" class="pp-timer-btn">Clear</button>
+        <button type="button" id="pp-rehearsal-export" class="pp-timer-btn">Export JSON</button>
+        <button type="button" id="pp-rehearsal-clear-history" class="pp-timer-btn">Clear history</button>
       </div>
       <div class="premium-presenter__timer-settings" id="pp-timer-settings" hidden>
         <label>Mode
@@ -485,6 +493,8 @@
     document.body.appendChild(root);
 
     bindPopupEvents();
+    loadTeleprompterRate();
+    renderSuggestedBudgets();
     window.addEventListener('resize', recomputePreviewScales);
     sendReady();
     if (heartbeatTimer) clearInterval(heartbeatTimer);
@@ -606,8 +616,12 @@
 
     const rehearsalToggle = document.getElementById('pp-rehearsal-toggle');
     const rehearsalReset = document.getElementById('pp-rehearsal-reset');
+    const rehearsalExport = document.getElementById('pp-rehearsal-export');
+    const rehearsalClearHistory = document.getElementById('pp-rehearsal-clear-history');
     if (rehearsalToggle) rehearsalToggle.addEventListener('click', toggleRehearsal);
     if (rehearsalReset) rehearsalReset.addEventListener('click', resetRehearsal);
+    if (rehearsalExport) rehearsalExport.addEventListener('click', exportRehearsalJson);
+    if (rehearsalClearHistory) rehearsalClearHistory.addEventListener('click', clearRehearsalHistory);
 
     // Timer settings inputs.
     const minutesInput = document.getElementById('pp-minutes');
@@ -696,6 +710,10 @@
       if (key === 'r') { e.preventDefault(); toggleRehearsal(); return; }
       if (key === 't' && e.shiftKey) { e.preventDefault(); sendControl('timer.toggle'); return; }
       if (key === 't') { e.preventDefault(); sendControl('theme.cycle'); return; }
+      if (key === 'm') { e.preventDefault(); toggleTeleprompterMode(); return; }
+      if (key === 'p') { e.preventDefault(); toggleTeleprompterScroll(); return; }
+      if (e.code === 'BracketRight') { e.preventDefault(); nudgeTeleprompterRate(+1); return; }
+      if (e.code === 'BracketLeft')  { e.preventDefault(); nudgeTeleprompterRate(-1); return; }
     });
   }
 
@@ -761,6 +779,7 @@
       clearInterval(rehearsalInterval);
       rehearsalInterval = 0;
     }
+    persistRun();     // primary commit boundary (ADR-2)
     renderTimeline();
   }
 
@@ -774,6 +793,7 @@
       clearInterval(rehearsalInterval);
       rehearsalInterval = 0;
     }
+    rehearsalRunTs = 0;
     rehearsalState.active = false;
     rehearsalState.currentIndex = presenterState.index || 0;
     rehearsalState.currentSince = 0;
@@ -782,6 +802,218 @@
     rehearsalState.visited = [];
     ensureRehearsalSize();
     renderTimeline();
+  }
+
+  // ─── Rehearsal persistence (R1) ─────────────────────────────────────────────
+  // A run is the full contents of rehearsalState for one start→stop session,
+  // identified by rehearsalRunTs (assigned on the first start after a reset).
+  // Committed on pauseRehearsal (primary boundary) and onPopupUnload
+  // (crash-safety); upsert-by-ts makes pause→resume→pause and
+  // beforeunload+unload double-fire idempotent (ADR-2).
+
+  const REHEARSAL_PREFIX = 'premium-rehearsal:';
+  const REHEARSAL_MAX_RUNS = 10;
+
+  function rehearsalKey() { return REHEARSAL_PREFIX + location.pathname; }
+
+  // A run is well-formed only if every field downstream code dereferences
+  // without a guard is present and of the right shape: {ts, totalMs, slideMs[]}.
+  // Malformed entries (hand-edited localStorage, storage corruption, a future
+  // schema mismatch) are dropped silently at read time so persistRun's
+  // `r.ts === ts` and eligibleRuns'/medianOf's `r.slideMs[...]` never see them.
+  function isValidRehearsalRun(r) {
+    if (!r || typeof r !== 'object' || Array.isArray(r)) return false;
+    if (!Number.isFinite(r.ts) || !Number.isFinite(r.totalMs)) return false;
+    if (!Array.isArray(r.slideMs)) return false;
+    return r.slideMs.every((ms) => Number.isFinite(ms) && ms >= 0);
+  }
+
+  function readRehearsalStore() {
+    try {
+      const raw = localStorage.getItem(rehearsalKey());
+      if (!raw) return { version: 1, slideCount: presenterState.total || 0, runs: [] };
+      const o = JSON.parse(raw);
+      if (!o || o.version !== 1 || !Array.isArray(o.runs)) throw 0;
+      o.runs = o.runs.filter(isValidRehearsalRun);   // sanitize: drop malformed runs, keep valid ones
+      return o;
+    } catch (_) {
+      return { version: 1, slideCount: presenterState.total || 0, runs: [] };
+    }
+  }
+
+  function writeRehearsalStore(store) {
+    try {
+      store.slideCount = presenterState.total || store.slideCount || 0;
+      if (store.runs.length > REHEARSAL_MAX_RUNS) {
+        store.runs = store.runs.slice(-REHEARSAL_MAX_RUNS);   // evict oldest
+      }
+      localStorage.setItem(rehearsalKey(), JSON.stringify(store));
+    } catch (_) {}   // localStorage unavailable → degrade to in-memory (assumption logged)
+  }
+
+  function pinnedTimerTotalMs() {
+    const s = derivePopupTimerState() || popupTimerState;
+    return (s && Number.isFinite(s.totalMs)) ? s.totalMs : 0;
+  }
+
+  // Upsert-by-ts: pause→resume→pause and beforeunload+unload are idempotent.
+  function persistRun() {
+    commitCurrentRehearsalSegment(Date.now());
+    if (!hasRehearsalData()) return;                 // pollution guard
+    const store = readRehearsalStore();
+    if (!rehearsalRunTs) {
+      let ts = Date.now();
+      // Same-ms collision with a DIFFERENT run (stubbed clocks, fast automation):
+      // bump until unique so the second run appends instead of replacing the first.
+      while (store.runs.some((r) => r.ts === ts)) ts++;
+      rehearsalRunTs = ts;
+    }
+    const run = {
+      ts: rehearsalRunTs,
+      totalMs: pinnedTimerTotalMs(),                 // planned basis at commit
+      slideMs: rehearsalState.slideMs.slice(),
+    };
+    const at = store.runs.findIndex((r) => r.ts === rehearsalRunTs);
+    if (at >= 0) store.runs[at] = run; else store.runs.push(run);
+    writeRehearsalStore(store);
+  }
+
+  function clearRehearsalHistory() {                 // "Clear history" (R1.5)
+    try { localStorage.removeItem(rehearsalKey()); } catch (_) {}
+    renderTimeline();
+  }
+
+  function eligibleRuns(store) {
+    const n = presenterState.total || 0;
+    return (store.runs || []).filter((r) => Array.isArray(r.slideMs) && r.slideMs.length === n);
+  }
+
+  function medianOf(values) {                        // integer ms; even → round of mid-pair
+    const v = values.slice().sort((a, b) => a - b);
+    const n = v.length;
+    if (n === 0) return 0;
+    const mid = n >> 1;
+    return (n % 2) ? v[mid] : Math.round((v[mid - 1] + v[mid]) / 2);
+  }
+
+  function perSlideMedians(store) {
+    const runs = eligibleRuns(store);
+    const n = presenterState.total || 0;
+    if (!runs.length) return null;                   // caller renders the fallback note
+    const out = new Array(n);
+    for (let j = 0; j < n; j++) out[j] = medianOf(runs.map((r) => r.slideMs[j] || 0));
+    return out;
+  }
+
+  // Per-slide actual for a slide index, sourced from live rehearsal if active
+  // (or paused-with-data), else from the most-recent persisted run eligible
+  // for THIS deck's slide count (ADR-2/ADR-3).
+  function displayedSlideMs(index) {
+    if (rehearsalState.active || hasRehearsalData()) return currentSlideElapsedMs(index);
+    const runs = eligibleRuns(readRehearsalStore());
+    const last = runs[runs.length - 1];
+    return (last && last.slideMs[index]) || 0;
+  }
+
+  function formatSignedDuration(ms) {
+    return (ms < 0 ? '-' : '+') + formatDuration(Math.abs(ms || 0));
+  }
+
+  function buildBudgetMarkdown(medians) {
+    const titles = presenterState.titles;
+    const rows = medians.map((ms, i) =>
+      '| ' + (i + 1) + ' | ' + (titles[i] || ('Slide ' + (i + 1))) +
+      ' | ' + formatDuration(ms) + ' | ' + ms + ' |');
+    return '| # | Title | Budget (mm:ss) | Budget (ms) |\n' +
+           '|---|-------|----------------|-------------|\n' + rows.join('\n');
+  }
+
+  function renderSuggestedBudgets() {                // R1.4, ADR-5
+    const host = document.getElementById('pp-budget-block');
+    if (!host) return;
+    const pre = host.querySelector('pre');
+    const medians = perSlideMedians(readRehearsalStore());
+    if (!medians) {
+      host.dataset.empty = 'true';
+      if (pre) pre.textContent = 'No comparable runs for this deck length yet.';
+      return;
+    }
+    host.dataset.empty = 'false';
+    const md = buildBudgetMarkdown(medians);
+    if (pre) pre.textContent = md;
+    const copyBtn = host.querySelector('.pp-budget__copy');
+    if (copyBtn) {
+      copyBtn.onclick = () => {
+        try { navigator.clipboard.writeText(md); } catch (_) {}
+      };
+    }
+  }
+
+  function exportRehearsalJson() {                   // "Export JSON" (R1.5)
+    const store = readRehearsalStore();
+    const medians = perSlideMedians(store);
+    const payload = JSON.stringify(Object.assign({}, store, { budgets: medians || [] }), null, 2);
+    try { navigator.clipboard.writeText(payload); } catch (_) {}
+    return payload;
+  }
+
+  // ─── Teleprompter mode (R2) ──────────────────────────────────────────────────
+  // Distance-reading mode toggle (`m`, CSS class only, no motion) + manual
+  // constant-speed scroll (`p` start/pause, `[`/`]` speed). Reduced-motion
+  // invariant (AT2): nothing calls startTeleprompterScroll except the `p`
+  // keypress — mode-on never starts motion, and prefersReducedMotion() exists
+  // to gate any future auto-advance idea; the default state is always paused.
+
+  const TELEPROMPTER_KEY = 'premium-teleprompter';
+  const RATE_MIN = 10, RATE_MAX = 240, RATE_STEP = 10, TP_TICK_MS = 50;
+  const teleprompterState = { mode: false, scrolling: false, rate: 40 /* px/s */, timer: 0 };
+
+  function prefersReducedMotion() {
+    try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; }
+    catch (_) { return false; }
+  }
+
+  function loadTeleprompterRate() {
+    try {
+      const r = parseFloat(localStorage.getItem(TELEPROMPTER_KEY));
+      if (Number.isFinite(r) && r > 0) teleprompterState.rate = Math.min(RATE_MAX, Math.max(RATE_MIN, r));
+    } catch (_) {}
+  }
+
+  function saveTeleprompterRate() {
+    try { localStorage.setItem(TELEPROMPTER_KEY, String(teleprompterState.rate)); } catch (_) {}
+  }
+
+  function toggleTeleprompterMode() {                // key 'm' — NO motion here (AT2)
+    teleprompterState.mode = !teleprompterState.mode;
+    const notes = document.getElementById('pp-notes');
+    if (notes) notes.classList.toggle('pp-notes--teleprompter', teleprompterState.mode);
+    if (!teleprompterState.mode) stopTeleprompterScroll();
+  }
+
+  function startTeleprompterScroll() {                // key 'p' — the EXPLICIT start
+    if (teleprompterState.scrolling) return;
+    const notes = document.getElementById('pp-notes');
+    if (!notes) return;
+    teleprompterState.scrolling = true;                // explicit user gesture; allowed even
+                                                         //  under reduced-motion (never AUTO)
+    const step = () => { notes.scrollTop += teleprompterState.rate * (TP_TICK_MS / 1000); };
+    teleprompterState.timer = setInterval(step, TP_TICK_MS);
+  }
+
+  function stopTeleprompterScroll() {
+    teleprompterState.scrolling = false;
+    if (teleprompterState.timer) { clearInterval(teleprompterState.timer); teleprompterState.timer = 0; }
+  }
+
+  function toggleTeleprompterScroll() {               // key 'p'
+    if (teleprompterState.scrolling) stopTeleprompterScroll(); else startTeleprompterScroll();
+  }
+
+  function nudgeTeleprompterRate(dir) {                // keys '[' / ']'
+    teleprompterState.rate = Math.min(RATE_MAX, Math.max(RATE_MIN,
+      teleprompterState.rate + dir * RATE_STEP));
+    saveTeleprompterRate();
   }
 
   function onPresenterSlideIndex(index, total) {
@@ -828,14 +1060,19 @@
 
     const timelineItemState = (i) => {
       const state = i === presenterState.index ? 'current' : (i < presenterState.index ? 'past' : 'upcoming');
-      const actualMs = currentSlideElapsedMs(i);
+      const actualMs = displayedSlideMs(i);       // live if rehearsing, else restored (ADR-2)
       let rehearsal = 'idle';
       if (rehearsalState.active && i === rehearsalState.currentIndex) rehearsal = 'active';
       else if (rehearsalState.visited[i] || actualMs > 0) rehearsal = 'visited';
       const meta = actualMs > 0
         ? 'actual ' + formatDuration(actualMs)
         : (plannedMs > 0 ? 'plan ' + formatDuration(plannedMs) : 'not timed');
-      return { state, rehearsal, meta };
+      // Delta vs uniform average (R1.3/R1.6). Rendered only inside this <li>'s
+      // own delta span — #pp-timer-pace (the timer's live pace pill) is never
+      // read or written here (ADR-6).
+      const deltaMs = (plannedMs > 0 && actualMs > 0) ? Math.round(actualMs - plannedMs) : 0;
+      const delta = deltaMs !== 0 ? formatSignedDuration(deltaMs) + ' vs avg' : '';
+      return { state, rehearsal, meta, delta };
     };
 
     // Update existing <li> nodes in place when the slide count is unchanged —
@@ -845,20 +1082,28 @@
     if (existing.length === titles.length) {
       titles.forEach((_, i) => {
         const li = existing[i];
-        const { state, rehearsal, meta } = timelineItemState(i);
+        const { state, rehearsal, meta, delta } = timelineItemState(i);
         li.dataset.state = state;
         li.dataset.rehearsal = rehearsal;
         const metaEl = li.querySelector('.pp-timeline__meta');
         if (metaEl) metaEl.textContent = meta;
+        let deltaEl = li.querySelector('.pp-timeline__delta');
+        if (!deltaEl && metaEl) {
+          deltaEl = document.createElement('span');
+          deltaEl.className = 'pp-timeline__delta';
+          metaEl.insertAdjacentElement('afterend', deltaEl);
+        }
+        if (deltaEl) deltaEl.textContent = delta;
       });
     } else {
       list.innerHTML = titles.map((title, i) => {
-        const { state, rehearsal, meta } = timelineItemState(i);
+        const { state, rehearsal, meta, delta } = timelineItemState(i);
         return '<li data-index="' + i + '" data-state="' + state + '" data-rehearsal="' + rehearsal + '">' +
           '<button type="button">' +
             '<span class="pp-timeline__num">' + String(i + 1).padStart(2, '0') + '</span>' +
             '<span class="pp-timeline__title">' + escapeHtml(title) + '</span>' +
             '<span class="pp-timeline__meta">' + escapeHtml(meta) + '</span>' +
+            '<span class="pp-timeline__delta">' + escapeHtml(delta) + '</span>' +
           '</button>' +
         '</li>';
       }).join('');
@@ -876,6 +1121,7 @@
     if (toggle) {
       toggle.textContent = rehearsalState.active ? 'Pause rehearsal' : (hasRehearsalData() ? 'Resume rehearsal' : 'Start rehearsal');
     }
+    renderSuggestedBudgets();
   }
 
   // Resolve content for a slide index.
@@ -1180,6 +1426,15 @@
   }
 
   function onPopupUnload() {
+    // Crash-safety net (ADR-2): beforeunload+unload double-fire is harmless —
+    // persistRun() upserts by rehearsalRunTs. Don't precheck hasRehearsalData()
+    // here — the in-flight segment (time on the CURRENT slide) isn't reflected
+    // in elapsedMs/slideMs until persistRun's own commitCurrentRehearsalSegment()
+    // runs, so a rehearsal that never paused/changed slides would look empty
+    // and get silently dropped. persistRun() commits first, THEN applies the
+    // pollution guard, so a genuinely-empty run (active but zero dwell) still
+    // won't be persisted.
+    if (rehearsalState.active) persistRun();
     if (rehearsalInterval) clearInterval(rehearsalInterval);
     postToPeer({ type: 'presenter.closing', sessionId: getSessionId() });
   }
@@ -1268,6 +1523,17 @@
       elapsedMs: totalRehearsalElapsedMs(),
       slideMs: rehearsalState.slideMs.map((_, i) => currentSlideElapsedMs(i)),
     }),
+    getRehearsalStore: () => readRehearsalStore(),
+    getSuggestedBudgets: () => perSlideMedians(readRehearsalStore()),
+    getLastRunDeltas: () => {
+      const total = presenterState.total || 0;
+      const plannedMs = getPlannedSlideMs();
+      const runs = eligibleRuns(readRehearsalStore());
+      const last = runs[runs.length - 1];
+      if (!last || !total || plannedMs <= 0) return null;
+      return Array.from({ length: total }, (_, i) => (last.slideMs[i] || 0) - plannedMs);
+    },
+    getTeleprompterState: () => Object.assign({}, teleprompterState, { reducedMotion: prefersReducedMotion() }),
   };
   window.PremiumPresenter = Object.assign(window.PremiumPresenter || {}, {
     postToPeer,

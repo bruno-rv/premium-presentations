@@ -43,7 +43,7 @@ at the bottom of each table.
 | `premium-clicker.js` | WebHID clicker support + Shift+C keyboard binding |
 | `premium-og-cover.js` | PNG slide export for OG covers |
 | `premium-slide-content.js` | Pure functions over slide DOM: `getTitle(slide, i)`, `getNotesHtml(slide)`, `getSummaryHtml(slide)`; shared between deck and popup |
-| `premium-presenter.js` | Presenter popup lifecycle, BroadcastChannel/postMessage/localStorage bridge, presenter UI DOM, timeline, and rehearsal tracking |
+| `premium-presenter.js` | Presenter popup lifecycle, BroadcastChannel/postMessage/localStorage bridge, presenter UI DOM, timeline, and rehearsal tracking; also carries rehearsal-run persistence (localStorage, capped 10 runs, per-slide median suggested-budget block) and teleprompter distance-reading/auto-scroll mode — both popup-local, zero transport |
 | `premium-mermaid.js` | Conditional (Mermaid markup): portable local renderer with optional preloaded full Mermaid support, auto-fit, clip detection, zoom/pan, theme re-render |
 | `premium-journey.js` | Conditional (`.journey-stage` markup): SVG path journey animation |
 | `premium-flow.js` | Conditional (`.live-flow` markup): phase spotlight cycling over `.flow-node`/`.flow-arrow` ids from `data-flow-phases` JSON, shimmer arrow animation, banner label; pauses off-screen, static under reduced motion |
@@ -103,7 +103,31 @@ stays mirrored (`on` when mode ≠ `off`). All modes flatten under
 **Presenter rehearsal:** the popup renders a horizontal timeline from the deck
 snapshot. Timeline items are clickable slide jumps, show planned per-slide time
 from the active timer, and switch to actual per-slide dwell while rehearsal is
-running. `R` toggles rehearsal; `Shift+R` clears the rehearsal session.
+running. `R` toggles rehearsal; `Shift+R` clears the rehearsal session (the
+in-memory current run only — persisted history is untouched).
+
+**Rehearsal persistence + suggested budgets:** each rehearsal run is committed
+to `localStorage['premium-rehearsal:'+location.pathname]` on pause (primary
+boundary) and on popup unload (crash-safety net), capped at the last 10 runs
+per deck path. On (re)open, the timeline restores per-slide actual + delta
+**vs uniform average** from the most-recent run whose slide count matches the
+loaded deck (mismatched-length runs are kept in history but excluded from the
+math). A "Suggested budgets" block below the timeline shows the per-slide
+**median across eligible runs** as a copy-pasteable markdown table (`# | Title
+| Budget (mm:ss) | Budget (ms)`, matching a future Slide Map "Budget" column
+with zero reformat); `Export JSON` copies the full payload plus the derived
+median vector, and `Clear history` wipes persisted runs. Deltas render only
+inside `#pp-timeline` `<li>` nodes — the timer's live pace pill
+(`#pp-timer-pace`) is never touched by this feature.
+
+**Teleprompter / distance-reading mode:** `m` toggles a CSS-only
+distance-reading class on the notes pane (bigger font/line-height/contrast,
+reclaims the previews pane); toggling mode never starts motion. `p` is the
+explicit start/pause of a manual constant-speed auto-scroll of `#pp-notes`;
+`]`/`[` (via `e.code`, layout-robust) speed up/down, and the rate persists in
+`localStorage['premium-teleprompter']` across sessions. Defaults to paused on
+every load and respects `prefers-reduced-motion: reduce` by construction —
+motion begins only on the explicit `p` gesture, never automatically.
 
 **Design power:** `window.PremiumDesignPower` exposes seven authoring helpers:
 `themeComposer`, `components`, `layouts`, `density`, `motionProfiles`,
