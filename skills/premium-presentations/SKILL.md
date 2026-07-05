@@ -7,7 +7,9 @@ description: >-
   browser-rendered HTML decks, presenter-mode decks, themed decks, Mermaid
   diagram decks, or reusable presentation templates, and when bundling decks,
   adding speaker timers, annotations, OG covers, or validating deck output
-  with the bundled scripts, themes, runtime, assets, and validators.
+  with the bundled scripts, themes, runtime, assets, and validators. Also
+  covers exporting a finished deck to PDF, an OG cover image, or a Markdown
+  speaker-notes handout.
 ---
 
 # Premium Presentations
@@ -154,3 +156,37 @@ Debugging only, one check at a time: `python3 scripts/validate_deck.py <deck.htm
 
 When changing browser behavior, run a browser smoke test for navigation, theme
 visuals, and controls.
+
+## Distribute (PDF, OG cover, handout)
+
+Three CLI scripts turn a bundled, gate-passing deck into shareable artifacts.
+All are Python, use the same Playwright Chromium as `validate_layout.py` (no
+second browser stack), and require `pip install playwright && playwright
+install chromium` (see `scripts/requirements.txt`) — they degrade with a
+clear message, not a crash, when Playwright is absent.
+
+```bash
+python3 scripts/export_pdf.py assets/decks/<slug>/<slug>-slides.html
+python3 scripts/og_cover.py assets/decks/<slug>/<slug>-slides.html
+python3 scripts/export_handout.py assets/decks/<slug>/<slug>-slides.html
+```
+
+- `export_pdf.py`: drives the deck's own `?print-pdf=1` layout headlessly —
+  one slide per 16:9 landscape page, selectable text, backgrounds printed.
+  Writes `<slug>.pdf` next to the deck.
+- `og_cover.py`: screenshots slide 1 at 1200×630 in normal (non-print) mode.
+  Writes `og-cover.png` next to the deck — the exact filename
+  `bundle_deck.py` rewrites `og:image` to. Replaces the removed
+  `og-cover.sh`, which probed for a system Chrome install; there is now a
+  single browser path across validation and export.
+- `export_handout.py`: stdlib-only (`html.parser`, no browser) — emits one
+  `## Slide N — <title>` Markdown section per `<section class="slide…">`,
+  with that slide's `<aside class="notes">` body. Writes `<slug>-handout.md`.
+
+## Inspectable example
+
+`assets/examples/rag-vector-graph/` ships a real, gate-passing deck (20
+slides, 12 of the 14 catalog components, authored Mermaid diagrams) with its
+`-slide-spec.md` — both tracked in git (unlike `assets/decks/`, which is
+gitignored working output). Read it to see the spec → deck → speaker-notes
+contract in a finished deck before generating your own.

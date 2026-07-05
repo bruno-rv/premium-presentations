@@ -133,6 +133,7 @@ def main() -> int:
         check_file(path, errors)
 
     deck_paths = sorted((ROOT / "assets" / "decks").glob("*/*-slides*.html"))
+    deck_paths += sorted((ROOT / "assets" / "examples").glob("*/*-slides*.html"))
     for path in deck_paths:
         check_file(path, errors)
 

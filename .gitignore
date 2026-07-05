@@ -10,6 +10,12 @@ __pycache__/
 .env.*
 assets/decks/
 **/assets/decks/
+
+# Generated export artifacts next to shipped examples — regenerable via
+# export_pdf.py / og_cover.py / export_handout.py, not source truth.
+**/assets/examples/*/*.pdf
+**/assets/examples/*/og-cover.png
+**/assets/examples/*/*-handout.md
 .agents/
 .claude/
 .codex/
