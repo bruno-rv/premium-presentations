@@ -135,16 +135,27 @@ test('speed keys ([ / ]) adjust and persist the scroll rate via e.code', async (
   assert.equal(Number(persisted), rate, 'rate is persisted to localStorage on every nudge');
 });
 
-test('keymap-collision — m / p / [ / ] are new bindings, absent from the pre-v1.3 handler', () => {
+test('keymap-collision — m / p / [ / ] are new bindings, absent from the pre-v1.3 handler', (t) => {
   const relPath = 'skills/premium-presentations/assets/shared/premium-presenter.js';
+  // Pinned to the commit immediately BEFORE af5a8e9 (v1.3 presenter moat),
+  // not HEAD — HEAD moves and eventually becomes the feature commit itself,
+  // which would diff the file against itself and always pass trivially.
+  const baselineCommit = '5263929';
   let baseline;
   try {
-    baseline = execFileSync('git', ['show', 'HEAD:' + relPath], { cwd: ROOT, encoding: 'utf8' });
+    baseline = execFileSync('git', ['show', baselineCommit + ':' + relPath], { cwd: ROOT, encoding: 'utf8' });
   } catch (err) {
-    throw new Error('could not read git HEAD baseline for ' + relPath + ': ' + err.message);
+    t.skip('pinned baseline commit ' + baselineCommit + ' is unavailable (shallow clone?): ' + err.message);
+    return;
   }
   assert.doesNotMatch(baseline, /key === 'm'/, 'pre-v1.3 handler must not already bind m');
   assert.doesNotMatch(baseline, /key === 'p'/, 'pre-v1.3 handler must not already bind p');
   assert.doesNotMatch(baseline, /BracketRight/, 'pre-v1.3 handler must not already bind ]');
   assert.doesNotMatch(baseline, /BracketLeft/, 'pre-v1.3 handler must not already bind [');
+
+  const current = execFileSync('git', ['show', 'HEAD:' + relPath], { cwd: ROOT, encoding: 'utf8' });
+  assert.match(current, /key === 'm'/, 'current handler must bind m');
+  assert.match(current, /key === 'p'/, 'current handler must bind p');
+  assert.match(current, /BracketRight/, 'current handler must bind ]');
+  assert.match(current, /BracketLeft/, 'current handler must bind [');
 });
