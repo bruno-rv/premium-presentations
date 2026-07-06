@@ -11,18 +11,29 @@ This repo is the Claude Code plugin package and the skill source. `SKILL.md` is 
   without CDN or remote-font dependencies.
 - **Presenter workflow:** press `Shift+P` to open the presenter popup with
   current/next slide previews, speaker notes, a slide timeline, rehearsal mode,
-  timer controls, and a slide rail.
+  a teleprompter/distance-reading mode, timer controls, and a slide rail.
 - **Rehearsal tools:** the presenter timeline shows planned per-slide time from
-  the active timer, tracks actual dwell time while rehearsing, and lets speakers
-  jump directly to any slide.
+  the active timer, tracks actual dwell time while rehearsing, lets speakers
+  jump directly to any slide, and persists rehearsal history (last 10 runs per
+  deck) with per-slide suggested budgets and a JSON export.
 - **Visual Design Power:** the Studio and runtime expose theme composition,
   layout variants, reusable design-power components, density checks, motion
-  profiles, data visualization blocks, and visual-asset audits.
+  profiles, data visualization blocks, visual-asset audits, and a theme
+  generator that turns a hex brand palette into a new theme behind a WCAG
+  contrast gate.
 - **Speaker controls:** decks include keyboard/touch navigation, Cmd+K search,
   annotations, laser pointer, curtain mode, TTS read-aloud, WebHID clicker
-  support, 3D modes, Mermaid/diagram helpers, and PNG/OG-cover export.
+  support, 3D modes, Mermaid/diagram helpers, PNG/OG-cover export, PDF export,
+  Markdown speaker-notes handouts, and LAN follow-along for the audience.
 - **Validation tooling:** deterministic scripts scaffold, bundle, validate,
-  and smoke-test decks and the shared runtime contract.
+  and smoke-test decks and the shared runtime contract, gated by `deck_doctor.py`
+  (structure, layout, diagrams, runtime contract, and WCAG contrast in one report).
+- **PR-to-deck:** the `/present-pr` plugin command turns the current branch's
+  diff into a `deck_doctor`-validated deck grounded in the real `git diff`.
+
+A full worked example — a 20-slide deck with a generated cover, PDF, and
+speaker-notes handout already checked in — lives at
+`skills/premium-presentations/assets/examples/rag-vector-graph/`.
 
 ## Preview
 
@@ -74,16 +85,13 @@ npm --prefix skills/premium-presentations/scripts ci
 ```
 
 For browser-rendering checks, install the Python validation dependency and its
-managed Chromium once:
+managed Chromium once (this Chromium also powers `og_cover.py`, `export_pdf.py`,
+and layout validation):
 
 ```bash
 python3 -m pip install -r skills/premium-presentations/scripts/requirements.txt
 python3 -m playwright install chromium
 ```
-
-`scripts/og-cover.sh` uses a system Chrome/Chromium binary (`chromium`,
-`google-chrome`, or macOS Google Chrome). Install one of those if you need the
-sidecar `og-cover.png` helper.
 
 ## Use
 
@@ -105,23 +113,29 @@ The generated deck is written to:
 skills/premium-presentations/assets/decks/my-talk/my-talk-slides.html
 ```
 
-Validate it:
+Validate it — `deck_doctor.py` chains every validator (structure, layout,
+diagrams, runtime contract, WCAG contrast) into one health report:
 
 ```bash
-python3 skills/premium-presentations/scripts/validate_deck.py \
+python3 skills/premium-presentations/scripts/deck_doctor.py \
   skills/premium-presentations/assets/decks/my-talk/my-talk-slides.html \
   skills/premium-presentations/assets/decks/my-talk/my-talk-slide-spec.md
 ```
 
-Generate an optional social/cover image next to the deck:
+Generate distribution artifacts next to the deck — a social/cover image, a
+PDF, and a Markdown speaker-notes handout:
 
 ```bash
-./skills/premium-presentations/scripts/og-cover.sh \
+python3 skills/premium-presentations/scripts/og_cover.py \
+  skills/premium-presentations/assets/decks/my-talk/my-talk-slides.html
+python3 skills/premium-presentations/scripts/export_pdf.py \
+  skills/premium-presentations/assets/decks/my-talk/my-talk-slides.html
+python3 skills/premium-presentations/scripts/export_handout.py \
   skills/premium-presentations/assets/decks/my-talk/my-talk-slides.html
 ```
 
-The cover is a sidecar file. The standalone deck HTML does not reference it
-automatically.
+Each writes a sidecar file (`og-cover.png`, `my-talk.pdf`, `my-talk-handout.md`)
+next to the deck. The standalone deck HTML does not reference them automatically.
 
 Open the studio:
 
@@ -144,6 +158,9 @@ Shift+P  open presenter popup
 R        start/pause/resume rehearsal in the popup
 Shift+R  clear rehearsal timings
 G        open/close the popup slide rail
+M        toggle teleprompter (distance-reading) mode
+P        start/pause teleprompter auto-scroll
+[ / ]    slow down / speed up auto-scroll
 ```
 
 The presenter popup is local to the speaker. Audience slides stay focused on
@@ -210,7 +227,7 @@ Create and validate a smoke deck:
 
 ```bash
 ./skills/premium-presentations/scripts/new-deck.sh editorial smoke-deck "Smoke Deck" 2
-python3 skills/premium-presentations/scripts/validate_deck.py \
+python3 skills/premium-presentations/scripts/deck_doctor.py \
   skills/premium-presentations/assets/decks/smoke-deck/smoke-deck-slides.html
 rm -rf skills/premium-presentations/assets/decks/smoke-deck
 ```
