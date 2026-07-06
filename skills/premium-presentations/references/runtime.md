@@ -49,6 +49,7 @@ at the bottom of each table.
 | `premium-flow.js` | Conditional (`.live-flow` markup): phase spotlight cycling over `.flow-node`/`.flow-arrow` ids from `data-flow-phases` JSON, shimmer arrow animation, banner label; pauses off-screen, static under reduced motion |
 | `premium-red-chrome.js` | Conditional (red decks): brand bar + hero mark injection |
 | `premium-glossary.js` | Conditional (`.term-link[data-term]` or `id="glossary"` markup): parses JSON dictionary, injects `#term-popup` modal, click/Esc/focus handlers; `window.PremiumGlossary` API |
+| `premium-follow.js` | Conditional (`data-follow` attribute on `<html>`, set before bundling — an attribute trigger, not a markup-class trigger): LAN follow-along. `?present=1` POSTs the current slide id to `/slide` on every `premium:slidechange`; `?follow=1` runs a single-flight recursive poll of `GET /slide` (~1500ms cadence, 1400ms abort-timeout so a stalled LAN can't pile up unresolved polls, monotonic sequence guard so a late/stale response can't navigate out of order) and navigates via `document.getElementById(id).scrollIntoView()` — the same mechanism `PremiumDeckControls.goTo()` uses (the engine binds `popstate` only, so a `location.hash` assignment would not navigate). With neither param (file:// or plain open), the module returns immediately: 0 fetch, 0 listeners, 0 timers |
 
 Linked decks use `../../shared/…` from `assets/decks/<slug>/`.
 
@@ -69,7 +70,36 @@ template, theme, bundler, or shared runtime edit. It verifies discovered theme
 scaffold templates, preview templates, and generated deck HTML files carry the
 common CSS/JS stack, plus red brand modules where the active template/deck is
 red, plus `premium-journey.js` when a file contains `.journey-stage` markup,
-plus `premium-flow.js` when a file contains `.live-flow` markup.
+plus `premium-flow.js` when a file contains `.live-flow` markup, plus
+`premium-follow.js` when `<html>` carries `data-follow`.
+
+**Contrast gate:** `deck_doctor.py` composes `scripts/validate_contrast.py` as
+a 5th section — a stdlib WCAG relative-luminance/contrast-ratio check over
+every `html[data-theme="…"]` block in the SOURCE `premium-themes.css`
+(location-independent; not the deck's own HTML, which carries no inlined
+token blocks). Gated pairs: `--text`/`--bg` and `--text`/`--surface` at 4.5:1,
+`--text-dim`/`--bg` at 4.5:1, `--accent`/`--bg` at 3.0:1 (accent is
+heading/UI scale, never body text). Run standalone: `./scripts/validate_contrast.py`.
+
+**Brand theme generation:** `./scripts/generate_theme.py <brand-id> --bg HEX
+--text HEX --accent HEX --surface HEX` ports `buildThemeCss`
+(`premium-design-power.js`) to Python and emits the full token set the
+built-in themes carry (not just the JS composer's 11) so a generated theme
+renders identically to a hand-authored one — progress bar, code windows, and
+semantic tags included. Runs the same contrast gate at generation time:
+fail-closed, nothing is appended to `premium-themes.css` on a failing
+palette. `--dry-run` prints the block without appending.
+
+**LAN follow-along + `/present-pr`:** `share-deck.sh`'s LAN fallback serves
+via `scripts/lan-sync-server.py` (stdlib `ThreadingHTTPServer`, binds
+`0.0.0.0`, no auth — acceptable for a venue LAN, single presenter, in-memory
+current-slide state only; do not run on an untrusted network) and prints a
+PRESENT url (`?present=1`) plus a FOLLOW url (`?follow=1`) — the latter only
+when the served deck was bundled with `data-follow` (see the
+`premium-follow.js` row above). `/present-pr` (plugin command,
+`commands/present-pr.md`) turns the current branch's PR/diff into a filled
+Content-First Brief (`references/present-pr-brief.md`) and runs the
+existing scaffold → spec → generate → `deck_doctor.py` pipeline unchanged.
 
 **Live theme switch:** `PremiumPresentations.setTheme('<theme>')` or UI control. The control panel discovers themes from loaded CSS. Dispatches `premium-theme-change` on `<html>`.
 

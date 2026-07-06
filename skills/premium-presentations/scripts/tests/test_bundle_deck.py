@@ -260,6 +260,55 @@ class WantsMatcher_Tests(unittest.TestCase):
         html = '<style>.journey-stage { font-weight: bold; }</style>'
         self.assertFalse(self.bundler.wants_premium_journey(html))
 
+    def test_wants_follow_on_html_data_follow_attr(self) -> None:
+        html = '<!doctype html><html lang="en" data-follow><body></body></html>'
+        self.assertTrue(self.bundler.wants_follow(html))
+
+    def test_wants_follow_false_without_attribute(self) -> None:
+        html = '<!doctype html><html lang="en"><body>data-follow mentioned in text</body></html>'
+        self.assertFalse(self.bundler.wants_follow(html))
+
+    def test_wants_follow_false_on_css_text_mentioning_data_follow(self) -> None:
+        # A CSS attribute-selector string must not trigger the matcher — the
+        # attribute must be on the actual <html> tag, not anywhere in the doc.
+        html = '<!doctype html><html lang="en"><style>[data-follow] { color: red; }</style></html>'
+        self.assertFalse(self.bundler.wants_follow(html))
+
+
+class BundleFollowTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        if not (SHARED / "premium-follow.js").is_file():
+            raise unittest.SkipTest("premium-follow.js not found — skipping")
+        cls.bundler = load_bundler()
+
+    def _bundle(self, html: str) -> str:
+        deck_dir = ROOT / "assets" / "decks" / "_test_bundle_tmp"
+        deck_dir.mkdir(parents=True, exist_ok=True)
+        path = deck_dir / "deck.html"
+        try:
+            path.write_text(html, encoding="utf-8")
+            return bundle_string(self.bundler, html, path)
+        finally:
+            path.unlink(missing_ok=True)
+            try:
+                deck_dir.rmdir()
+            except OSError:
+                pass
+
+    def test_deck_with_data_follow_includes_follow_module(self) -> None:
+        html = _make_minimal_deck().replace(
+            '<html lang="en">', '<html lang="en" data-follow>'
+        )
+        bundled = self._bundle(html)
+        self.assertIn("/* --- premium-follow.js --- */", bundled,
+                      "Deck WITH data-follow should have premium-follow.js inlined")
+
+    def test_plain_deck_excludes_follow_module(self) -> None:
+        bundled = self._bundle(_make_minimal_deck())
+        self.assertNotIn("/* --- premium-follow.js --- */", bundled,
+                         "Deck WITHOUT data-follow must NOT have premium-follow.js inlined")
+
 
 _THEME_VISUALS_DIR = SHARED / "assets" / "theme-visuals"
 _MANIFEST_PATH = _THEME_VISUALS_DIR / "manifest.json"

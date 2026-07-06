@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _common import (
     FLOW_JS,
+    FOLLOW_JS,
     GLOSSARY_JS,
     JOURNEY_JS,
     RED_CSS,
@@ -93,6 +94,20 @@ def needs_glossary_runtime(html: str) -> bool:
     )
 
 
+def needs_follow_runtime(html: str) -> bool:
+    """True iff the <html> tag carries data-follow, or the module marker is
+    already present. Attribute-gated (like needs_red_runtime), NOT a markup
+    class trigger (unlike journey/flow/glossary) — followability is an
+    author/recipe opt-in set before bundling, not something inferred from
+    slide content."""
+    root_match = re.search(r"<html\b[^>]*>", html, re.I)
+    root_tag = root_match.group(0) if root_match else ""
+    return (
+        "data-follow" in root_tag
+        or marker_present(html, "premium-follow.js")
+    )
+
+
 def check_file(path: Path, errors: list[str]) -> None:
     html = path.read_text(encoding="utf-8")
     css_required = REQUIRED_CSS + (RED_CSS if needs_red_runtime(path, html) else ())
@@ -102,6 +117,7 @@ def check_file(path: Path, errors: list[str]) -> None:
         + (JOURNEY_JS if needs_journey_runtime(html) else ())
         + (FLOW_JS if needs_flow_runtime(html) else ())
         + (GLOSSARY_JS if needs_glossary_runtime(html) else ())
+        + (FOLLOW_JS if needs_follow_runtime(html) else ())
     )
 
     css_present = modules_present(html, "css", css_required)

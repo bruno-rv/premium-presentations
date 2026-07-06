@@ -54,6 +54,41 @@ class RuntimeContractTests(unittest.TestCase):
 
         self.assertEqual([], errors)
 
+    def html_with_data_follow(self, *, include_follow_module: bool) -> str:
+        modules = list(self.validator.REQUIRED_CSS) + list(self.validator.REQUIRED_JS)
+        if include_follow_module:
+            modules.append("premium-follow.js")
+        markers = "\n".join(f"/* --- {name} --- */" for name in modules)
+        return (
+            "<!doctype html><html data-follow>"
+            f"<head><style>{markers}</style></head>"
+            "<body><section class='slide'></section></body></html>"
+        )
+
+    def test_data_follow_without_module_reports_missing_premium_follow(self) -> None:
+        # data-follow present, module marker absent -> must fail (not
+        # vacuously satisfied by its own presence check).
+        html = self.html_with_data_follow(include_follow_module=False)
+
+        errors = self.check_temp_html(html)
+
+        self.assertIn("premium-follow.js", "\n".join(errors))
+
+    def test_data_follow_with_module_passes(self) -> None:
+        html = self.html_with_data_follow(include_follow_module=True)
+
+        errors = self.check_temp_html(html)
+
+        self.assertEqual([], errors)
+
+    def test_plain_deck_does_not_require_premium_follow_runtime(self) -> None:
+        html = self.html_with_runtime("<section class='slide'></section>")
+
+        errors = self.check_temp_html(html)
+
+        self.assertEqual([], errors)
+        self.assertNotIn("premium-follow.js", "\n".join(errors))
+
 
 if __name__ == "__main__":
     unittest.main()

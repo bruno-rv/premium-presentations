@@ -3,7 +3,17 @@
 # Usage: ./scripts/share-deck.sh <deck.html>
 #
 # Primary: deploys via `vercel` CLI (if installed and logged in).
-# Fallback: serves the deck's directory over LAN via python3 -m http.server.
+# Fallback: serves the deck's directory over LAN via lan-sync-server.py
+#           (stdlib ThreadingHTTPServer + POST/GET /slide follow-along).
+#
+# Follow-along: prints a FOLLOW url (?follow=1) only when the served HTML
+# carries the premium-follow.js bundle marker (deck was bundled with
+# data-follow on <html>) — a deck cannot become followable post-bundle, so a
+# plain deck gets a one-line rebuild hint instead of a dead FOLLOW url.
+#
+# Security: the LAN fallback binds 0.0.0.0 with no auth — acceptable for a
+# venue LAN, single presenter, ephemeral in-memory state. Do not use on an
+# untrusted network.
 #
 # ponytail: single file, one provider (Vercel), no auth management —
 #           upgrade path: multi-file decks, other providers, scripted login.
@@ -13,7 +23,7 @@ set -euo pipefail
 SRC="${1:-}"
 
 usage() {
-  sed -n '2,6p' "$0" | tail -n +2
+  sed -n '2,7p' "$0" | tail -n +2
   exit 1
 }
 
@@ -26,6 +36,7 @@ SRC="$(cd "$(dirname "$SRC")" && pwd)/$(basename "$SRC")"
 serve_lan_fallback() {
   DIR="$(dirname "$SRC")"
   FILE="$(basename "$SRC")"
+  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
   IP="$(ipconfig getifaddr en0 2>/dev/null || hostname -I 2>/dev/null | awk '{print $1}' || hostname)"
 
   PORT=""
@@ -42,9 +53,14 @@ serve_lan_fallback() {
   fi
 
   echo "Serving $DIR on your local network."
-  echo "Share this URL (same Wi-Fi only): http://$IP:$PORT/$FILE"
+  echo "PRESENT (same Wi-Fi only): http://$IP:$PORT/$FILE?present=1"
+  if grep -q '/\* --- premium-follow\.js --- \*/' "$SRC"; then
+    echo "FOLLOW  (same Wi-Fi only): http://$IP:$PORT/$FILE?follow=1"
+  else
+    echo "No FOLLOW url: rebuild with data-follow on <html> (bundle_deck.py) to enable follow-along."
+  fi
   echo "Press Ctrl-C to stop."
-  cd "$DIR" && exec python3 -m http.server "$PORT"
+  exec python3 "$SCRIPT_DIR/lan-sync-server.py" "$DIR" "$PORT"
 }
 
 if command -v vercel >/dev/null 2>&1; then

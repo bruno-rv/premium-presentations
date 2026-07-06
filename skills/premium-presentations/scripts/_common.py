@@ -46,14 +46,23 @@ RED_JS = ("premium-red-chrome.js",)
 JOURNEY_JS = ("premium-journey.js",)
 FLOW_JS = ("premium-flow.js",)
 GLOSSARY_JS = ("premium-glossary.js",)
+FOLLOW_JS = ("premium-follow.js",)
 
 # Inlining order used by bundle_deck.py: conditional modules slot in after
 # premium-annotations.js so they initialize before timer/presenter chrome.
-JS_BUNDLE_ORDER = REQUIRED_JS[:3] + RED_JS + JOURNEY_JS + FLOW_JS + GLOSSARY_JS + REQUIRED_JS[3:]
+JS_BUNDLE_ORDER = (
+    REQUIRED_JS[:3] + RED_JS + JOURNEY_JS + FLOW_JS + GLOSSARY_JS + FOLLOW_JS + REQUIRED_JS[3:]
+)
 
-THEME_RE = re.compile(
+# Selector alternation (quoted-double / quoted-single / unquoted attribute
+# value — all three are valid CSS) shared with validate_contrast.py's block
+# matcher. Keep both in sync: a variant present in one but not the other
+# creates a blind spot in either theme discovery or the contrast/duplicate
+# gate.
+THEME_SELECTOR_SRC = (
     r"html\[data-theme=(?:\"([a-z0-9][a-z0-9-]*)\"|'([a-z0-9][a-z0-9-]*)'|([a-z0-9][a-z0-9-]*))\]"
 )
+THEME_RE = re.compile(THEME_SELECTOR_SRC)
 
 
 def discover_themes(css_path: Path | None = None) -> list[str]:

@@ -26,6 +26,8 @@ from _common import REQUIRED_CSS
 from _common import REQUIRED_JS
 from _common import ROOT, SHARED
 
+_HTML_TAG_RE = re.compile(r"<html\b[^>]*>", re.I)
+
 
 def read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
@@ -191,6 +193,16 @@ def wants_premium_glossary(html: str) -> bool:
         or bool(re.search(r'\bdata-term=["\']', html))
         or bool(re.search(r'\bid=["\']glossary["\']', html))
     )
+
+
+def wants_follow(html: str) -> bool:
+    # Attribute-gated (like the red-theme trigger), NOT a markup-class
+    # trigger (unlike journey/flow/glossary) — followability is an
+    # author/recipe opt-in set on <html> BEFORE bundling; a deck cannot
+    # become followable by editing already-bundled HTML.
+    root_match = _HTML_TAG_RE.search(html)
+    root_tag = root_match.group(0) if root_match else ""
+    return "data-follow" in root_tag
 
 
 def build_mermaid_module() -> str:
@@ -595,6 +607,7 @@ def bundle_html(html: str, html_path: Path, *, embed_visuals: bool = True) -> st
     use_journey = wants_premium_journey(html)
     use_flow = wants_premium_flow(html)
     use_glossary = wants_premium_glossary(html)
+    use_follow = wants_follow(html)
     # has_visual_slides uses a quote-bounded class-attribute regex (safe post-inline),
     # but capturing pre-inline keeps it consistent with the other detection flags.
     use_embed = embed_visuals and has_visual_slides(html)
@@ -626,6 +639,11 @@ def bundle_html(html: str, html_path: Path, *, embed_visuals: bool = True) -> st
         if glossary_path.is_file() and glossary_path not in seen_paths:
             seen_paths.add(glossary_path)
             script_paths.append(glossary_path)
+    if use_follow:
+        follow_path = SHARED / "premium-follow.js"
+        if follow_path.is_file() and follow_path not in seen_paths:
+            seen_paths.add(follow_path)
+            script_paths.append(follow_path)
     # Inject any REQUIRED_JS modules absent from old bundles (added after initial generation).
     for name in REQUIRED_JS:
         req_path = SHARED / name

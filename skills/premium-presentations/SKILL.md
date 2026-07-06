@@ -236,6 +236,30 @@ python3 scripts/export_handout.py assets/decks/<slug>/<slug>-slides.html
   `## Slide N — <title>` Markdown section per `<section class="slide…">`,
   with that slide's `<aside class="notes">` body. Writes `<slug>-handout.md`.
 
+## Agent-Native Extras
+
+- **`/present-pr`** (plugin command, `commands/present-pr.md`): turns the
+  current branch's PR/diff into a filled Content-First Brief
+  (`references/present-pr-brief.md`) grounded in real `git diff`/`git log`/
+  touched-file content, then runs the existing `new-deck.sh` → spec →
+  generate → `deck_doctor.py` pipeline verbatim. No diff-to-slide bypass.
+- **Brand theme generation:** `./scripts/generate_theme.py <brand-id> --bg
+  HEX --text HEX --accent HEX --surface HEX` appends a full-token
+  `html[data-theme="<brand-id>"]{…}` block to `premium-themes.css`,
+  discoverable by `list-themes.py` like any built-in theme. Fail-closed: a
+  palette that fails the WCAG contrast gate is rejected and nothing is
+  appended. See `references/runtime.md` for the derivation and gated pairs.
+- **Contrast gate:** `deck_doctor.py` composes `scripts/validate_contrast.py`
+  as a 5th section — a repo-wide WCAG check over every theme block in
+  `premium-themes.css`. Run standalone with `./scripts/validate_contrast.py`.
+- **LAN follow-along:** `./scripts/share-deck.sh <deck.html>` falls back to
+  `scripts/lan-sync-server.py` (stdlib, binds `0.0.0.0`, **no auth** —
+  acceptable for a venue LAN only, do not use on an untrusted network) and
+  prints a PRESENT url plus a FOLLOW url. Follow-along requires the deck be
+  bundled with `data-follow` on `<html>` before sharing (see
+  `references/runtime.md`); a plain deck stays inert on `file://` with no
+  server and no param.
+
 ## Inspectable example
 
 `assets/examples/rag-vector-graph/` ships a real, gate-passing deck (20

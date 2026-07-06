@@ -20,10 +20,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import validate_contrast
 import validate_deck
 import validate_runtime_contract
 from validate_diagrams import validate_deck_diagrams, validate_inline_scripts
 from validate_layout import validate_deck_layout
+from _common import THEMES_CSS
 
 # validate_deck.validate() always ends with one of these summary lines.
 _SUMMARY_RE = re.compile(r"(\d+) error\(s\), (\d+) warning\(s\)")
@@ -109,10 +111,21 @@ def main(argv: list[str]) -> int:
         [f"FAIL: {e}" for e in rt_errors],
     )
 
+    # 5. validate_contrast — repo-wide WCAG gate over every html[data-theme=...]
+    # block in the SOURCE premium-themes.css (_common.THEMES_CSS), not this
+    # deck's HTML (a linked deck has zero inlined data-theme token blocks, so
+    # scanning deck HTML would pass vacuously — see ADR-a).
+    contrast_errors = validate_contrast.scan_themes_css(THEMES_CSS)
+    _section(
+        "validate_contrast (WCAG contrast over premium-themes.css)",
+        not contrast_errors,
+        [f"FAIL: {e}" for e in contrast_errors],
+    )
+
     # Layout/diagram/inline findings are already counted inside validate_deck's
     # totals (validate() chains those same checkers), so the verdict sums only
-    # validate_deck + runtime-contract to avoid double counting.
-    issues = deck_errors + len(rt_errors)
+    # validate_deck + runtime-contract + contrast to avoid double counting.
+    issues = deck_errors + len(rt_errors) + len(contrast_errors)
     warnings = deck_warnings
     if issues:
         print(f"{issues} issue(s), {warnings} warning(s)")
