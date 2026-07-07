@@ -1,0 +1,38 @@
+{
+  "name": "premium-presentations",
+  "version": "2.0.0",
+  "description": "Generate polished, browser-rendered HTML slide decks with presenter mode, theme assets, export helpers, and offline validation.",
+  "author": {
+    "name": "Bruno Rodrigues Veloso",
+    "url": "https://github.com/bruno-rv"
+  },
+  "homepage": "https://github.com/bruno-rv/premium-presentations",
+  "repository": "https://github.com/bruno-rv/premium-presentations",
+  "license": "MIT",
+  "keywords": [
+    "presentations",
+    "slides",
+    "html",
+    "themes",
+    "decks",
+    "presenter-mode"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Premium Presentations",
+    "shortDescription": "Create validated HTML presentation decks",
+    "longDescription": "Generate, edit, validate, bundle, and export self-contained Premium Presentations HTML slide decks with bundled themes, presenter tools, diagrams, speaker notes, and deterministic deck validation.",
+    "developerName": "Bruno Rodrigues Veloso",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Create a polished HTML deck about this topic",
+      "Turn this PR diff into a validated deck",
+      "Export this deck to PDF and speaker notes"
+    ],
+    "brandColor": "#C43E1C"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "premium-presentations",
+  "interface": {
+    "displayName": "Premium Presentations"
+  },
+  "plugins": [
+    {
+      "name": "premium-presentations",
+      "source": {
+        "source": "url",
+        "url": "./"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

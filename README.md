@@ -1,8 +1,12 @@
 # Premium Presentations
 
-Claude skill for generating polished, browser-rendered HTML presentation decks.
+Agent plugin for generating polished, browser-rendered HTML presentation decks.
 
-This repo is the Claude Code plugin package and the skill source. `SKILL.md` is the agent entry point; `README.md` is human-facing orientation only.
+This repo is the shared plugin package and skill source for Claude Code and
+Codex. `SKILL.md` is the agent entry point; `README.md` is human-facing
+orientation only. Claude-specific packaging lives under `.claude-plugin/`.
+Codex-specific packaging lives under `.codex-plugin/` and
+`.agents/plugins/`.
 
 ## What You Get
 
@@ -50,6 +54,21 @@ speaker-notes handout already checked in — lives at
 ![Presenter view](docs/screenshot-presenter.png)
 
 ## Install
+
+### Codex plugin
+
+Codex imports this repo through `.agents/plugins/marketplace.json` and
+`.codex-plugin/plugin.json` while reusing the same
+`skills/premium-presentations` source as Claude Code. Add this repository as a
+marketplace source, then install the plugin:
+
+```bash
+codex plugin marketplace add bruno-rv/premium-presentations
+codex plugin add premium-presentations@premium-presentations
+```
+
+If the marketplace is already configured, only run the `codex plugin add`
+command.
 
 ### Claude Code plugin (recommended)
 
@@ -171,9 +190,15 @@ jumps, rehearsal timing, and timer settings.
 
 ```text
 premium-presentations/          ← repo root
+├── .agents/
+│   └── plugins/
+│       └── marketplace.json
+├── .codex-plugin/
+│   └── plugin.json
 ├── .claude-plugin/
 │   ├── plugin.json
 │   └── marketplace.json
+├── commands/                    ← Claude Code slash-command recipes
 ├── docs/                       ← screenshots for this README
 ├── skills/
 │   └── premium-presentations/  ← skill root (SKILL.md entry point)

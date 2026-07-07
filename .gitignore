@@ -16,7 +16,10 @@ assets/decks/
 **/assets/examples/*/*.pdf
 **/assets/examples/*/og-cover.png
 **/assets/examples/*/*-handout.md
-.agents/
+.agents/*
+!.agents/plugins/
+.agents/plugins/*
+!.agents/plugins/marketplace.json
 .claude/
 .codex/
 .cursor/

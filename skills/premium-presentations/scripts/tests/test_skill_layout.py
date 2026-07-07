@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import unittest
+import json
 import subprocess
+import unittest
 from pathlib import Path
 
 
@@ -103,6 +104,27 @@ class SkillLayoutTests(unittest.TestCase):
     def test_generated_decks_are_ignored(self) -> None:
         gitignore = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8")
         self.assertIn("assets/decks/", gitignore)
+
+    def test_repository_exposes_claude_and_codex_plugin_manifests(self) -> None:
+        claude_manifest = REPO_ROOT / ".claude-plugin" / "plugin.json"
+        codex_manifest = REPO_ROOT / ".codex-plugin" / "plugin.json"
+        codex_marketplace = REPO_ROOT / ".agents" / "plugins" / "marketplace.json"
+        command_recipe = REPO_ROOT / "commands" / "present-pr.md"
+
+        self.assertTrue(claude_manifest.exists(), "missing Claude plugin manifest")
+        self.assertTrue(codex_manifest.exists(), "missing Codex plugin manifest")
+        self.assertTrue(codex_marketplace.exists(), "missing Codex marketplace manifest")
+        self.assertTrue(command_recipe.exists(), "missing present-pr command recipe")
+
+        codex = json.loads(codex_manifest.read_text(encoding="utf-8"))
+        self.assertEqual("premium-presentations", codex["name"])
+        self.assertEqual("./skills/", codex["skills"])
+        self.assertNotIn("commands", codex)
+
+        marketplace = json.loads(codex_marketplace.read_text(encoding="utf-8"))
+        self.assertEqual("premium-presentations", marketplace["name"])
+        self.assertEqual("premium-presentations", marketplace["plugins"][0]["name"])
+        self.assertEqual({"source": "url", "url": "./"}, marketplace["plugins"][0]["source"])
 
 
 if __name__ == "__main__":

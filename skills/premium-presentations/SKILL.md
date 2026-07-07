@@ -14,8 +14,9 @@ description: >-
 
 # Premium Presentations
 
-This directory is the Claude skill. Use the bundled scripts, references, and
-assets from this folder instead of recreating a slide framework from memory.
+This directory is the shared Premium Presentations skill. Use the bundled
+scripts, references, and assets from this folder instead of recreating a slide
+framework from memory.
 
 ## Start
 
@@ -238,11 +239,13 @@ python3 scripts/export_handout.py assets/decks/<slug>/<slug>-slides.html
 
 ## Agent-Native Extras
 
-- **`/present-pr`** (plugin command, `commands/present-pr.md`): turns the
-  current branch's PR/diff into a filled Content-First Brief
-  (`references/present-pr-brief.md`) grounded in real `git diff`/`git log`/
-  touched-file content, then runs the existing `new-deck.sh` → spec →
-  generate → `deck_doctor.py` pipeline verbatim. No diff-to-slide bypass.
+- **PR-to-deck workflow:** `commands/present-pr.md` defines the Claude Code
+  `/present-pr` command. Codex uses the same skill source; when asked to turn
+  the current branch's PR/diff into a premium deck, follow that command recipe:
+  fill the Content-First Brief (`references/present-pr-brief.md`) from real
+  `git diff`/`git log`/touched-file content, then run the existing
+  `new-deck.sh` → spec → generate → `deck_doctor.py` pipeline verbatim. No
+  diff-to-slide bypass.
 - **Brand theme generation:** `./scripts/generate_theme.py <brand-id> --bg
   HEX --text HEX --accent HEX --surface HEX` appends a full-token
   `html[data-theme="<brand-id>"]{…}` block to `premium-themes.css`,
