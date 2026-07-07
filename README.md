@@ -32,8 +32,9 @@ Codex-specific packaging lives under `.codex-plugin/` and
 - **Validation tooling:** deterministic scripts scaffold, bundle, validate,
   and smoke-test decks and the shared runtime contract, gated by `deck_doctor.py`
   (structure, layout, diagrams, runtime contract, and WCAG contrast in one report).
-- **PR-to-deck:** the `/present-pr` plugin command turns the current branch's
-  diff into a `deck_doctor`-validated deck grounded in the real `git diff`.
+- **PR-to-deck recipe:** Claude Code exposes `/present-pr`; Codex can follow
+  the same recipe when asked to turn the current branch's diff into a
+  `deck_doctor`-validated deck grounded in the real `git diff`.
 
 A full worked example — a 20-slide deck with a generated cover, PDF, and
 speaker-notes handout already checked in — lives at
@@ -57,20 +58,31 @@ speaker-notes handout already checked in — lives at
 
 ### Codex plugin
 
-Codex imports this repo through `.agents/plugins/marketplace.json` and
-`.codex-plugin/plugin.json` while reusing the same
-`skills/premium-presentations` source as Claude Code. Add this repository as a
-marketplace source, then install the plugin:
+Codex imports this repo as a Git marketplace through
+`.agents/plugins/marketplace.json`, then reads `.codex-plugin/plugin.json` for
+the plugin manifest. Both Codex and Claude Code reuse the same
+`skills/premium-presentations` source. Add this repository as a marketplace
+source, then install the plugin:
 
 ```bash
 codex plugin marketplace add bruno-rv/premium-presentations
 codex plugin add premium-presentations@premium-presentations
 ```
 
-If the marketplace is already configured, only run the `codex plugin add`
-command.
+Confirm that Codex sees the installed plugin:
 
-### Claude Code plugin (recommended)
+```bash
+codex plugin list --marketplace premium-presentations
+```
+
+To refresh an existing Codex install after this repo changes:
+
+```bash
+codex plugin marketplace upgrade premium-presentations
+codex plugin add premium-presentations@premium-presentations
+```
+
+### Claude Code plugin
 
 Add to `~/.claude/settings.json`:
 
@@ -87,7 +99,7 @@ Add to `~/.claude/settings.json`:
 }
 ```
 
-### Manual
+### Manual Claude skill link
 
 Clone the repo and link the skill subdirectory:
 
