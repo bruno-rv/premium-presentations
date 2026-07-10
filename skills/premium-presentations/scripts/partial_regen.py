@@ -4,11 +4,16 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
+import datetime as datetime_module
 import hashlib
+import io
 import json
+import os
 import re
 import stat as stat_module
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
@@ -20,6 +25,8 @@ from slide_html import (
     assign_slide_ids,
     parse_json_script_span,
     parse_slide_spans,
+    splice_sections,
+    validate_fragment,
 )
 from slide_spec import (
     ID_RE,
@@ -33,6 +40,8 @@ from slide_spec import (
     parse_slide_map,
     rewrite_slide_map_ids,
 )
+import deck_doctor
+import validate_runtime_contract
 
 
 STATE_ID = "premium-regen-state"
@@ -62,6 +71,23 @@ PLAN_REASONS = {
 
 class RegenInputError(ValueError):
     """Raised when a read-only regeneration input is unsafe or malformed."""
+
+
+class RegenValidationError(RegenInputError):
+    """Raised when a staged or committed deck fails validation."""
+
+
+class FullRegenerationRequired(RegenInputError):
+    """Raised when a partial edit would require new bundled capabilities."""
+
+
+CAPABILITY_MARKERS = {
+    "journey": "premium-journey.js",
+    "flow": "premium-flow.js",
+    "glossary": "premium-glossary.js",
+    "mermaid": "premium-mermaid",
+    "theme_homage": "theme-visuals-embed",
+}
 
 
 @dataclass(frozen=True)
@@ -378,8 +404,156 @@ def _identity_result(reason: str, message: str) -> PlanResult:
     return _result(reason, messages=(message,))
 
 
+def _fsync_directory(path: Path) -> None:
+    fd = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def _atomic_json(path: Path, value: Mapping[str, object]) -> None:
+    data = json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    fd, raw = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    temporary = Path(raw)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+        _fsync_directory(path.parent)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _backup_root(deck: Path) -> Path:
+    return deck.resolve().parent / ".partial-regen" / "backups"
+
+
+def _write_exclusive(path: Path, data: bytes, mode: int) -> None:
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, mode)
+    with os.fdopen(fd, "wb") as handle:
+        handle.write(data)
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
+def _create_backup(deck: Path, operation: str, targets: Sequence[Path]) -> Path:
+    root = _backup_root(deck)
+    root.mkdir(parents=True, exist_ok=True)
+    _fsync_directory(root.parent)
+    stem = datetime_module.datetime.now(datetime_module.timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
+    for suffix in range(1000):
+        backup = root / (stem if suffix == 0 else f"{stem}-{suffix}")
+        try:
+            backup.mkdir(mode=0o700)
+            break
+        except FileExistsError:
+            continue
+    else:
+        raise RegenInputError("could not allocate unique backup directory")
+    entries: list[dict[str, str]] = []
+    for target in targets:
+        mode = target.lstat().st_mode
+        if stat_module.S_ISLNK(mode) or not stat_module.S_ISREG(mode):
+            raise RegenInputError(f"target must be a regular non-symlink file: {target}")
+        payload = target.read_bytes()
+        _write_exclusive(backup / target.name, payload, stat_module.S_IMODE(mode))
+        entries.append({"backup": target.name, "sha256": _sha256(payload), "target": target.name})
+    _atomic_json(backup / "metadata.json", {"version": 1, "operation": operation, "status": "prepared", "targets": entries})
+    _fsync_directory(backup)
+    return backup
+
+
+def _replace_file(source: Path, target: Path) -> None:
+    os.replace(source, target)
+    _fsync_directory(target.parent)
+
+
+def _stage_bytes(target: Path, data: bytes) -> Path:
+    fd, raw = tempfile.mkstemp(prefix=f".{target.name}.partial-regen-", dir=target.parent)
+    staged = Path(raw)
+    try:
+        os.fchmod(fd, stat_module.S_IMODE(target.lstat().st_mode))
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        return staged
+    except BaseException:
+        os.close(fd)
+        staged.unlink(missing_ok=True)
+        raise
+
+
+def _metadata(backup: Path) -> dict[str, object]:
+    path = backup / "metadata.json"
+    if path.is_symlink() or not path.is_file():
+        raise RegenInputError("backup metadata is missing or unsafe")
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RegenInputError("backup metadata is invalid") from exc
+    if not isinstance(value, dict) or value.get("version") != 1 or value.get("status") not in {"prepared", "committed", "rolled_back"}:
+        raise RegenInputError("backup metadata has an invalid schema")
+    targets = value.get("targets")
+    if not isinstance(targets, list) or not targets:
+        raise RegenInputError("backup metadata has invalid targets")
+    for item in targets:
+        if not isinstance(item, dict) or set(item) != {"backup", "sha256", "target"}:
+            raise RegenInputError("backup metadata has invalid target entry")
+        if item["backup"] != item["target"] or not isinstance(item["target"], str) or Path(item["target"]).name != item["target"] or not HASH_RE.fullmatch(item["sha256"]):
+            raise RegenInputError("backup metadata target is unsafe")
+    return value
+
+
+def _set_backup_status(backup: Path, metadata: dict[str, object], status: str) -> None:
+    updated = dict(metadata)
+    updated["status"] = status
+    _atomic_json(backup / "metadata.json", updated)
+
+
+def _prepared_backups(deck: Path) -> list[Path]:
+    root = _backup_root(deck)
+    if not root.exists():
+        return []
+    if root.is_symlink() or not root.is_dir():
+        raise RegenInputError("backup root is unsafe")
+    prepared: list[Path] = []
+    for candidate in root.iterdir():
+        if candidate.is_symlink() or not candidate.is_dir():
+            continue
+        metadata = candidate / "metadata.json"
+        if metadata.is_file() and not metadata.is_symlink():
+            try:
+                if json.loads(metadata.read_text(encoding="utf-8")).get("status") == "prepared":
+                    prepared.append(candidate)
+            except (OSError, json.JSONDecodeError):
+                prepared.append(candidate)
+    return prepared
+
+
 def _check_unresolved_transaction(deck: Path) -> None:
-    """Task 4 extends this read-only seam with durable journal detection."""
+    prepared = _prepared_backups(deck)
+    if prepared:
+        raise RegenInputError("unresolved transaction; run rollback with backup: " + ", ".join(str(path) for path in prepared))
+
+
+def _run_deck_doctor(deck: Path, spec: Path) -> None:
+    output = io.StringIO()
+    with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
+        result = deck_doctor.main([str(deck), str(spec)])
+    if result != 0:
+        raise RegenValidationError(output.getvalue().strip() or "Deck Doctor rejected staged deck")
+
+
+def _validate_committed_pair(deck: Path, spec: Path) -> None:
+    validate_pair(deck, spec)
+    _run_deck_doctor(deck, spec)
+    result = plan_pair(deck, spec, check_transactions=False)
+    if result.status != "no_changes":
+        raise RegenValidationError(f"committed pair did not establish a clean baseline: {result.reason_code}")
 
 
 def plan_pair(
@@ -474,6 +648,195 @@ def plan_pair(
     )
 
 
+def _init_apply(deck: Path, spec: Path) -> PlanResult:
+    deck, spec = validate_pair(deck, spec)
+    _check_unresolved_transaction(deck)
+    candidate_deck, candidate_spec, preview = _build_init_candidates(deck, spec)
+    staged_deck = _stage_bytes(deck, candidate_deck.encode("utf-8"))
+    staged_spec = _stage_bytes(spec, candidate_spec.encode("utf-8"))
+    backup: Path | None = None
+    metadata: dict[str, object] | None = None
+    try:
+        _run_deck_doctor(staged_deck, staged_spec)
+        backup = _create_backup(deck, "init", (deck, spec))
+        metadata = _metadata(backup)
+        _replace_file(staged_deck, deck)
+        _replace_file(staged_spec, spec)
+        _validate_committed_pair(deck, spec)
+        _set_backup_status(backup, metadata, "committed")
+        return PlanResult("initialized", "initialized_and_committed", preview.changed, ("Initialization committed.",))
+    except BaseException:
+        if backup is not None and metadata is not None:
+            try:
+                _restore_backup(deck, backup, metadata, validate=False)
+                _set_backup_status(backup, metadata, "rolled_back")
+            except BaseException:
+                pass
+        raise
+    finally:
+        staged_deck.unlink(missing_ok=True)
+        staged_spec.unlink(missing_ok=True)
+
+
+def _fragment_capabilities(fragment: str) -> set[str]:
+    found: set[str] = set()
+    if validate_runtime_contract.needs_journey_runtime(fragment): found.add("journey")
+    if validate_runtime_contract.needs_flow_runtime(fragment): found.add("flow")
+    if validate_runtime_contract.needs_glossary_runtime(fragment): found.add("glossary")
+    if re.search(r'\bclass=["\'][^"\']*\bmermaid\b', fragment, re.I): found.add("mermaid")
+    if re.search(r'\bclass=["\'][^"\']*\bslide--(?:title|divider)\b', fragment, re.I): found.add("theme_homage")
+    return found
+
+
+def _deck_capabilities(html: str) -> set[str]:
+    return {name for name, marker in CAPABILITY_MARKERS.items() if validate_runtime_contract.marker_present(html, marker) or marker in html}
+
+
+def _glossary_keys(html: str) -> set[str]:
+    try:
+        span = parse_json_script_span(html, "glossary")
+        value = json.loads(span.content)
+    except (SlideHtmlError, json.JSONDecodeError):
+        return set()
+    return set(value) if isinstance(value, dict) and all(isinstance(key, str) for key in value) else set()
+
+
+def _parse_fragments(values: Sequence[str]) -> dict[str, str]:
+    fragments: dict[str, str] = {}
+    for value in values:
+        slide_id, separator, filename = value.partition("=")
+        if not separator or not slide_id or not ID_RE.fullmatch(slide_id) or slide_id in fragments:
+            raise RegenInputError("each --fragment must be a unique ID=FILE")
+        path = Path(filename)
+        try:
+            mode = path.lstat().st_mode
+        except OSError as exc:
+            raise RegenInputError(f"fragment is unavailable: {path}") from exc
+        if stat_module.S_ISLNK(mode) or not stat_module.S_ISREG(mode):
+            raise RegenInputError(f"fragment must be a regular non-symlink file: {path}")
+        fragments[slide_id] = path.read_text(encoding="utf-8")
+    return fragments
+
+
+def _apply(deck: Path, spec: Path, fragment_values: Sequence[str]) -> PlanResult:
+    deck, spec = validate_pair(deck, spec)
+    plan = plan_pair(deck, spec)
+    if plan.status != "changes_planned":
+        raise RegenInputError("apply requires a plan with changed rows")
+    fragments = _parse_fragments(fragment_values)
+    if set(fragments) != set(plan.changed):
+        raise RegenInputError("fragment IDs must exactly match planned changed IDs")
+    deck_text = deck.read_text(encoding="utf-8")
+    spec_text = spec.read_text(encoding="utf-8")
+    state = load_state(deck_text)
+    edited = parse_slide_map(spec_text, require_ids=True)
+    rows = {row.slide_id: row for row in edited.rows}
+    glossary = _glossary_keys(deck_text)
+    for slide_id, fragment in fragments.items():
+        errors = validate_fragment(fragment, rows[slide_id])
+        if errors:
+            raise RegenInputError("invalid fragment for " + slide_id + ": " + "; ".join(errors))
+        capabilities = _fragment_capabilities(fragment) - _deck_capabilities(deck_text)
+        if capabilities:
+            raise FullRegenerationRequired("new_runtime_capability: " + ", ".join(sorted(capabilities)))
+        fragment_keys = set(re.findall(r'\bdata-term\s*=\s*["\']([^"\']+)["\']', fragment, re.I))
+        if fragment_keys - glossary:
+            raise FullRegenerationRequired("new_glossary_key: " + ", ".join(sorted(fragment_keys - glossary)))
+    candidate = splice_sections(deck_text, fragments)
+    candidate_state = dict(state)
+    candidate_slides = {slide_id: dict(value) for slide_id, value in state["slides"].items()}
+    for span in parse_slide_spans(candidate):
+        if span.slide_id in fragments:
+            candidate_slides[span.slide_id]["row"] = _semantic_row(rows[span.slide_id])
+            candidate_slides[span.slide_id]["rowHash"] = _sha256(canonical_row(rows[span.slide_id]))
+            candidate_slides[span.slide_id]["sectionHash"] = _sha256(span.raw.encode("utf-8"))
+    candidate_state["slides"] = candidate_slides
+    state_span = parse_json_script_span(candidate, STATE_ID)
+    candidate = candidate[:state_span.start] + render_state(candidate_state) + candidate[state_span.end:]
+    if envelope_hash(candidate) != state["envelopeHash"]:
+        raise RegenValidationError("candidate changed the deck envelope")
+    staged = _stage_bytes(deck, candidate.encode("utf-8"))
+    backup: Path | None = None
+    metadata: dict[str, object] | None = None
+    try:
+        _run_deck_doctor(staged, spec)
+        backup = _create_backup(deck, "apply", (deck,))
+        metadata = _metadata(backup)
+        _replace_file(staged, deck)
+        _validate_committed_pair(deck, spec)
+        _set_backup_status(backup, metadata, "committed")
+        return PlanResult("applied", "fragments_committed", plan.changed, ("Fragments committed.",))
+    except BaseException:
+        if backup is not None and metadata is not None:
+            try:
+                _restore_backup(deck, backup, metadata, validate=False)
+                _set_backup_status(backup, metadata, "rolled_back")
+            except BaseException:
+                pass
+        raise
+    finally:
+        staged.unlink(missing_ok=True)
+
+
+def _safe_backup_directory(deck: Path, requested: Path) -> Path:
+    mode = deck.lstat().st_mode
+    if stat_module.S_ISLNK(mode) or not stat_module.S_ISREG(mode):
+        raise RegenInputError("deck must be a regular non-symlink file")
+    if ".." in requested.parts:
+        raise RegenInputError("backup path must not contain traversal")
+    root = _backup_root(deck)
+    candidate = Path(os.path.abspath(requested))
+    resolved = candidate.resolve()
+    try:
+        resolved.relative_to(root)
+    except ValueError as exc:
+        raise RegenInputError("backup must be beneath the deck backup root") from exc
+    cursor = deck.resolve().parent
+    for part in resolved.relative_to(cursor).parts:
+        cursor /= part
+        if cursor.is_symlink():
+            raise RegenInputError("backup path must not contain symlinks")
+    if not resolved.is_dir():
+        raise RegenInputError("backup directory is unsafe")
+    return resolved
+
+
+def _restore_backup(deck: Path, backup: Path, metadata: dict[str, object], *, validate: bool) -> None:
+    targets = metadata["targets"]
+    expected = {deck.name} if metadata.get("operation") == "apply" else {deck.name, load_state(deck.read_text(encoding="utf-8"))["spec"]}
+    if {item["target"] for item in targets} != expected:
+        raise RegenInputError("backup target set is unexpected")
+    staged: list[tuple[Path, Path]] = []
+    try:
+        for item in targets:
+            payload_path = backup / item["backup"]
+            if payload_path.is_symlink() or not payload_path.is_file():
+                raise RegenInputError("backup payload is unsafe")
+            payload = payload_path.read_bytes()
+            if _sha256(payload) != item["sha256"]:
+                raise RegenInputError("backup payload hash mismatch")
+            target = deck.parent / item["target"]
+            staged.append((_stage_bytes(target, payload), target))
+        for source, target in reversed(staged):
+            _replace_file(source, target)
+        if validate and len(staged) == 2:
+            _validate_committed_pair(deck, deck.parent / next(item["target"] for item in targets if item["target"] != deck.name))
+    finally:
+        for source, _ in staged:
+            source.unlink(missing_ok=True)
+
+
+def _rollback(deck: Path, requested: Path) -> PlanResult:
+    backup = _safe_backup_directory(deck, requested)
+    prepared = _prepared_backups(deck)
+    if prepared and (len(prepared) != 1 or prepared[0] != backup):
+        raise RegenInputError("rollback must use the unresolved prepared backup")
+    metadata = _metadata(backup)
+    _restore_backup(deck, backup, metadata, validate=False)
+    _set_backup_status(backup, metadata, "committed")
+    return PlanResult("rolled_back", "backup_restored", _immutable_changed(), ("Backup restored.",))
+
+
 class RegenArgumentParser(argparse.ArgumentParser):
     def error(self, message: str) -> NoReturn:
         raise RegenInputError(message)
@@ -483,14 +846,24 @@ def _parser() -> RegenArgumentParser:
     parser = RegenArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
 
-    init_parser = commands.add_parser("init", help="preview initialization")
+    init_parser = commands.add_parser("init", help="preview or apply initialization")
     init_parser.add_argument("--deck", type=Path, required=True)
     init_parser.add_argument("--spec", type=Path, required=True)
+    init_parser.add_argument("--apply", action="store_true")
 
     plan_parser = commands.add_parser("plan", help="plan changed slide fragments")
     plan_parser.add_argument("--deck", type=Path, required=True)
     plan_parser.add_argument("--spec", type=Path, required=True)
     plan_parser.add_argument("--json", action="store_true", dest="as_json")
+
+    apply_parser = commands.add_parser("apply", help="apply planned slide fragments")
+    apply_parser.add_argument("--deck", type=Path, required=True)
+    apply_parser.add_argument("--spec", type=Path, required=True)
+    apply_parser.add_argument("--fragment", action="append", required=True)
+
+    rollback_parser = commands.add_parser("rollback", help="restore a transaction backup")
+    rollback_parser.add_argument("--deck", type=Path, required=True)
+    rollback_parser.add_argument("--backup", type=Path, required=True)
     return parser
 
 
@@ -538,11 +911,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         options = _parser().parse_args(arguments)
         if options.command == "init":
-            result = preview_init(options.deck, options.spec)
-        else:
+            result = _init_apply(options.deck, options.spec) if options.apply else preview_init(options.deck, options.spec)
+        elif options.command == "plan":
             result = plan_pair(options.deck, options.spec)
+        elif options.command == "apply":
+            result = _apply(options.deck, options.spec, options.fragment)
+        else:
+            result = _rollback(options.deck, options.backup)
     except SystemExit as exc:
         return int(exc.code)
+    except FullRegenerationRequired as exc:
+        code = "new_glossary_key" if str(exc).startswith("new_glossary_key:") else "new_runtime_capability"
+        result = PlanResult("full_regeneration_required", code, _immutable_changed(), (str(exc),))
+        _print_human(result)
+        return 2
     except (RegenInputError, OSError, UnicodeError) as exc:
         result = _error_result(str(exc))
         if json_requested:

@@ -7,8 +7,10 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import partial_regen
+from slide_html import parse_slide_spans
 
 
 class PairFixture(unittest.TestCase):
@@ -340,6 +342,119 @@ class PlanningTests(PairFixture):
         self.assertEqual(rc, 0)
         self.assertIn("init", output)
         self.assertIn("plan", output)
+
+
+class MutationTests(PairFixture):
+    def setUp(self) -> None:
+        super().setUp()
+        doctor = mock.patch.object(partial_regen, "_run_deck_doctor", return_value=None)
+        doctor.start()
+        self.addCleanup(doctor.stop)
+
+    def only_backup(self, deck: Path) -> Path:
+        backups = sorted((deck.parent / ".partial-regen" / "backups").iterdir())
+        self.assertEqual(len(backups), 1)
+        return backups[0]
+
+    def write_fragment(self, slide_id: str, title: str, body: str) -> Path:
+        path = self.root / f"{slide_id}.html"
+        path.write_text(
+            f'<section class="slide" id="{slide_id}" data-nav-title="{title}">'
+            f'<div class="content">{body}</div>'
+            '<aside class="notes">Explain the updated evidence.</aside></section>',
+            encoding="utf-8",
+        )
+        return path
+
+    def write_ready_apply_pair(self) -> tuple[Path, Path, Path]:
+        deck, spec = self.write_initialized_pair()
+        spec.write_text(
+            spec.read_text(encoding="utf-8").replace(
+                "Compare results", "Compare verified results"
+            ),
+            encoding="utf-8",
+        )
+        return deck, spec, self.write_fragment("slide-2", "Proof", "Verified body")
+
+    def test_init_apply_backs_up_both_files_and_commits_state(self) -> None:
+        deck, spec = self.write_uninitialized_pair()
+        original = {deck.name: deck.read_bytes(), spec.name: spec.read_bytes()}
+        rc, _ = self.run_main(["init", "--deck", str(deck), "--spec", str(spec), "--apply"])
+        self.assertEqual(rc, 0)
+        self.assertEqual(partial_regen.load_state(deck.read_text(encoding="utf-8"))["order"], ["slide-1", "slide-2"])
+        backup = self.only_backup(deck)
+        metadata = json.loads((backup / "metadata.json").read_text(encoding="utf-8"))
+        self.assertEqual([item["target"] for item in metadata["targets"]], [deck.name, spec.name])
+        self.assertEqual(metadata["status"], "committed")
+        for name, content in original.items():
+            self.assertEqual((backup / name).read_bytes(), content)
+
+    def test_apply_exact_set_preserves_other_slide_and_keeps_spec(self) -> None:
+        deck, spec, fragment = self.write_ready_apply_pair()
+        before = {span.slide_id: span.raw for span in parse_slide_spans(deck.read_text())}
+        spec_before = spec.read_bytes()
+        rc, _ = self.run_main(["apply", "--deck", str(deck), "--spec", str(spec), "--fragment", f"slide-2={fragment}"])
+        self.assertEqual(rc, 0)
+        after = {span.slide_id: span.raw for span in parse_slide_spans(deck.read_text())}
+        self.assertEqual(after["slide-1"], before["slide-1"])
+        self.assertIn("Verified body", after["slide-2"])
+        self.assertEqual(spec.read_bytes(), spec_before)
+
+    def test_apply_rejects_invalid_fragment_sets_and_inputs(self) -> None:
+        deck, spec, fragment = self.write_ready_apply_pair()
+        other = self.write_fragment("slide-1", "Opening", "Extra")
+        cases = [
+            [f"slide-1={other}"],
+            [f"slide-2={fragment}", f"slide-2={fragment}"],
+            [f"slide-2={fragment}", f"slide-1={other}"],
+        ]
+        for fragments in cases:
+            with self.subTest(fragments=fragments):
+                rc, _ = self.run_main(["apply", "--deck", str(deck), "--spec", str(spec), *sum((["--fragment", value] for value in fragments), [])])
+                self.assertEqual(rc, 1)
+        linked = self.root / "linked.html"
+        try:
+            os.symlink(fragment, linked)
+        except OSError:
+            self.skipTest("symlinks unavailable")
+        rc, _ = self.run_main(["apply", "--deck", str(deck), "--spec", str(spec), "--fragment", f"slide-2={linked}"])
+        self.assertEqual(rc, 1)
+
+    def test_apply_rejects_new_capabilities_and_invalid_fragments(self) -> None:
+        deck, spec, _ = self.write_ready_apply_pair()
+        for label, body in {
+            "journey": '<div class="journey-stage"></div>',
+            "flow": '<div class="live-flow"></div>',
+            "mermaid": '<pre class="mermaid">graph TD; A--&gt;B;</pre>',
+            "glossary": '<button class="term-link" data-term="NEW_TERM">Term</button>',
+            "theme": '<div class="slide--title">Hero</div>',
+        }.items():
+            with self.subTest(label=label):
+                fragment = self.write_fragment("slide-2", "Proof", body)
+                rc, _ = self.run_main(["apply", "--deck", str(deck), "--spec", str(spec), "--fragment", f"slide-2={fragment}"])
+                self.assertEqual(rc, 2)
+        bad = self.write_fragment("wrong", "Wrong", "Bad")
+        rc, _ = self.run_main(["apply", "--deck", str(deck), "--spec", str(spec), "--fragment", f"slide-2={bad}"])
+        self.assertEqual(rc, 1)
+
+    def test_failure_seams_and_rollback_recover_original_bytes(self) -> None:
+        for seam in ("_create_backup", "_run_deck_doctor", "_replace_file", "_validate_committed_pair"):
+            with self.subTest(seam=seam):
+                deck, spec, fragment = self.write_ready_apply_pair()
+                before = (deck.read_bytes(), spec.read_bytes())
+                with mock.patch.object(partial_regen, seam, side_effect=OSError("injected")):
+                    rc, _ = self.run_main(["apply", "--deck", str(deck), "--spec", str(spec), "--fragment", f"slide-2={fragment}"])
+                self.assertEqual(rc, 1)
+                self.assertEqual((deck.read_bytes(), spec.read_bytes()), before)
+
+    def test_rollback_restores_init_backup_and_rejects_tampering(self) -> None:
+        deck, spec = self.write_uninitialized_pair()
+        original = (deck.read_bytes(), spec.read_bytes())
+        self.assertEqual(self.run_main(["init", "--deck", str(deck), "--spec", str(spec), "--apply"])[0], 0)
+        backup = self.only_backup(deck)
+        self.assertEqual(self.run_main(["rollback", "--deck", str(deck), "--backup", str(backup)])[0], 0)
+        self.assertEqual((deck.read_bytes(), spec.read_bytes()), original)
+        self.assertEqual(self.run_main(["rollback", "--deck", str(deck), "--backup", str(backup / "..")])[0], 1)
 
 
 if __name__ == "__main__":
