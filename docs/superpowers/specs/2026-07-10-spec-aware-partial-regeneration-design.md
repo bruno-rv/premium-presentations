@@ -1,7 +1,7 @@
 # Spec-aware partial regeneration design
 
 Date: July 10, 2026
-Status: Approved in conversation; awaiting written-spec review
+Status: Approved
 
 ## Objective
 
