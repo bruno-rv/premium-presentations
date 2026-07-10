@@ -516,20 +516,42 @@ def _metadata(backup: Path) -> dict[str, object]:
     for item in targets:
         if not isinstance(item, dict) or set(item) != {"backup", "sha256", "target"}:
             raise RegenInputError("backup metadata has invalid target entry")
-        if item["backup"] != item["target"] or not isinstance(item["target"], str) or Path(item["target"]).name != item["target"] or not HASH_RE.fullmatch(item["sha256"]):
+        if (
+            item["backup"] != item["target"]
+            or not _is_backup_basename(item["target"])
+            or not HASH_RE.fullmatch(item["sha256"])
+        ):
             raise RegenInputError("backup metadata target is unsafe")
     return value
 
 
-def _metadata_targets(deck: Path, metadata: Mapping[str, object]) -> list[tuple[Path, Mapping[str, str]]]:
+def _is_backup_basename(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and value not in {".", ".."}
+        and Path(value).name == value
+        and not Path(value).is_absolute()
+        and "/" not in value
+        and "\\" not in value
+    )
+
+
+def _metadata_targets(
+    deck: Path,
+    metadata: Mapping[str, object],
+    *,
+    spec_basename: str | None = None,
+) -> list[tuple[Path, Mapping[str, str]]]:
     entries = metadata["targets"]
     names = {item["target"] for item in entries}
     if metadata["operation"] == "apply":
         expected = {deck.name}
     else:
-        if len(names) != 2 or deck.name not in names:
+        if spec_basename is None:
+            raise RegenInputError("initialization backup requires a trusted spec basename")
+        expected = {deck.name, spec_basename}
+        if len(names) != 2:
             raise RegenInputError("initialization backup target set is unexpected")
-        expected = names
     if names != expected:
         raise RegenInputError("backup target set is unexpected")
     return [(deck.parent / item["target"], item) for item in entries]
@@ -698,7 +720,9 @@ def _init_apply(deck: Path, spec: Path) -> PlanResult:
     except BaseException:
         if backup is not None and metadata is not None:
             try:
-                _restore_backup(deck, backup, metadata, validate=False)
+                _restore_backup(
+                    deck, backup, metadata, validate=False, spec_basename=spec.name
+                )
                 _set_backup_status(backup, metadata, "rolled_back")
             except BaseException:
                 pass
@@ -833,10 +857,17 @@ def _safe_backup_directory(deck: Path, requested: Path) -> Path:
     return resolved
 
 
-def _restore_backup(deck: Path, backup: Path, metadata: dict[str, object], *, validate: bool) -> None:
+def _restore_backup(
+    deck: Path,
+    backup: Path,
+    metadata: dict[str, object],
+    *,
+    validate: bool,
+    spec_basename: str | None = None,
+) -> None:
     staged: list[tuple[Path, Path]] = []
     try:
-        for target, item in _metadata_targets(deck, metadata):
+        for target, item in _metadata_targets(deck, metadata, spec_basename=spec_basename):
             payload_path = backup / item["backup"]
             if payload_path.is_symlink() or not payload_path.is_file():
                 raise RegenInputError("backup payload is unsafe")
@@ -847,7 +878,7 @@ def _restore_backup(deck: Path, backup: Path, metadata: dict[str, object], *, va
         for source, target in reversed(staged):
             _replace_file(source, target)
         if validate:
-            for target, item in _metadata_targets(deck, metadata):
+            for target, item in _metadata_targets(deck, metadata, spec_basename=spec_basename):
                 if _sha256(target.read_bytes()) != item["sha256"]:
                     raise RegenValidationError("restored target hash mismatch")
     finally:
@@ -861,7 +892,13 @@ def _rollback(deck: Path, requested: Path) -> PlanResult:
     if prepared and (len(prepared) != 1 or prepared[0] != backup):
         raise RegenInputError("rollback must use the unresolved prepared backup")
     metadata = _metadata(backup)
-    targets = _metadata_targets(deck, metadata)
+    spec_basename: str | None = None
+    if metadata["operation"] == "init":
+        state = load_state(deck.read_text(encoding="utf-8"))
+        if state["deck"] != deck.name:
+            raise RegenInputError("embedded state does not match rollback deck")
+        spec_basename = _validate_basename(state["spec"], "spec")
+    targets = _metadata_targets(deck, metadata, spec_basename=spec_basename)
     rollback_path = backup / "rollback-metadata.json"
     if rollback_path.exists():
         if rollback_path.is_symlink():
@@ -901,7 +938,9 @@ def _rollback(deck: Path, requested: Path) -> PlanResult:
             staged_originals.append((_stage_bytes(target, payload), target))
         rollback_metadata = {"version": 1, "operation": "rollback", "status": "prepared", "targets": journal_targets}
         _atomic_json(rollback_path, rollback_metadata)
-        _restore_backup(deck, backup, metadata, validate=True)
+        _restore_backup(
+            deck, backup, metadata, validate=True, spec_basename=spec_basename
+        )
         _atomic_json(rollback_path, {**rollback_metadata, "status": "committed"})
     except BaseException:
         if rollback_metadata and rollback_path.exists():

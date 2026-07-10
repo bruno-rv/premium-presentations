@@ -533,6 +533,55 @@ class MutationTests(PairFixture):
                     self.skipTest("symlinks unavailable")
                 self.assertEqual(self.run_main(["init", "--deck", str(deck), "--spec", str(spec), "--apply"])[0], 1)
 
+    def test_init_recovery_refuses_tampered_unrelated_sibling_target(self) -> None:
+        deck, spec = self.write_uninitialized_pair()
+        sibling = self.root / "unrelated.txt"
+        sibling.write_text("do not replace", encoding="utf-8")
+        real_backup = partial_regen._create_backup
+        real_replace = partial_regen._replace_file
+
+        def tampered_backup(deck_path: Path, operation: str, targets: tuple[Path, ...]) -> Path:
+            backup = real_backup(deck_path, operation, targets)
+            metadata = json.loads((backup / "metadata.json").read_text())
+            item = metadata["targets"][1]
+            payload = (backup / item["backup"]).read_bytes()
+            (backup / sibling.name).write_bytes(payload)
+            item["target"] = sibling.name
+            item["backup"] = sibling.name
+            (backup / "metadata.json").write_text(json.dumps(metadata), encoding="utf-8")
+            return backup
+
+        calls = 0
+        def fail_first_publish(source: Path, target: Path) -> None:
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise OSError("publish failure")
+            real_replace(source, target)
+
+        with mock.patch.object(partial_regen, "_create_backup", side_effect=tampered_backup), mock.patch.object(partial_regen, "_replace_file", side_effect=fail_first_publish):
+            self.assertEqual(self.run_main(["init", "--deck", str(deck), "--spec", str(spec), "--apply"])[0], 1)
+        self.assertEqual(sibling.read_text(encoding="utf-8"), "do not replace")
+
+    def test_public_rollback_rejects_unrelated_and_dot_backup_targets(self) -> None:
+        for bad_name in ("unrelated.txt", ".", ".."):
+            with self.subTest(bad_name=bad_name):
+                deck, spec = self.write_uninitialized_pair()
+                sibling = self.root / "unrelated.txt"
+                sibling.write_text("do not replace", encoding="utf-8")
+                self.assertEqual(self.run_main(["init", "--deck", str(deck), "--spec", str(spec), "--apply"])[0], 0)
+                backup = self.only_backup(deck)
+                metadata = json.loads((backup / "metadata.json").read_text())
+                item = metadata["targets"][1]
+                payload = (backup / item["backup"]).read_bytes()
+                if bad_name not in {".", ".."}:
+                    (backup / bad_name).write_bytes(payload)
+                item["target"] = bad_name
+                item["backup"] = bad_name
+                (backup / "metadata.json").write_text(json.dumps(metadata), encoding="utf-8")
+                self.assertEqual(self.run_main(["rollback", "--deck", str(deck), "--backup", str(backup)])[0], 1)
+                self.assertEqual(sibling.read_text(encoding="utf-8"), "do not replace")
+
 
 if __name__ == "__main__":
     unittest.main()
