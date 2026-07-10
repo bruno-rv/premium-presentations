@@ -427,8 +427,22 @@ def _atomic_json(path: Path, value: Mapping[str, object]) -> None:
         temporary.unlink(missing_ok=True)
 
 
-def _backup_root(deck: Path) -> Path:
-    return deck.resolve().parent / ".partial-regen" / "backups"
+def _backup_root(deck: Path, *, create: bool = False) -> Path:
+    parent = deck.resolve().parent
+    partial = parent / ".partial-regen"
+    root = partial / "backups"
+    for path, label in ((partial, "transaction directory"), (root, "backup root")):
+        try:
+            mode = path.lstat().st_mode
+        except FileNotFoundError:
+            if not create:
+                continue
+            path.mkdir(mode=0o700)
+            _fsync_directory(path.parent)
+            continue
+        if stat_module.S_ISLNK(mode) or not stat_module.S_ISDIR(mode):
+            raise RegenInputError(f"{label} is unsafe")
+    return root
 
 
 def _write_exclusive(path: Path, data: bytes, mode: int) -> None:
@@ -440,14 +454,13 @@ def _write_exclusive(path: Path, data: bytes, mode: int) -> None:
 
 
 def _create_backup(deck: Path, operation: str, targets: Sequence[Path]) -> Path:
-    root = _backup_root(deck)
-    root.mkdir(parents=True, exist_ok=True)
-    _fsync_directory(root.parent)
+    root = _backup_root(deck, create=True)
     stem = datetime_module.datetime.now(datetime_module.timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
     for suffix in range(1000):
         backup = root / (stem if suffix == 0 else f"{stem}-{suffix}")
         try:
             backup.mkdir(mode=0o700)
+            _fsync_directory(root)
             break
         except FileExistsError:
             continue
@@ -495,7 +508,7 @@ def _metadata(backup: Path) -> dict[str, object]:
         value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise RegenInputError("backup metadata is invalid") from exc
-    if not isinstance(value, dict) or value.get("version") != 1 or value.get("status") not in {"prepared", "committed", "rolled_back"}:
+    if not isinstance(value, dict) or value.get("version") != 1 or value.get("operation") not in {"init", "apply"} or value.get("status") not in {"prepared", "committed", "rolled_back"}:
         raise RegenInputError("backup metadata has an invalid schema")
     targets = value.get("targets")
     if not isinstance(targets, list) or not targets:
@@ -506,6 +519,20 @@ def _metadata(backup: Path) -> dict[str, object]:
         if item["backup"] != item["target"] or not isinstance(item["target"], str) or Path(item["target"]).name != item["target"] or not HASH_RE.fullmatch(item["sha256"]):
             raise RegenInputError("backup metadata target is unsafe")
     return value
+
+
+def _metadata_targets(deck: Path, metadata: Mapping[str, object]) -> list[tuple[Path, Mapping[str, str]]]:
+    entries = metadata["targets"]
+    names = {item["target"] for item in entries}
+    if metadata["operation"] == "apply":
+        expected = {deck.name}
+    else:
+        if len(names) != 2 or deck.name not in names:
+            raise RegenInputError("initialization backup target set is unexpected")
+        expected = names
+    if names != expected:
+        raise RegenInputError("backup target set is unexpected")
+    return [(deck.parent / item["target"], item) for item in entries]
 
 
 def _set_backup_status(backup: Path, metadata: dict[str, object], status: str) -> None:
@@ -524,13 +551,16 @@ def _prepared_backups(deck: Path) -> list[Path]:
     for candidate in root.iterdir():
         if candidate.is_symlink() or not candidate.is_dir():
             continue
-        metadata = candidate / "metadata.json"
-        if metadata.is_file() and not metadata.is_symlink():
-            try:
-                if json.loads(metadata.read_text(encoding="utf-8")).get("status") == "prepared":
+        for name in ("metadata.json", "rollback-metadata.json"):
+            metadata = candidate / name
+            if metadata.is_file() and not metadata.is_symlink():
+                try:
+                    if json.loads(metadata.read_text(encoding="utf-8")).get("status") == "prepared":
+                        prepared.append(candidate)
+                        break
+                except (OSError, json.JSONDecodeError):
                     prepared.append(candidate)
-            except (OSError, json.JSONDecodeError):
-                prepared.append(candidate)
+                    break
     return prepared
 
 
@@ -785,42 +815,41 @@ def _safe_backup_directory(deck: Path, requested: Path) -> Path:
     if ".." in requested.parts:
         raise RegenInputError("backup path must not contain traversal")
     root = _backup_root(deck)
+    lexical_root = Path(os.path.abspath(deck.parent / ".partial-regen" / "backups"))
     candidate = Path(os.path.abspath(requested))
-    resolved = candidate.resolve()
     try:
-        resolved.relative_to(root)
+        candidate.relative_to(lexical_root)
     except ValueError as exc:
         raise RegenInputError("backup must be beneath the deck backup root") from exc
-    cursor = deck.resolve().parent
-    for part in resolved.relative_to(cursor).parts:
+    cursor = lexical_root
+    for part in candidate.relative_to(cursor).parts:
         cursor /= part
-        if cursor.is_symlink():
+        mode = cursor.lstat().st_mode
+        if stat_module.S_ISLNK(mode):
             raise RegenInputError("backup path must not contain symlinks")
-    if not resolved.is_dir():
+    resolved = candidate.resolve()
+    if not candidate.is_dir() or resolved != root / candidate.relative_to(lexical_root):
         raise RegenInputError("backup directory is unsafe")
     return resolved
 
 
 def _restore_backup(deck: Path, backup: Path, metadata: dict[str, object], *, validate: bool) -> None:
-    targets = metadata["targets"]
-    expected = {deck.name} if metadata.get("operation") == "apply" else {deck.name, load_state(deck.read_text(encoding="utf-8"))["spec"]}
-    if {item["target"] for item in targets} != expected:
-        raise RegenInputError("backup target set is unexpected")
     staged: list[tuple[Path, Path]] = []
     try:
-        for item in targets:
+        for target, item in _metadata_targets(deck, metadata):
             payload_path = backup / item["backup"]
             if payload_path.is_symlink() or not payload_path.is_file():
                 raise RegenInputError("backup payload is unsafe")
             payload = payload_path.read_bytes()
             if _sha256(payload) != item["sha256"]:
                 raise RegenInputError("backup payload hash mismatch")
-            target = deck.parent / item["target"]
             staged.append((_stage_bytes(target, payload), target))
         for source, target in reversed(staged):
             _replace_file(source, target)
-        if validate and len(staged) == 2:
-            _validate_committed_pair(deck, deck.parent / next(item["target"] for item in targets if item["target"] != deck.name))
+        if validate:
+            for target, item in _metadata_targets(deck, metadata):
+                if _sha256(target.read_bytes()) != item["sha256"]:
+                    raise RegenValidationError("restored target hash mismatch")
     finally:
         for source, _ in staged:
             source.unlink(missing_ok=True)
@@ -832,8 +861,64 @@ def _rollback(deck: Path, requested: Path) -> PlanResult:
     if prepared and (len(prepared) != 1 or prepared[0] != backup):
         raise RegenInputError("rollback must use the unresolved prepared backup")
     metadata = _metadata(backup)
-    _restore_backup(deck, backup, metadata, validate=False)
-    _set_backup_status(backup, metadata, "committed")
+    targets = _metadata_targets(deck, metadata)
+    rollback_path = backup / "rollback-metadata.json"
+    if rollback_path.exists():
+        if rollback_path.is_symlink():
+            raise RegenInputError("rollback metadata is unsafe")
+        try:
+            previous = json.loads(rollback_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise RegenInputError("rollback metadata is invalid") from exc
+        if previous.get("status") == "prepared":
+            recovery: list[tuple[Path, Path]] = []
+            try:
+                entries = previous.get("targets")
+                if not isinstance(entries, list) or {item.get("target") for item in entries} != {item[1]["target"] for item in targets}:
+                    raise RegenInputError("rollback recovery metadata is invalid")
+                for item in entries:
+                    payload = (backup / item["backup"]).read_bytes()
+                    if _sha256(payload) != item["sha256"]:
+                        raise RegenInputError("rollback recovery payload hash mismatch")
+                    target = deck.parent / item["target"]
+                    recovery.append((_stage_bytes(target, payload), target))
+                for source, target in reversed(recovery):
+                    _replace_file(source, target)
+                _atomic_json(rollback_path, {**previous, "status": "rolled_back"})
+            finally:
+                for source, _ in recovery:
+                    source.unlink(missing_ok=True)
+    staged_originals: list[tuple[Path, Path]] = []
+    journal_targets: list[dict[str, str]] = []
+    rollback_metadata: dict[str, object] = {}
+    try:
+        for target, item in targets:
+            payload = target.read_bytes()
+            stamp = datetime_module.datetime.now(datetime_module.timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
+            name = f"rollback-{stamp}-{item['target']}"
+            _write_exclusive(backup / name, payload, stat_module.S_IMODE(target.lstat().st_mode))
+            journal_targets.append({"backup": name, "sha256": _sha256(payload), "target": item["target"]})
+            staged_originals.append((_stage_bytes(target, payload), target))
+        rollback_metadata = {"version": 1, "operation": "rollback", "status": "prepared", "targets": journal_targets}
+        _atomic_json(rollback_path, rollback_metadata)
+        _restore_backup(deck, backup, metadata, validate=True)
+        _atomic_json(rollback_path, {**rollback_metadata, "status": "committed"})
+    except BaseException:
+        if rollback_metadata and rollback_path.exists():
+            try:
+                for source, target in reversed(staged_originals):
+                    _replace_file(source, target)
+                hashes = {item["target"]: item["sha256"] for item in journal_targets}
+                for _, target in staged_originals:
+                    if _sha256(target.read_bytes()) != hashes[target.name]:
+                        raise RegenValidationError("rollback recovery hash mismatch")
+                _atomic_json(rollback_path, {**rollback_metadata, "status": "rolled_back"})
+            except BaseException:
+                pass
+        raise
+    finally:
+        for source, _ in staged_originals:
+            source.unlink(missing_ok=True)
     return PlanResult("rolled_back", "backup_restored", _immutable_changed(), ("Backup restored.",))
 
 

@@ -353,8 +353,8 @@ class MutationTests(PairFixture):
 
     def only_backup(self, deck: Path) -> Path:
         backups = sorted((deck.parent / ".partial-regen" / "backups").iterdir())
-        self.assertEqual(len(backups), 1)
-        return backups[0]
+        self.assertTrue(backups)
+        return backups[-1]
 
     def write_fragment(self, slide_id: str, title: str, body: str) -> Path:
         path = self.root / f"{slide_id}.html"
@@ -455,6 +455,83 @@ class MutationTests(PairFixture):
         self.assertEqual(self.run_main(["rollback", "--deck", str(deck), "--backup", str(backup)])[0], 0)
         self.assertEqual((deck.read_bytes(), spec.read_bytes()), original)
         self.assertEqual(self.run_main(["rollback", "--deck", str(deck), "--backup", str(backup / "..")])[0], 1)
+
+    def test_init_publish_failures_restore_originals_and_close_journal(self) -> None:
+        for failed_call in (1, 2):
+            with self.subTest(failed_call=failed_call):
+                deck, spec = self.write_uninitialized_pair()
+                original = (deck.read_bytes(), spec.read_bytes())
+                real_replace = partial_regen._replace_file
+                calls = 0
+
+                def fail_publish(source: Path, target: Path) -> None:
+                    nonlocal calls
+                    calls += 1
+                    if calls == failed_call:
+                        raise OSError("publish failure")
+                    real_replace(source, target)
+
+                with mock.patch.object(partial_regen, "_replace_file", side_effect=fail_publish):
+                    self.assertEqual(self.run_main(["init", "--deck", str(deck), "--spec", str(spec), "--apply"])[0], 1)
+                self.assertEqual((deck.read_bytes(), spec.read_bytes()), original)
+                backup = self.only_backup(deck)
+                self.assertEqual(json.loads((backup / "metadata.json").read_text())["status"], "rolled_back")
+
+    def test_rollback_publish_failures_restore_pre_rollback_view(self) -> None:
+        for failed_call in (1, 2):
+            with self.subTest(failed_call=failed_call):
+                deck, spec = self.write_uninitialized_pair()
+                self.assertEqual(self.run_main(["init", "--deck", str(deck), "--spec", str(spec), "--apply"])[0], 0)
+                backup = self.only_backup(deck)
+                before = (deck.read_bytes(), spec.read_bytes())
+                real_replace = partial_regen._replace_file
+                calls = 0
+
+                def fail_publish(source: Path, target: Path) -> None:
+                    nonlocal calls
+                    calls += 1
+                    if calls == failed_call:
+                        raise OSError("rollback publish failure")
+                    real_replace(source, target)
+
+                with mock.patch.object(partial_regen, "_replace_file", side_effect=fail_publish):
+                    self.assertEqual(self.run_main(["rollback", "--deck", str(deck), "--backup", str(backup)])[0], 1)
+                self.assertEqual((deck.read_bytes(), spec.read_bytes()), before)
+                rollback_metadata = json.loads((backup / "rollback-metadata.json").read_text())
+                self.assertEqual(rollback_metadata["status"], "rolled_back")
+
+    def test_prepared_rollback_journal_is_selected_and_symlinked_request_is_rejected(self) -> None:
+        deck, spec = self.write_uninitialized_pair()
+        self.assertEqual(self.run_main(["init", "--deck", str(deck), "--spec", str(spec), "--apply"])[0], 0)
+        backup = self.only_backup(deck)
+        with mock.patch.object(partial_regen, "_replace_file", side_effect=OSError("interrupted rollback")):
+            self.assertEqual(self.run_main(["rollback", "--deck", str(deck), "--backup", str(backup)])[0], 1)
+        self.assertEqual(partial_regen._prepared_backups(deck), [backup.resolve()])
+        self.assertEqual(self.run_main(["rollback", "--deck", str(deck), "--backup", str(backup)])[0], 0)
+
+        linked = backup.parent / "linked-backup"
+        try:
+            os.symlink(backup, linked)
+        except OSError:
+            self.skipTest("symlinks unavailable")
+        self.assertEqual(self.run_main(["rollback", "--deck", str(deck), "--backup", str(linked)])[0], 1)
+
+    def test_create_backup_refuses_symlinked_ancestors(self) -> None:
+        for component in (".partial-regen", "backups"):
+            with self.subTest(component=component):
+                deck, spec = self.write_uninitialized_pair()
+                outside = self.root / f"outside-{component}"
+                outside.mkdir()
+                parent = deck.parent / ".partial-regen"
+                try:
+                    if component == ".partial-regen":
+                        os.symlink(outside, parent)
+                    else:
+                        parent.mkdir()
+                        os.symlink(outside, parent / "backups")
+                except OSError:
+                    self.skipTest("symlinks unavailable")
+                self.assertEqual(self.run_main(["init", "--deck", str(deck), "--spec", str(spec), "--apply"])[0], 1)
 
 
 if __name__ == "__main__":
