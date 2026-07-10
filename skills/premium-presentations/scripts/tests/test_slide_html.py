@@ -57,6 +57,30 @@ class SlideHtmlTests(unittest.TestCase):
         with self.assertRaisesRegex(SlideHtmlError, "multiple"):
             parse_json_script_span(DECK.replace("</body>", state + state + "</body>"), "premium-regen-state")
 
+    def test_json_state_matching_uses_first_duplicate_attribute_value(self) -> None:
+        later_matches = (
+            '<script id="other" id="premium-regen-state" type="application/json">{}</script>',
+            '<script id="premium-regen-state" type="text/plain" type="application/json">{}</script>',
+        )
+        for state in later_matches:
+            with self.subTest(state=state), self.assertRaisesRegex(SlideHtmlError, "not found"):
+                parse_json_script_span(
+                    DECK.replace("</body>", state + "</body>"),
+                    "premium-regen-state",
+                )
+
+        first_matches = (
+            '<script id="premium-regen-state" id="other" type="application/json">{}</script>',
+            '<script id="premium-regen-state" type="application/json" type="text/plain">{}</script>',
+        )
+        for state in first_matches:
+            with self.subTest(state=state):
+                span = parse_json_script_span(
+                    DECK.replace("</body>", state + "</body>"),
+                    "premium-regen-state",
+                )
+                self.assertEqual(span.content, "{}")
+
     def test_splice_preserves_every_untargeted_byte(self) -> None:
         replacement = '<section class="slide" id="proof" data-nav-title="Proof"><h2>Verified</h2><aside class="notes">Explain proof.</aside></section>'
         updated = splice_sections(DECK, {"proof": replacement})
@@ -109,6 +133,23 @@ class SlideHtmlTests(unittest.TestCase):
         for label, source in cases.items():
             with self.subTest(label=label), self.assertRaises(SlideHtmlError):
                 parse_slide_spans(source)
+
+    def test_deck_detection_uses_first_duplicate_id_value(self) -> None:
+        later_match = DECK.replace(
+            '<div id="deck">',
+            '<div id="other" id="deck">',
+        )
+        with self.assertRaises(SlideHtmlError):
+            parse_slide_spans(later_match)
+
+        first_match = DECK.replace(
+            '<div id="deck">',
+            '<div id="deck" id="other">',
+        )
+        self.assertEqual(
+            [span.slide_id for span in parse_slide_spans(first_match)],
+            ["intro", "proof"],
+        )
 
     def test_fragment_contract(self) -> None:
         valid = '<section class="wide slide" id="proof" data-nav-title="Proof &amp; Safety"><h2>Verified</h2><aside class="speaker notes">Explain proof.</aside></section>'

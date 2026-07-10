@@ -77,7 +77,10 @@ def _class_tokens(attrs: list[tuple[str, str | None]]) -> set[str]:
 
 
 def _attrs(attrs: list[tuple[str, str | None]]) -> dict[str, str]:
-    return {name.casefold(): value or "" for name, value in attrs}
+    values: dict[str, str] = {}
+    for name, value in attrs:
+        values.setdefault(name.casefold(), value or "")
+    return values
 
 
 def _duplicate_attributes(attrs: list[tuple[str, str | None]]) -> list[str]:
