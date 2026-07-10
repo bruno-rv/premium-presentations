@@ -400,6 +400,34 @@ class MutationTests(PairFixture):
         self.assertIn("Verified body", after["slide-2"])
         self.assertEqual(spec.read_bytes(), spec_before)
 
+    def test_public_rollback_of_apply_restores_deck_and_keeps_edited_spec(self) -> None:
+        deck, spec, fragment = self.write_ready_apply_pair()
+        original_deck = deck.read_bytes()
+        edited_spec = spec.read_bytes()
+        self.assertEqual(
+            self.run_main(
+                [
+                    "apply",
+                    "--deck",
+                    str(deck),
+                    "--spec",
+                    str(spec),
+                    "--fragment",
+                    f"slide-2={fragment}",
+                ]
+            )[0],
+            0,
+        )
+        backup = self.only_backup(deck)
+        self.assertEqual(
+            self.run_main(
+                ["rollback", "--deck", str(deck), "--backup", str(backup)]
+            )[0],
+            0,
+        )
+        self.assertEqual(deck.read_bytes(), original_deck)
+        self.assertEqual(spec.read_bytes(), edited_spec)
+
     def test_apply_rejects_invalid_fragment_sets_and_inputs(self) -> None:
         deck, spec, fragment = self.write_ready_apply_pair()
         other = self.write_fragment("slide-1", "Opening", "Extra")
