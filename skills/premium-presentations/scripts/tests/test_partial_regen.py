@@ -127,6 +127,11 @@ class PlanningTests(PairFixture):
         with_path["deck"] = "../lesson-slides.html"
         cases.append(with_path)
 
+        for unsafe_basename in (".", ".."):
+            with_unsafe_basename = dict(state)
+            with_unsafe_basename["deck"] = unsafe_basename
+            cases.append(with_unsafe_basename)
+
         with_bad_hash = dict(state)
         with_bad_hash["slides"] = {
             key: dict(value) for key, value in state["slides"].items()
@@ -194,6 +199,26 @@ class PlanningTests(PairFixture):
             (drift.status, drift.reason_code),
             ("baseline_drift", "section_hash_changed"),
         )
+
+    def test_plan_refuses_misplaced_id_column_as_full_regeneration(self) -> None:
+        deck, spec = self.write_initialized_pair()
+        spec.write_text(
+            spec.read_text(encoding="utf-8").replace(
+                "| # | ID | Act |", "| # | Act | ID |", 1
+            ),
+            encoding="utf-8",
+        )
+
+        result = partial_regen.plan_pair(deck, spec)
+        cli_rc, _ = self.run_main(
+            ["plan", "--deck", str(deck), "--spec", str(spec)]
+        )
+
+        self.assertEqual(
+            (result.status, result.reason_code),
+            ("full_regeneration_required", "invalid_identity_column"),
+        )
+        self.assertEqual(cli_rc, 2)
 
     def test_plan_refuses_envelope_drift_before_section_drift(self) -> None:
         deck, spec = self.write_initialized_pair()

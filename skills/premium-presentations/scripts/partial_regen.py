@@ -53,6 +53,10 @@ PLAN_REASONS = {
     "missing_id": ("full_regeneration_required", "missing_identity"),
     "duplicate_id": ("full_regeneration_required", "duplicate_identity"),
     "invalid_id": ("full_regeneration_required", "invalid_identity"),
+    "invalid_id_column": (
+        "full_regeneration_required",
+        "invalid_identity_column",
+    ),
 }
 
 
@@ -124,6 +128,7 @@ def _validate_basename(value: object, label: str) -> str:
     if (
         not isinstance(value, str)
         or not value
+        or value in {".", ".."}
         or "/" in value
         or "\\" in value
         or Path(value).is_absolute()
@@ -394,7 +399,12 @@ def plan_pair(
     try:
         edited_spec = parse_slide_map(spec_text, require_ids=True)
     except SlideSpecError as exc:
-        if exc.code in {"missing_id", "duplicate_id", "invalid_id"}:
+        if exc.code in {
+            "missing_id",
+            "duplicate_id",
+            "invalid_id",
+            "invalid_id_column",
+        }:
             return _identity_result(exc.code, str(exc))
         raise RegenInputError(str(exc)) from exc
 
