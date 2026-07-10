@@ -303,7 +303,7 @@ def validate(html_path: Path, spec_path: str = "", strict_variety: bool = False)
         try:
             parsed_spec = parse_slide_map(spec)
         except SlideSpecError as exc:
-            if str(exc) == "no Slide Map table found":
+            if exc.code == "no_slide_map":
                 warn("Spec provided but no slide map rows parsed")
             else:
                 err(f"Invalid Slide Map: {exc}")

@@ -95,6 +95,30 @@ class SlideSpecTests(unittest.TestCase):
         self.assertEqual(diff.changes[0].slide_id, "proof")
         self.assertEqual(diff.changes[0].fields, ("Key Content",))
 
+    def test_diff_reports_removed_semantic_columns_after_edited_fields(self) -> None:
+        edited_lines = []
+        for line in MAP.splitlines():
+            if line.startswith(("| # |", "|---|", "| 1 |", "| 2 |")):
+                line = line.rsplit("|", 2)[0] + "|"
+            edited_lines.append(line)
+        edited = "\n".join(edited_lines).replace(
+            "Compare results", "Compare verified results"
+        )
+
+        diff = diff_rows(
+            parse_slide_map(MAP, require_ids=True),
+            parse_slide_map(edited, require_ids=True),
+        )
+
+        self.assertEqual(diff.structural_reasons, ())
+        self.assertEqual(
+            [(change.slide_id, change.fields) for change in diff.changes],
+            [
+                ("intro", ("Audience Risk",)),
+                ("proof", ("Key Content", "Audience Risk")),
+            ],
+        )
+
     def test_diff_reports_structural_reasons_in_fixed_order(self) -> None:
         one_row = MAP.replace(
             "| 2 | proof | 1 | Content | Evidence | Compare results | BAR bar-chart | Decision | Explain the delta | Name the baseline. | High |\n",
@@ -160,6 +184,16 @@ class SlideSpecTests(unittest.TestCase):
         for label, text in cases.items():
             with self.subTest(label=label), self.assertRaises(SlideSpecError):
                 parse_slide_map(text, require_ids=True)
+
+    def test_rejects_id_column_outside_second_position(self) -> None:
+        misplaced = """## Slide Map
+| # | Title | ID | Type |
+|---|-------|----|------|
+| 1 | Opening | intro | Title |
+| 2 | Evidence | proof | Content |"""
+        with self.assertRaises(SlideSpecError) as raised:
+            parse_slide_map(misplaced, require_ids=True)
+        self.assertEqual(raised.exception.code, "invalid_id_column")
 
     def test_pipe_escaping_uses_odd_even_backslash_parity(self) -> None:
         cases = {
@@ -228,6 +262,10 @@ class SlideSpecTests(unittest.TestCase):
                 "malformed_row",
             ),
             "unterminated row": (LEGACY_5.removesuffix("|"), "malformed_row"),
+            "unterminated header": (
+                "## Slide Map\n| # | Type | Title",
+                "malformed_row",
+            ),
             "bad ordinal": (LEGACY_5.replace("| 2 | Content |", "| two | Content |"), "malformed_row"),
         }
         for label, (text, code) in cases.items():

@@ -145,6 +145,15 @@ def _locate_table(lines: list[str]) -> _TableLocation:
                 break
         header_index = _find_header(lines, start, end)
         if header_index is None:
+            if any(
+                _looks_like_table_row(_line_body(lines[index]))
+                and not _is_pipe_row(_line_body(lines[index]))
+                for index in range(start, end)
+            ):
+                raise SlideSpecError(
+                    "malformed_row",
+                    "Slide Map contains a malformed pipe table row",
+                )
             if any(_is_pipe_row(_line_body(lines[index])) for index in range(start, end)):
                 raise SlideSpecError(
                     "missing_header",
@@ -225,6 +234,12 @@ def _parse_with_location(
             "missing_header",
             "Slide Map table is missing a leading # column",
         )
+    id_index = normalized_headers.index("id") if "id" in normalized_headers else None
+    if id_index is not None and id_index != 1:
+        raise SlideSpecError(
+            "invalid_id_column",
+            "Slide Map ID column must appear immediately after #",
+        )
 
     separator = _split_pipe_row(_line_body(lines[location.separator_index]))
     if len(separator) != len(headers) or any(
@@ -235,7 +250,6 @@ def _parse_with_location(
             "Slide Map separator width or syntax does not match its header",
         )
 
-    id_index = normalized_headers.index("id") if "id" in normalized_headers else None
     rows: list[SlideSpecRow] = []
     seen_ids: set[str] = set()
     for expected_ordinal, index in enumerate(location.row_indices, start=1):
@@ -351,8 +365,17 @@ def diff_rows(baseline: SlideSpec, edited: SlideSpec) -> SpecDiff:
         return SpecDiff(changes=(), structural_reasons=tuple(structural_reasons))
 
     baseline_by_id = {row.slide_id: row for row in baseline.rows}
+    baseline_headers = [
+        header for header in baseline.headers if _normalized(header) not in {"#", "id"}
+    ]
     edited_headers = [
         header for header in edited.headers if _normalized(header) not in {"#", "id"}
+    ]
+    edited_header_names = {_normalized(header) for header in edited_headers}
+    comparison_headers = edited_headers + [
+        header
+        for header in baseline_headers
+        if _normalized(header) not in edited_header_names
     ]
     changes: list[RowChange] = []
     for edited_row in edited.rows:
@@ -360,7 +383,7 @@ def diff_rows(baseline: SlideSpec, edited: SlideSpec) -> SpecDiff:
         edited_values = _semantic_by_normalized_name(edited_row)
         changed_fields = tuple(
             header
-            for header in edited_headers
+            for header in comparison_headers
             if baseline_values.get(_normalized(header)) != edited_values.get(_normalized(header))
         )
         if changed_fields:
