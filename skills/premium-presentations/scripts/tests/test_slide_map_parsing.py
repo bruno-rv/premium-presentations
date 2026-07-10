@@ -216,6 +216,15 @@ No tabular slide map has been written yet.
 
 
 class SlideMapHeaderParsingTests(unittest.TestCase):
+    def test_slide_count_accepts_id_before_class(self) -> None:
+        html = _make_deck_html(slide_count=1).replace(
+            '<section class="slide">',
+            '<section id="opening" class="slide">',
+        )
+        rc, out = run_validate(html, NO_SLIDE_MAP)
+        self.assertEqual(rc, 0, f"Expected attribute order to remain valid:\n{out}")
+        self.assertIn("Slides found: 1", out)
+
     def test_new_9col_format_mismatch_fails(self) -> None:
         """New-format (9-col) spec claiming 5 slides vs. a 2-slide deck must FAIL,
         not silently degrade to a 'no slide map rows parsed' warning."""

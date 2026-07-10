@@ -15,6 +15,7 @@ from validate_diagrams import (
     validate_inline_scripts,
 )
 from validate_layout import validate_deck_layout
+from slide_html import SlideHtmlError, parse_slide_spans
 from slide_spec import SlideSpecError, parse_slide_map
 
 # Class tokens that count as a visual anchor on a content slide. Mirrors the
@@ -164,7 +165,11 @@ def validate(html_path: Path, spec_path: str = "", strict_variety: bool = False)
     if 'id="deck"' not in text and "id='deck'" not in text:
         err('Missing <div id="deck">')
 
-    slides = len(re.findall(r'<section\s+class="[^"]*\bslide\b', text, re.I))
+    try:
+        slides = len(parse_slide_spans(text))
+    except SlideHtmlError as exc:
+        err(f"Invalid slide structure: {exc}")
+        slides = 0
     if slides == 0:
         err('No <section class="... slide ..."> found')
     elif slides < 2:
