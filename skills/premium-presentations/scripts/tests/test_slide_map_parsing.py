@@ -193,6 +193,20 @@ SLIDE_MAP_DRAFT_HEADING = """## Slide Map (draft)
 """
 
 
+MALFORMED_SLIDE_MAP = """## Slide Map
+
+| # | Type | Title | Key Content | Visual Pattern |
+|---|------|-------|-------------|----------------|
+| 1 | Title | Opening |
+"""
+
+
+NO_SLIDE_MAP = """## Lesson Plan
+
+No tabular slide map has been written yet.
+"""
+
+
 class SlideMapHeaderParsingTests(unittest.TestCase):
     def test_new_9col_format_mismatch_fails(self) -> None:
         """New-format (9-col) spec claiming 5 slides vs. a 2-slide deck must FAIL,
@@ -287,6 +301,18 @@ class SlideMapHeaderParsingTests(unittest.TestCase):
         rc, out = run_validate(html, SLIDE_MAP_DRAFT_HEADING)
         self.assertEqual(rc, 0, f"Expected '## Slide Map (draft)' to still be recognized:\n{out}")
         self.assertIn("Spec expects: 2", out)
+
+    def test_malformed_detected_slide_map_is_an_error(self) -> None:
+        html = _make_deck_html(slide_count=1)
+        rc, out = run_validate(html, MALFORMED_SLIDE_MAP)
+        self.assertEqual(rc, 1, f"Expected malformed Slide Map to fail validation:\n{out}")
+        self.assertIn("FAIL: Invalid Slide Map:", out)
+
+    def test_absent_slide_map_remains_a_warning(self) -> None:
+        html = _make_deck_html(slide_count=1)
+        rc, out = run_validate(html, NO_SLIDE_MAP)
+        self.assertEqual(rc, 0, f"Expected absent Slide Map to remain non-fatal:\n{out}")
+        self.assertIn("WARN: Spec provided but no slide map rows parsed", out)
 
 
 if __name__ == "__main__":

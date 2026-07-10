@@ -15,6 +15,7 @@ from validate_diagrams import (
     validate_inline_scripts,
 )
 from validate_layout import validate_deck_layout
+from slide_spec import SlideSpecError, parse_slide_map
 
 # Class tokens that count as a visual anchor on a content slide. Mirrors the
 # component vocabulary in references/components.md.
@@ -299,56 +300,17 @@ def validate(html_path: Path, spec_path: str = "", strict_variety: bool = False)
     expected = None
     if spec_path and Path(spec_path).is_file():
         spec = Path(spec_path).read_text(encoding="utf-8", errors="replace")
-        # Scope the "| # |" header match to the "## Slide Map" section so an
-        # earlier unrelated table with a "#" first column (e.g. "| # | Fact |")
-        # can't flip in_map early and have its rows miscounted as slides. If a
-        # spec has no "## Slide Map" heading at all, fall back to the old
-        # ungated behavior so legacy specs without the heading still parse.
-        # Heading match is case-insensitive so "## slide map" is still gated
-        # instead of silently dropping to the ungated legacy path. The `\b`
-        # after "Map" requires a boundary (end of heading, whitespace, or
-        # punctuation like "(") so "## Slide Map (draft)" still matches but
-        # "## Slide Mapping Notes" does not get misclassified as the section.
-        has_slide_map_heading = bool(re.search(r"(?m)^##\s*Slide Map\b", spec, re.IGNORECASE))
-        in_map = False
-        in_slide_map_section = False
-        map_rows = []
-        for line in spec.splitlines():
-            # `(?!#)` restricts this to exact-depth "##" headings — a "###"+
-            # subheading nested inside "## Slide Map" (e.g. "### Act 1") must
-            # not match here and reset in_slide_map_section, or the whole
-            # section's rows silently stop being counted.
-            heading_match = re.match(r"^##(?!#)\s*(.*)", line)
-            if heading_match:
-                entering_slide_map = bool(
-                    re.match(r"Slide Map\b", heading_match.group(1), re.IGNORECASE)
-                )
-                if entering_slide_map:
-                    # If a spec has more than one heading starting with
-                    # "Slide Map" (e.g. a leftover "## Slide Map (draft)"
-                    # before the real one), only the last such section's rows
-                    # count — earlier ones are discarded here.
-                    map_rows = []
-                in_slide_map_section = entering_slide_map
-                in_map = False
-                continue
-            # Slide-map header: "| # | Type | ... |" (legacy 5/7-col) or
-            # "| # | Act | Type | ... |" (current 9-col, see spec_generator.py
-            # and references/slide-spec-template.md). Match on the leading
-            # "| # |" column rather than a fixed full-header string so both
-            # layouts are recognized regardless of column count.
-            if re.match(r"^\|\s*#\s*\|", line):
-                if not has_slide_map_heading or in_slide_map_section:
-                    in_map = True
-                continue
-            if in_map and line.startswith("|") and re.match(r"^\|\s*\d+\s*\|", line):
-                map_rows.append(line)
-        if map_rows:
-            expected = len(map_rows)
+        try:
+            parsed_spec = parse_slide_map(spec)
+        except SlideSpecError as exc:
+            if str(exc) == "no Slide Map table found":
+                warn("Spec provided but no slide map rows parsed")
+            else:
+                err(f"Invalid Slide Map: {exc}")
+        else:
+            expected = len(parsed_spec.rows)
             if expected != slides:
                 err(f"Slide count mismatch: HTML has {slides}, spec slide map has {expected}")
-        else:
-            warn("Spec provided but no slide map rows parsed")
 
     print(f"Validating: {html_path}")
     print(f"  Slides found: {slides}")
