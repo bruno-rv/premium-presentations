@@ -244,6 +244,31 @@ the slide-spec template.
 `scripts/` contains deterministic tooling for scaffolding, bundling, and
 validation. Its test suite lives in `scripts/tests/`.
 
+## Partial Regeneration
+
+For replacing existing slides after a Slide Map edit, use the same explicit,
+provider-neutral CLI with Claude Code or Codex. From the repository root:
+
+```bash
+python3 skills/premium-presentations/scripts/partial_regen.py init --deck DECK --spec SPEC
+python3 skills/premium-presentations/scripts/partial_regen.py init --deck DECK --spec SPEC --apply
+python3 skills/premium-presentations/scripts/partial_regen.py plan --deck DECK --spec SPEC --json
+python3 skills/premium-presentations/scripts/partial_regen.py apply --deck DECK --spec SPEC --fragment slide-3=slide-3.html
+python3 skills/premium-presentations/scripts/partial_regen.py rollback --deck DECK --backup BACKUP_DIRECTORY
+```
+
+First inspect the explicit initialization preview and assigned IDs, then choose
+`--apply`; initialization never happens automatically. Claude Code and Codex
+consume the same JSON plan and generate the same one-section fragment per
+changed ID. The CLI itself never invokes a provider.
+
+Give `apply` every changed ID at once. It preserves untargeted slide bytes and
+the embedded WebP theme-homage payloads, then requires Deck Doctor as the
+publication gate. Insertions, deletions, reordering, new global CSS/runtime or
+controls, new glossary keys, and new conditional capabilities require full
+regeneration. Do not hand-edit an initialized baseline: section drift exits
+`3`; restore a backup or regenerate the deck fully.
+
 ## Validate The Skill
 
 These commands test the skill package itself (deck-output validation lives in

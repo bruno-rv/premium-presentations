@@ -105,6 +105,26 @@ class SkillLayoutTests(unittest.TestCase):
         gitignore = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8")
         self.assertIn("assets/decks/", gitignore)
 
+    def test_partial_regeneration_guidance_is_provider_neutral(self) -> None:
+        documents = {
+            "SKILL.md": (ROOT / "SKILL.md").read_text(encoding="utf-8"),
+            "README.md": (REPO_ROOT / "README.md").read_text(encoding="utf-8"),
+            "runtime.md": (ROOT / "references" / "runtime.md").read_text(encoding="utf-8"),
+        }
+        for name, document in documents.items():
+            with self.subTest(document=name):
+                for command in (
+                    "partial_regen.py init",
+                    "partial_regen.py plan",
+                    "partial_regen.py apply",
+                    "partial_regen.py rollback",
+                ):
+                    self.assertIn(command, document)
+                self.assertIn("Claude Code", document)
+                self.assertIn("Codex", document)
+        self.assertNotIn("row index, confirmed by title", documents["SKILL.md"])
+        self.assertNotIn("stable data-slide-id", documents["SKILL.md"])
+
     def test_repository_exposes_claude_and_codex_plugin_manifests(self) -> None:
         claude_manifest = REPO_ROOT / ".claude-plugin" / "plugin.json"
         codex_manifest = REPO_ROOT / ".codex-plugin" / "plugin.json"
