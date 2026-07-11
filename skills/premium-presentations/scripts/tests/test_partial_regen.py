@@ -449,7 +449,6 @@ class MutationTests(PairFixture):
         self.assertEqual(rc, 1)
 
     def test_apply_rejects_new_capabilities_and_invalid_fragments(self) -> None:
-        deck, spec, _ = self.write_ready_apply_pair()
         for label, body in {
             "journey": '<div class="journey-stage"></div>',
             "flow": '<div class="live-flow"></div>',
@@ -458,12 +457,32 @@ class MutationTests(PairFixture):
             "theme": '<div class="slide--title">Hero</div>',
         }.items():
             with self.subTest(label=label):
+                deck, spec, _ = self.write_ready_apply_pair()
                 fragment = self.write_fragment("slide-2", "Proof", body)
                 rc, _ = self.run_main(["apply", "--deck", str(deck), "--spec", str(spec), "--fragment", f"slide-2={fragment}"])
                 self.assertEqual(rc, 2)
         bad = self.write_fragment("wrong", "Wrong", "Bad")
         rc, _ = self.run_main(["apply", "--deck", str(deck), "--spec", str(spec), "--fragment", f"slide-2={bad}"])
         self.assertEqual(rc, 1)
+
+    def test_fragment_capabilities_support_html_attribute_forms(self) -> None:
+        for class_name, capability in {
+            "journey-stage": "journey",
+            "live-flow": "flow",
+            "term-link": "glossary",
+            "mermaid": "mermaid",
+            "slide--title": "theme_homage",
+            "slide--divider": "theme_homage",
+        }.items():
+            for form, value in {
+                "unquoted": class_name,
+                "entity_encoded": class_name.replace("-", "&#45;"),
+            }.items():
+                with self.subTest(class_name=class_name, form=form):
+                    self.assertEqual(
+                        partial_regen._fragment_capabilities(f"<div class={value}></div>"),
+                        {capability},
+                    )
 
     def test_failure_seams_and_rollback_recover_original_bytes(self) -> None:
         for seam in ("_create_backup", "_run_deck_doctor", "_replace_file", "_validate_committed_pair"):
@@ -527,6 +546,41 @@ class MutationTests(PairFixture):
                 self.assertEqual((deck.read_bytes(), spec.read_bytes()), before)
                 rollback_metadata = json.loads((backup / "rollback-metadata.json").read_text())
                 self.assertEqual(rollback_metadata["status"], "rolled_back")
+
+    def test_rollback_recovery_rejects_tampered_journal_before_writing(self) -> None:
+        for label, mutate in {
+            "backup traversal": lambda journal, outside_hash: journal["targets"][0].update({"backup": "../outside", "sha256": outside_hash}),
+            "target traversal": lambda journal, _: journal["targets"][0].update({"target": "../outside"}),
+            "schema": lambda journal, _: journal.update({"unexpected": True}),
+            "hash": lambda journal, _: journal["targets"][0].update({"sha256": "sha256:" + "0" * 64}),
+        }.items():
+            with self.subTest(label=label):
+                with tempfile.TemporaryDirectory() as temporary:
+                    original_root = self.root
+                    self.root = Path(temporary)
+                    try:
+                        deck, spec = self.write_uninitialized_pair()
+                        self.assertEqual(self.run_main(["init", "--deck", str(deck), "--spec", str(spec), "--apply"])[0], 0)
+                        backup = self.only_backup(deck)
+                        before = (deck.read_bytes(), spec.read_bytes())
+                        journal_targets = []
+                        for target in (deck, spec):
+                            name = f"rollback-{target.name}"
+                            (backup / name).write_bytes(target.read_bytes())
+                            journal_targets.append({"backup": name, "sha256": partial_regen._sha256(target.read_bytes()), "target": target.name})
+                        journal = {"version": 1, "operation": "rollback", "status": "prepared", "targets": journal_targets}
+                        outside = backup.parent / "outside"
+                        outside_payload = b"<!doctype html><html><body>outside sentinel</body></html>"
+                        outside.write_bytes(outside_payload)
+                        mutate(journal, partial_regen._sha256(outside_payload))
+                        (backup / "rollback-metadata.json").write_text(json.dumps(journal), encoding="utf-8")
+
+                        self.assertEqual(self.run_main(["rollback", "--deck", str(deck), "--backup", str(backup)])[0], 1)
+                        self.assertEqual(deck.read_bytes(), before[0])
+                        self.assertEqual(spec.read_bytes(), before[1])
+                        self.assertEqual(outside.read_bytes(), outside_payload)
+                    finally:
+                        self.root = original_root
 
     def test_prepared_rollback_journal_is_selected_and_symlinked_request_is_rejected(self) -> None:
         deck, spec = self.write_uninitialized_pair()

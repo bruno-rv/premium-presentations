@@ -23,6 +23,7 @@ from slide_html import (
     SlideHtmlError,
     SlideSpan,
     assign_slide_ids,
+    fragment_class_tokens,
     parse_json_script_span,
     parse_slide_spans,
     splice_sections,
@@ -557,6 +558,39 @@ def _metadata_targets(
     return [(deck.parent / item["target"], item) for item in entries]
 
 
+def _rollback_recovery_targets(
+    metadata: object, targets: Sequence[tuple[Path, Mapping[str, str]]]
+) -> list[tuple[Path, Mapping[str, str]]]:
+    if (
+        not isinstance(metadata, dict)
+        or set(metadata) != {"version", "operation", "status", "targets"}
+        or metadata.get("version") != 1
+        or metadata.get("operation") != "rollback"
+        or metadata.get("status") != "prepared"
+        or not isinstance(metadata.get("targets"), list)
+    ):
+        raise RegenInputError("rollback recovery metadata is invalid")
+    trusted_targets = {item["target"]: target for target, item in targets}
+    entries = metadata["targets"]
+    if len(entries) != len(trusted_targets):
+        raise RegenInputError("rollback recovery metadata is invalid")
+    validated: list[Mapping[str, str]] = []
+    for item in entries:
+        if (
+            not isinstance(item, dict)
+            or set(item) != {"backup", "sha256", "target"}
+            or not _is_backup_basename(item["backup"])
+            or not _is_backup_basename(item["target"])
+            or not isinstance(item["sha256"], str)
+            or not HASH_RE.fullmatch(item["sha256"])
+        ):
+            raise RegenInputError("rollback recovery metadata is invalid")
+        validated.append(item)
+    if {item["target"] for item in validated} != set(trusted_targets):
+        raise RegenInputError("rollback recovery metadata is invalid")
+    return [(trusted_targets[item["target"]], item) for item in validated]
+
+
 def _set_backup_status(backup: Path, metadata: dict[str, object], status: str) -> None:
     updated = dict(metadata)
     updated["status"] = status
@@ -734,11 +768,12 @@ def _init_apply(deck: Path, spec: Path) -> PlanResult:
 
 def _fragment_capabilities(fragment: str) -> set[str]:
     found: set[str] = set()
-    if validate_runtime_contract.needs_journey_runtime(fragment): found.add("journey")
-    if validate_runtime_contract.needs_flow_runtime(fragment): found.add("flow")
-    if validate_runtime_contract.needs_glossary_runtime(fragment): found.add("glossary")
-    if re.search(r'\bclass=["\'][^"\']*\bmermaid\b', fragment, re.I): found.add("mermaid")
-    if re.search(r'\bclass=["\'][^"\']*\bslide--(?:title|divider)\b', fragment, re.I): found.add("theme_homage")
+    classes = fragment_class_tokens(fragment)
+    if "journey-stage" in classes: found.add("journey")
+    if "live-flow" in classes: found.add("flow")
+    if "term-link" in classes: found.add("glossary")
+    if "mermaid" in classes: found.add("mermaid")
+    if {"slide--title", "slide--divider"} & classes: found.add("theme_homage")
     return found
 
 
@@ -907,17 +942,19 @@ def _rollback(deck: Path, requested: Path) -> PlanResult:
             previous = json.loads(rollback_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
             raise RegenInputError("rollback metadata is invalid") from exc
+        if not isinstance(previous, dict):
+            raise RegenInputError("rollback metadata is invalid")
         if previous.get("status") == "prepared":
             recovery: list[tuple[Path, Path]] = []
             try:
-                entries = previous.get("targets")
-                if not isinstance(entries, list) or {item.get("target") for item in entries} != {item[1]["target"] for item in targets}:
-                    raise RegenInputError("rollback recovery metadata is invalid")
-                for item in entries:
-                    payload = (backup / item["backup"]).read_bytes()
+                recovery_targets = _rollback_recovery_targets(previous, targets)
+                for target, item in recovery_targets:
+                    payload_path = backup / item["backup"]
+                    if payload_path.is_symlink() or not payload_path.is_file():
+                        raise RegenInputError("rollback recovery payload is unsafe")
+                    payload = payload_path.read_bytes()
                     if _sha256(payload) != item["sha256"]:
                         raise RegenInputError("rollback recovery payload hash mismatch")
-                    target = deck.parent / item["target"]
                     recovery.append((_stage_bytes(target, payload), target))
                 for source, target in reversed(recovery):
                     _replace_file(source, target)

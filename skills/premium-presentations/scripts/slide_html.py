@@ -350,6 +350,7 @@ class _FragmentInspector(HTMLParser):
         self.root_classes: frozenset[str] = frozenset()
         self.root_id = ""
         self.root_title = ""
+        self.class_tokens: set[str] = set()
         self.direct_children: list[tuple[str, frozenset[str]]] = []
         self.direct_notes = 0
         self.outside_errors: list[str] = []
@@ -366,6 +367,7 @@ class _FragmentInspector(HTMLParser):
         tag = tag.casefold()
         values = _attrs(attrs)
         classes = frozenset(_class_tokens(attrs))
+        self.class_tokens.update(classes)
         depth = len(self.stack)
         if depth == 0:
             self.root_count += 1
@@ -492,3 +494,10 @@ def validate_fragment(fragment: str, expected: SlideSpecRow) -> list[str]:
         errors.append("aside.notes must be the final direct child element")
     errors.extend(inspector.markup_errors)
     return list(dict.fromkeys(errors))
+
+
+def fragment_class_tokens(fragment: str) -> frozenset[str]:
+    inspector = _FragmentInspector()
+    inspector.feed(fragment)
+    inspector.close()
+    return frozenset(inspector.class_tokens)
