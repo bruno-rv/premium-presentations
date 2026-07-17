@@ -28,6 +28,8 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
+from slide_spec import SlideSpecError
+
 ROOT = Path(__file__).resolve().parent.parent.parent
 VALIDATOR_PATH = ROOT / "scripts" / "validate_deck.py"
 
@@ -193,7 +195,36 @@ SLIDE_MAP_DRAFT_HEADING = """## Slide Map (draft)
 """
 
 
+MALFORMED_SLIDE_MAP = """## Slide Map
+
+| # | Type | Title | Key Content | Visual Pattern |
+|---|------|-------|-------------|----------------|
+| 1 | Title | Opening |
+"""
+
+
+UNTERMINATED_HEADER_SLIDE_MAP = """## Slide Map
+
+| # | Type | Title
+"""
+
+
+NO_SLIDE_MAP = """## Lesson Plan
+
+No tabular slide map has been written yet.
+"""
+
+
 class SlideMapHeaderParsingTests(unittest.TestCase):
+    def test_slide_count_accepts_id_before_class(self) -> None:
+        html = _make_deck_html(slide_count=1).replace(
+            '<section class="slide">',
+            '<section id="opening" class="slide">',
+        )
+        rc, out = run_validate(html, NO_SLIDE_MAP)
+        self.assertEqual(rc, 0, f"Expected attribute order to remain valid:\n{out}")
+        self.assertIn("Slides found: 1", out)
+
     def test_new_9col_format_mismatch_fails(self) -> None:
         """New-format (9-col) spec claiming 5 slides vs. a 2-slide deck must FAIL,
         not silently degrade to a 'no slide map rows parsed' warning."""
@@ -287,6 +318,33 @@ class SlideMapHeaderParsingTests(unittest.TestCase):
         rc, out = run_validate(html, SLIDE_MAP_DRAFT_HEADING)
         self.assertEqual(rc, 0, f"Expected '## Slide Map (draft)' to still be recognized:\n{out}")
         self.assertIn("Spec expects: 2", out)
+
+    def test_malformed_detected_slide_map_is_an_error(self) -> None:
+        html = _make_deck_html(slide_count=1)
+        rc, out = run_validate(html, MALFORMED_SLIDE_MAP)
+        self.assertEqual(rc, 1, f"Expected malformed Slide Map to fail validation:\n{out}")
+        self.assertIn("FAIL: Invalid Slide Map:", out)
+
+    def test_unterminated_slide_map_header_is_an_error(self) -> None:
+        html = _make_deck_html(slide_count=1)
+        rc, out = run_validate(html, UNTERMINATED_HEADER_SLIDE_MAP)
+        self.assertEqual(rc, 1, f"Expected malformed Slide Map header to fail:\n{out}")
+        self.assertIn("FAIL: Invalid Slide Map:", out)
+        self.assertNotIn("no slide map rows parsed", out)
+
+    def test_absent_slide_map_remains_a_warning(self) -> None:
+        html = _make_deck_html(slide_count=1)
+        rc, out = run_validate(html, NO_SLIDE_MAP)
+        self.assertEqual(rc, 0, f"Expected absent Slide Map to remain non-fatal:\n{out}")
+        self.assertIn("WARN: Spec provided but no slide map rows parsed", out)
+
+    def test_absent_map_warning_uses_error_code_not_message(self) -> None:
+        html = _make_deck_html(slide_count=1)
+        changed_wording = SlideSpecError("no_slide_map", "wording changed")
+        with patch("slide_spec.parse_slide_map", side_effect=changed_wording):
+            rc, out = run_validate(html, NO_SLIDE_MAP)
+        self.assertEqual(rc, 0, f"Expected no_slide_map code to remain a warning:\n{out}")
+        self.assertIn("WARN: Spec provided but no slide map rows parsed", out)
 
 
 if __name__ == "__main__":

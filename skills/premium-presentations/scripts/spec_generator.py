@@ -15,8 +15,8 @@ import sys
 from pathlib import Path
 
 TABLE_HEADER = (
-    "| # | Act | Type | Title | Key Content | Visual Pattern | Why Panel | Voiceover Beat | Speaker Notes |\n"
-    "|---|-----|------|-------|-------------|----------------|-----------|----------------|---------------|"
+    "| # | ID | Act | Type | Title | Key Content | Visual Pattern | Why Panel | Voiceover Beat | Speaker Notes |\n"
+    "|---|----|-----|------|-------|-------------|----------------|-----------|----------------|---------------|"
 )
 
 # Concrete component IDs rotated through content slides so every slot ships
@@ -128,7 +128,7 @@ def slide_row(i: int, count: int, content_ordinal: int = 0) -> str:
         pattern = f"{suggestion} {PATTERN_NOTE}"
         notes = PATTERN_SPEAKER_NOTES[idx]
     act = slide_act(i, count)
-    return f"| {i} | {act} | {typ} | {title} | TBD | {pattern} | TBD | {beat} | {notes} |"
+    return f"| {i} | slide-{i} | {act} | {typ} | {title} | TBD | {pattern} | TBD | {beat} | {notes} |"
 
 
 def slide_rows(count: int) -> list[str]:
@@ -149,7 +149,7 @@ def generate_spec(text: str, slug: str, title: str, count: int) -> str:
 
     table = TABLE_HEADER + "\n" + "\n".join(slide_rows(count))
     return re.sub(
-        r"\| # \| Act \| Type \| Title \| Key Content \| Visual Pattern \| Why Panel[^\n]*\n"
+        r"\| # \| (?:ID \| )?Act \| Type \| Title \| Key Content \| Visual Pattern \| Why Panel[^\n]*\n"
         r"\|---\|[^\n]*\n"
         r"(?:\|[^\n]*\n)*",
         table.replace("\\", "\\\\") + "\n",

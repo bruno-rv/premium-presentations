@@ -74,13 +74,13 @@ Divider slides mark act boundaries. Acts must reflect the topic's content phases
 
 ## Slide Map
 
-| # | Act | Type | Title | Key Content | Visual Pattern | Why Panel | Voiceover Beat | Speaker Notes |
-|---|-----|------|-------|-------------|----------------|-----------|----------------|---------------|
-| 1 | 0 | Title | … | … | slide--title | N/A | "{First words the presenter says}" | … |
-| 2 | 0 | Hook Quote | … | … | slide--quote | N/A | "{Delivery cue for the quote}" | … |
-| 3 | 1 | Content | … | … | FLOW+ live-flow \| PIPE pipeline-vertical \| P9 compare-paradigm \| P14 journey \| TL timeline \| STG stage-card \| GL glass-code \| TERM terminal \| BAR bar-chart \| FLOW setup-flow \| STAT stats-row \| CHK checklist \| kpi-row \| content-grid+aside-card \| data-table | "{Why this matters}" | "{What the presenter says — not a repeat of slide text}" | … |
-| … | … | … | … | … | … | … | … | … |
-| N | N | Closing Quote | … | … | slide--quote | N/A | "{Anchor phrase delivery}" | … |
+| # | ID | Act | Type | Title | Key Content | Visual Pattern | Why Panel | Voiceover Beat | Speaker Notes |
+|---|----|-----|------|-------|-------------|----------------|-----------|----------------|---------------|
+| 1 | slide-1 | 0 | Title | … | … | slide--title | N/A | "{First words the presenter says}" | … |
+| 2 | slide-2 | 0 | Hook Quote | … | … | slide--quote | N/A | "{Delivery cue for the quote}" | … |
+| 3 | slide-3 | 1 | Content | … | … | FLOW+ live-flow \| PIPE pipeline-vertical \| P9 compare-paradigm \| P14 journey \| TL timeline \| STG stage-card \| GL glass-code \| TERM terminal \| BAR bar-chart \| FLOW setup-flow \| STAT stats-row \| CHK checklist \| kpi-row \| content-grid+aside-card \| data-table | "{Why this matters}" | "{What the presenter says — not a repeat of slide text}" | … |
+| … | … | … | … | … | … | … | … | … | … |
+| N | slide-N | N | Closing Quote | … | … | slide--quote | N/A | "{Anchor phrase delivery}" | … |
 
 **Visual Pattern rule:** every Content row names one concrete pattern from the
 routing table in [components.md](components.md) — never leave it generic and

@@ -105,6 +105,31 @@ existing scaffold → spec → generate → `deck_doctor.py` pipeline unchanged.
 
 **Theme visuals:** `.slide--title` receives a `hero` visual; `.slide--divider` receives a `map` visual. Default linked-mode assets follow `assets/shared/assets/theme-visuals/<theme>-<role>.webp`; bundled standalone decks embed those images as `data:` URIs. Override with `data-theme-visual-<theme>-<role>` or `window.PremiumThemeVisuals` only when the value is a `data:image/...` URI in standalone output; unsafe remote or sidecar paths are ignored. Disable per slide with `data-theme-visual="off"`.
 
+## Partial regeneration
+
+For an existing initialized deck, use the same provider-neutral commands from
+the skill root for Claude Code and Codex:
+
+```bash
+cd skills/premium-presentations
+python3 scripts/partial_regen.py init --deck DECK --spec SPEC
+python3 scripts/partial_regen.py init --deck DECK --spec SPEC --apply
+python3 scripts/partial_regen.py plan --deck DECK --spec SPEC --json
+python3 scripts/partial_regen.py apply --deck DECK --spec SPEC --fragment slide-3=slide-3.html
+python3 scripts/partial_regen.py rollback --deck DECK --backup BACKUP_DIRECTORY
+```
+
+Initialization is always explicit: inspect the preview and assigned IDs before
+`--apply`. Both providers read the JSON plan and create one matching section
+fragment for each changed ID; the CLI makes no provider call. Supply the exact
+complete fragment set in one apply. The operation preserves untouched slide
+bytes and the embedded WebP hero/map theme homages, so live theme changes keep
+their imagery after regeneration; run Deck Doctor before publishing.
+
+Require full regeneration for insertion, deletion, reordering, global
+CSS/runtime/control changes, new glossary keys, or a new conditional runtime
+capability. Never hand-edit the initialized baseline: section drift exits `3`.
+
 **3D modes:** **`3`** cycles `off → ambient → tilt → depth → card` (`Shift+3` backward; handled
 via `e.code === 'Digit3'`, layout-safe). `data-3d="<mode>"` on `<html>` is the source
 of truth; the controls panel has a `3D` select (`#premium-3d`) and a transient toast

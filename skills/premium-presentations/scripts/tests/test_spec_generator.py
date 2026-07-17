@@ -32,7 +32,7 @@ class SpecGeneratorTests(unittest.TestCase):
         rows: dict[int, str] = {}
         in_map = False
         for line in spec.splitlines():
-            if line.startswith("| # | Act |"):
+            if line.startswith("| # | ID | Act |"):
                 in_map = True
                 continue
             if not in_map:
@@ -56,7 +56,7 @@ class SpecGeneratorTests(unittest.TestCase):
         patterns = set()
         for row in content_rows:
             cells = [c.strip() for c in row.strip("|").split("|")]
-            pattern = cells[5]
+            pattern = cells[6]
             self.assertIn(self.gen.PATTERN_NOTE, pattern)
             patterns.add(pattern.replace(self.gen.PATTERN_NOTE, "").strip())
         self.assertGreaterEqual(len(patterns), 4)
@@ -85,8 +85,8 @@ class SpecGeneratorTests(unittest.TestCase):
         rows = self.map_rows(self.spec_14)
         for i, row in rows.items():
             cells = [c.strip() for c in row.strip("|").split("|")]
-            self.assertGreaterEqual(len(cells), 9, f"Row {i} has fewer than 9 cells")
-            notes_cell = cells[8]
+            self.assertGreaterEqual(len(cells), 10, f"Row {i} has fewer than 10 cells")
+            notes_cell = cells[9]
             self.assertTrue(
                 len(notes_cell) > 10,
                 f"Row {i} speaker notes cell is empty or too short: {notes_cell!r}",
@@ -98,7 +98,7 @@ class SpecGeneratorTests(unittest.TestCase):
             if not self.gen.is_content_slide(i, 14):
                 continue
             cells = [c.strip() for c in row.strip("|").split("|")]
-            notes_cell = cells[8]
+            notes_cell = cells[9]
             self.assertNotEqual(notes_cell, "TBD", f"Row {i} notes is still TBD")
             self.assertNotIn("add notes here", notes_cell.lower(), f"Row {i} has generic placeholder")
 
@@ -106,9 +106,27 @@ class SpecGeneratorTests(unittest.TestCase):
         rows = self.map_rows(self.spec_14)
         for fixed_slot in (1, 2, 14):
             cells = [c.strip() for c in rows[fixed_slot].strip("|").split("|")]
-            notes_cell = cells[8]
+            notes_cell = cells[9]
             self.assertTrue(len(notes_cell) > 10, f"Slot {fixed_slot} notes too short: {notes_cell!r}")
             self.assertNotIn("add notes here", notes_cell.lower())
+
+    def test_generated_slide_map_has_deterministic_ids(self) -> None:
+        rows = self.map_rows(self.spec_14)
+        for i, row in rows.items():
+            cells = [c.strip() for c in row.strip("|").split("|")]
+            self.assertEqual(cells[1], f"slide-{i}")
+
+    def test_regeneration_accepts_legacy_header_without_id(self) -> None:
+        legacy = """## Slide Map
+| # | Act | Type | Title | Key Content | Visual Pattern | Why Panel | Voiceover Beat | Speaker Notes |
+|---|-----|------|-------|-------------|----------------|-----------|----------------|---------------|
+| 1 | 0 | Title | Old title | Old content | slide--title | N/A | Old beat | Old notes |
+
+## Evidence Data
+"""
+        generated = self.gen.generate_spec(legacy, "demo", "Demo", 2)
+        self.assertEqual(generated.count("| # | ID | Act |"), 1)
+        self.assertNotIn("Old title", generated)
 
 
 if __name__ == "__main__":

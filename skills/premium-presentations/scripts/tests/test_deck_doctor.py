@@ -8,12 +8,14 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import deck_doctor  # noqa: E402
+import validate_layout  # noqa: E402
 from _common import REQUIRED_CSS, REQUIRED_JS  # noqa: E402
 
 
@@ -100,6 +102,24 @@ class DeckDoctorTests(unittest.TestCase):
         self.assertEqual(rc, 1, f"Expected exit 1 for missing spec:\n{err}")
         self.assertIn("Spec not found", err)
         self.assertIn(str(bogus_spec), err)
+
+    def test_layout_validation_runs_once_and_rejects_layout_errors(self) -> None:
+        sweeps = 0
+
+        def playwright_sweep(*_args: object) -> tuple[list[str], list[str]]:
+            nonlocal sweeps
+            sweeps += 1
+            return ["layout sweep failed"], []
+
+        with mock.patch.object(
+            validate_layout, "_playwright_check", side_effect=playwright_sweep
+        ):
+            rc, out = run_doctor(_make_deck_html(2), SPEC_2_ROWS)
+
+        self.assertEqual(sweeps, 1)
+        self.assertEqual(rc, 1)
+        self.assertIn("[✗] validate_deck", out)
+        self.assertIn("layout sweep failed", out)
 
 
 if __name__ == "__main__":

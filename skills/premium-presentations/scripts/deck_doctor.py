@@ -24,7 +24,6 @@ import validate_contrast
 import validate_deck
 import validate_runtime_contract
 from validate_diagrams import validate_deck_diagrams, validate_inline_scripts
-from validate_layout import validate_deck_layout
 from _common import THEMES_CSS
 
 # validate_deck.validate() always ends with one of these summary lines.
@@ -81,15 +80,7 @@ def main(argv: list[str]) -> int:
         deck_out.splitlines(),
     )
 
-    # 2. validate_layout — importable (errors, warnings) API.
-    l_errs, l_warns = validate_deck_layout(text, bundle, html_path)
-    _section(
-        "validate_layout (divider ghost numbers, overlap)",
-        not l_errs,
-        [f"FAIL: {e}" for e in l_errs] + [f"WARN: {w}" for w in l_warns],
-    )
-
-    # 3. validate_diagrams — importable (errors, warnings) API.
+    # 2. validate_diagrams — importable (errors, warnings) API.
     d_errs, d_warns, mermaid_count = validate_deck_diagrams(text, bundle, html_path)
     s_errs, s_warns = validate_inline_scripts(text)
     d_errs, d_warns = d_errs + s_errs, d_warns + s_warns
@@ -97,7 +88,7 @@ def main(argv: list[str]) -> int:
     d_lines += [f"FAIL: {e}" for e in d_errs] + [f"WARN: {w}" for w in d_warns]
     _section("validate_diagrams (mermaid structure, engine)", not d_errs, d_lines)
 
-    # 4. validate_runtime_contract — its main() is repo-wide (templates + every
+    # 3. validate_runtime_contract — its main() is repo-wide (templates + every
     # deck under assets/), so the doctor scopes to this deck via check_file(),
     # which applies to bundled decks (module markers). Its rel() formatter is
     # ROOT-relative and breaks for decks outside the skill tree, so report
@@ -111,7 +102,7 @@ def main(argv: list[str]) -> int:
         [f"FAIL: {e}" for e in rt_errors],
     )
 
-    # 5. validate_contrast — repo-wide WCAG gate over every html[data-theme=...]
+    # 4. validate_contrast — repo-wide WCAG gate over every html[data-theme=...]
     # block in the SOURCE premium-themes.css (_common.THEMES_CSS), not this
     # deck's HTML (a linked deck has zero inlined data-theme token blocks, so
     # scanning deck HTML would pass vacuously — see ADR-a).
