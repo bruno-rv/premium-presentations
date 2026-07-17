@@ -337,6 +337,22 @@ class PlanningTests(PairFixture):
         self.assertEqual(payload["status"], "error")
         self.assertEqual(payload["changed"], {})
 
+    def test_non_object_transaction_json_is_controlled_invalid_input(self) -> None:
+        deck, spec = self.write_uninitialized_pair()
+        backup = deck.parent / ".partial-regen" / "backups" / "transaction"
+        backup.mkdir(parents=True)
+        (backup / "metadata.json").write_text("[]", encoding="utf-8")
+
+        rc, output = self.run_main(
+            ["plan", "--deck", str(deck), "--spec", str(spec), "--json"]
+        )
+
+        self.assertEqual(rc, 1)
+        payload = json.loads(output)
+        self.assertEqual(payload["status"], "error")
+        self.assertEqual(payload["reasonCode"], "invalid_input")
+        self.assertNotIn("AttributeError", output)
+
     def test_public_cli_help_preserves_success_exit_code(self) -> None:
         rc, output = self.run_main(["--help"])
         self.assertEqual(rc, 0)
@@ -502,6 +518,40 @@ class MutationTests(PairFixture):
         self.assertEqual(self.run_main(["rollback", "--deck", str(deck), "--backup", str(backup)])[0], 0)
         self.assertEqual((deck.read_bytes(), spec.read_bytes()), original)
         self.assertEqual(self.run_main(["rollback", "--deck", str(deck), "--backup", str(backup / "..")])[0], 1)
+
+    def test_rollback_of_pre_state_init_backup_derives_spec_target(self) -> None:
+        deck, spec = self.write_uninitialized_pair()
+        original = (deck.read_bytes(), spec.read_bytes())
+        partial_regen._create_backup(deck, "init", (deck, spec))
+        backup = self.only_backup(deck)
+        deck.write_bytes(deck.read_bytes() + b"\n<!-- changed -->")
+        spec.write_text(spec.read_text(encoding="utf-8").replace("Opening", "Changed"), encoding="utf-8")
+
+        rc, output = self.run_main(["rollback", "--deck", str(deck), "--backup", str(backup)])
+
+        self.assertEqual(rc, 0, output)
+        self.assertEqual((deck.read_bytes(), spec.read_bytes()), original)
+
+    def test_rollback_init_uses_nonconventional_metadata_spec_with_corrupt_state(self) -> None:
+        deck, conventional_spec = self.write_uninitialized_pair()
+        spec = self.root / "custom-plan.txt"
+        spec.write_bytes(conventional_spec.read_bytes())
+        original = (deck.read_bytes(), spec.read_bytes())
+        partial_regen._create_backup(deck, "init", (deck, spec))
+        backup = self.only_backup(deck)
+        deck.write_text(
+            deck.read_text(encoding="utf-8").replace(
+                "</body>",
+                '<script type="application/json" id="premium-regen-state">[]</script></body>',
+            ),
+            encoding="utf-8",
+        )
+        spec.write_text(spec.read_text(encoding="utf-8").replace("Opening", "Changed"), encoding="utf-8")
+
+        rc, output = self.run_main(["rollback", "--deck", str(deck), "--backup", str(backup)])
+
+        self.assertEqual(rc, 0, output)
+        self.assertEqual((deck.read_bytes(), spec.read_bytes()), original)
 
     def test_init_publish_failures_restore_originals_and_close_journal(self) -> None:
         for failed_call in (1, 2):

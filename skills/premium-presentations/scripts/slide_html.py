@@ -177,6 +177,8 @@ class _SlideParser(_OffsetParser):
 
     def handle_endtag(self, tag: str) -> None:
         tag = tag.casefold()
+        if not self.stack or self.stack[-1][0] != tag:
+            raise SlideHtmlError(f"mismatched closing tag </{tag}>")
         if self.active is not None and tag == "section":
             depth = int(self.active["section_depth"]) - 1
             self.active["section_depth"] = depth
@@ -194,11 +196,7 @@ class _SlideParser(_OffsetParser):
                     _SlideRecord(span=span, start_tag_end=int(self.active["start_tag_end"]))
                 )
                 self.active = None
-
-        for index in range(len(self.stack) - 1, -1, -1):
-            if self.stack[index][0] == tag:
-                del self.stack[index:]
-                break
+        self.stack.pop()
 
 
 def _parse_slide_records(source: str) -> list[_SlideRecord]:
@@ -209,6 +207,8 @@ def _parse_slide_records(source: str) -> list[_SlideRecord]:
         raise SlideHtmlError("missing div#deck root")
     if parser.active is not None:
         raise SlideHtmlError("unclosed slide section")
+    if parser.stack:
+        raise SlideHtmlError("unclosed ancestor element")
     return parser.records
 
 

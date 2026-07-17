@@ -134,6 +134,19 @@ class SlideHtmlTests(unittest.TestCase):
             with self.subTest(label=label), self.assertRaises(SlideHtmlError):
                 parse_slide_spans(source)
 
+    def test_parse_rejects_mismatched_and_unclosed_ancestor_nesting(self) -> None:
+        cases = {
+            "mismatched ancestor": (
+                '<div id="deck"><section class="slide" id="one"><div></section></div>'
+            ),
+            "unclosed ancestor": (
+                '<div id="deck"><section class="slide" id="one"></section>'
+            ),
+        }
+        for label, source in cases.items():
+            with self.subTest(label=label), self.assertRaises(SlideHtmlError):
+                parse_slide_spans(source)
+
     def test_deck_detection_uses_first_duplicate_id_value(self) -> None:
         later_match = DECK.replace(
             '<div id="deck">',
