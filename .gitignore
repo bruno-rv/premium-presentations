@@ -28,3 +28,6 @@ assets/decks/
 
 # Internal dev-planning artifacts — not part of the distributed plugin
 PLAN-*.md
+graphify-out/
+PORTABILITY-AUDIT-*.md
+AUDIT-REVIEW-LOG.md

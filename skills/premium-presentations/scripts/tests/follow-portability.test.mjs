@@ -67,8 +67,8 @@ test('no param (file:// / plain open): 0 fetch, 0 setTimeout, 0 listeners, no th
   assert.equal(slidechangeListeners, 0);
 });
 
-test('?present=1 binds a premium:slidechange listener that POSTs the slide id', async () => {
-  const dom = makeDom('http://localhost/deck.html?present=1');
+test('?present=1 preserves the room token when POSTing the slide id', async () => {
+  const dom = makeDom('http://localhost/deck.html?present=1&room=room-secret');
   const { window } = dom;
 
   const posted = [];
@@ -82,13 +82,13 @@ test('?present=1 binds a premium:slidechange listener that POSTs the slide id', 
   await Promise.resolve();
 
   assert.equal(posted.length, 1);
-  assert.equal(posted[0].url, '/slide');
+  assert.equal(posted[0].url, '/slide?room=room-secret');
   assert.equal(posted[0].opts.method, 'POST');
   assert.deepEqual(JSON.parse(posted[0].opts.body), { id: 'slide-2' });
 });
 
 test('?present=1 swallows fetch errors instead of throwing', () => {
-  const dom = makeDom('http://localhost/deck.html?present=1');
+  const dom = makeDom('http://localhost/deck.html?present=1&room=room-secret');
   const { window } = dom;
   window.fetch = () => { throw new Error('network down'); };
 
@@ -96,6 +96,19 @@ test('?present=1 swallows fetch errors instead of throwing', () => {
   assert.doesNotThrow(() => {
     window.dispatchEvent(new window.CustomEvent('premium:slidechange', { detail: { id: 'slide-2' } }));
   });
+});
+
+test('present/follow mode without a room token remains inert', () => {
+  for (const mode of ['present', 'follow']) {
+    const dom = makeDom(`http://localhost/deck.html?${mode}=1`);
+    let fetchCalls = 0;
+    dom.window.fetch = () => { fetchCalls += 1; return Promise.resolve({}); };
+    dom.window.eval(source);
+    dom.window.dispatchEvent(new dom.window.CustomEvent('premium:slidechange', {
+      detail: { id: 'slide-2' },
+    }));
+    assert.equal(fetchCalls, 0, `${mode} must not contact an unscoped room`);
+  }
 });
 
 // Capture every setTimeout call (both the abort-timeout and the
@@ -110,14 +123,18 @@ function stubSetTimeoutCapture(window) {
   return calls;
 }
 
-test('?follow=1 polls GET /slide and navigates via scrollIntoView by id', async () => {
-  const dom = makeDom('http://localhost/deck.html?follow=1');
+test('?follow=1 preserves the room token while polling and navigates by id', async () => {
+  const dom = makeDom('http://localhost/deck.html?follow=1&room=room%20secret');
   const { window } = dom;
 
   let scrolledId = null;
   window.HTMLElement.prototype.scrollIntoView = function () { scrolledId = this.id; };
   const calls = stubSetTimeoutCapture(window);
-  window.fetch = () => Promise.resolve({ json: () => Promise.resolve({ id: 'slide-2' }) });
+  let fetchedUrl = '';
+  window.fetch = (url) => {
+    fetchedUrl = url;
+    return Promise.resolve({ json: () => Promise.resolve({ id: 'slide-2' }) });
+  };
 
   window.eval(source);
   // poll() runs synchronously at eval time and schedules its abort-timeout.
@@ -127,6 +144,7 @@ test('?follow=1 polls GET /slide and navigates via scrollIntoView by id', async 
   await flush();
 
   assert.equal(scrolledId, 'slide-2');
+  assert.equal(fetchedUrl, '/slide?room=room%20secret');
   // The fetch resolved well under the abort deadline, so the cycle advanced
   // by scheduling exactly one next-poll timer at the 1500ms cadence.
   assert.equal(calls.length, 2);
@@ -134,7 +152,7 @@ test('?follow=1 polls GET /slide and navigates via scrollIntoView by id', async 
 });
 
 test('?follow=1 does not re-navigate when the polled id matches the current visible slide', async () => {
-  const dom = makeDom('http://localhost/deck.html?follow=1');
+  const dom = makeDom('http://localhost/deck.html?follow=1&room=room-secret');
   const { window } = dom;
 
   let scrollCount = 0;
@@ -149,7 +167,7 @@ test('?follow=1 does not re-navigate when the polled id matches the current visi
 });
 
 test('?follow=1 swallows fetch rejection and keeps polling', async () => {
-  const dom = makeDom('http://localhost/deck.html?follow=1');
+  const dom = makeDom('http://localhost/deck.html?follow=1&room=room-secret');
   const { window } = dom;
   const calls = stubSetTimeoutCapture(window);
   window.fetch = () => Promise.reject(new Error('offline'));
@@ -162,7 +180,7 @@ test('?follow=1 swallows fetch rejection and keeps polling', async () => {
 });
 
 test('?follow=1 is single-flight: no second fetch while the first is still pending', async () => {
-  const dom = makeDom('http://localhost/deck.html?follow=1');
+  const dom = makeDom('http://localhost/deck.html?follow=1&room=room-secret');
   const { window } = dom;
 
   let fetchCalls = 0;
@@ -181,7 +199,7 @@ test('?follow=1 is single-flight: no second fetch while the first is still pendi
 });
 
 test('?follow=1 advances to the next poll when the abort-timeout fires on a hung fetch', async () => {
-  const dom = makeDom('http://localhost/deck.html?follow=1');
+  const dom = makeDom('http://localhost/deck.html?follow=1&room=room-secret');
   const { window } = dom;
 
   let fetchCalls = 0;
@@ -215,7 +233,7 @@ test('?follow=1 advances to the next poll when the abort-timeout fires on a hung
 });
 
 test('?follow=1 drops a stale response that resolves late and out of order (no navigate)', async () => {
-  const dom = makeDom('http://localhost/deck.html?follow=1');
+  const dom = makeDom('http://localhost/deck.html?follow=1&room=room-secret');
   const { window } = dom;
 
   let scrolledId = null;

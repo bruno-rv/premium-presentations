@@ -21,6 +21,20 @@ function tick(n) {
   return new Promise((r) => setTimeout(r, n || 10));
 }
 
+function installTrustedOpener(popup) {
+  const opener = { closed: false, postMessage() {} };
+  Object.defineProperty(popup.window, 'opener', { value: opener, configurable: true });
+  return opener;
+}
+
+function directPopupMessage(popup, opener, data) {
+  popup.window.dispatchEvent(new popup.window.MessageEvent('message', {
+    data,
+    source: opener,
+    origin: popup.window.location.origin,
+  }));
+}
+
 // ── nextStateSeq monotonic allocator ─────────────────────────────────────────
 
 console.log('Test: nextStateSeq — monotonic, shared across calls');
@@ -46,6 +60,7 @@ console.log('Test: nextStateSeq — monotonic, shared across calls');
 console.log('Test: popup reducer — stale slidechange ignored (seq filter)');
 await (async () => {
   const popup = makeWindow({ url: 'http://localhost/d.html?presenter=1&session=test-sess', withSlides: false });
+  const opener = installTrustedOpener(popup);
   popup.window.document.documentElement.dataset.session = 'test-sess';
   loadScript(popup, 'premium-controller.js');
   loadScript(popup, 'premium-slide-content.js');
@@ -61,24 +76,20 @@ await (async () => {
 
   // Direct postMessage to the popup window — simulates deck sending to popup.
   // onPopupMessage is wired to the window 'message' event.
-  popup.window.dispatchEvent(new popup.window.MessageEvent('message', {
-    data: {
+  directPopupMessage(popup, opener, {
       type: 'slidechange', sessionId: 'test-sess', seq: 10,
       index: 2, total: 4, notes: 'Slide Three', bodyHtml: '',
       nextTitle: 'Slide Four',
-    },
-  }));
+  });
   await tick(20);
   const afterNew = counter.textContent;
 
   // Stale message (lower seq) — should be ignored.
-  popup.window.dispatchEvent(new popup.window.MessageEvent('message', {
-    data: {
+  directPopupMessage(popup, opener, {
       type: 'slidechange', sessionId: 'test-sess', seq: 5,
       index: 0, total: 4, notes: 'Slide One (stale)', bodyHtml: '',
       nextTitle: 'Slide Two',
-    },
-  }));
+  });
   await tick(20);
   const afterStale = counter.textContent;
 
@@ -91,6 +102,7 @@ await (async () => {
 console.log('Test: popup session filter — messages from different session ignored');
 await (async () => {
   const popup = makeWindow({ url: 'http://localhost/d.html?presenter=1&session=sess-A', withSlides: false });
+  const opener = installTrustedOpener(popup);
   popup.window.document.documentElement.dataset.session = 'sess-A';
   loadScript(popup, 'premium-controller.js');
   loadScript(popup, 'premium-slide-content.js');
@@ -105,29 +117,69 @@ await (async () => {
   }
 
   // Message from same session — should apply.
-  popup.window.dispatchEvent(new popup.window.MessageEvent('message', {
-    data: {
+  directPopupMessage(popup, opener, {
       type: 'snapshot', sessionId: 'sess-A', seq: 1,
       index: 1, total: 3,
       titles: ['A', 'B', 'C'], notes: ['', 'Note B', ''], bodyHtmls: ['', '', ''],
-    },
-  }));
+  });
   await tick(20);
   const afterOwn = counter.textContent;
 
   // Message from different session — should be ignored.
-  popup.window.dispatchEvent(new popup.window.MessageEvent('message', {
-    data: {
+  directPopupMessage(popup, opener, {
       type: 'snapshot', sessionId: 'sess-B', seq: 2,
       index: 0, total: 5,
       titles: ['X', 'Y', 'Z', 'W', 'V'], notes: [], bodyHtmls: [],
-    },
-  }));
+  });
   await tick(20);
   const afterForeign = counter.textContent;
 
   assert('own-session snapshot applied', /2\s*\/\s*3/.test(afterOwn), 'counter=' + afterOwn);
   assert('foreign-session snapshot ignored', afterForeign === afterOwn, 'after foreign: ' + afterForeign);
+})();
+
+console.log('Test: BroadcastChannel/storage messages require an exact session');
+await (async () => {
+  const deck = makeWindow({ url: 'http://localhost/sessionless.html', bc: FakeBC });
+  deck.window.document.documentElement.dataset.session = 'strict-session';
+  let jumpedTo = null;
+  deck.window.PremiumDeckControls = {
+    goTo: (index) => { jumpedTo = index; },
+    next() {}, prev() {},
+    getTitles: () => [],
+    getState: () => ({ index: 0, total: 0 }),
+    getNotes: () => '',
+    getSummary: () => '',
+  };
+  loadScript(deck, 'premium-presenter.js');
+  await tick(20);
+  const sender = new FakeBC('premium-deck');
+  sender.postMessage({ type: 'control', action: 'jump', index: 1, commandId: 'no-session' });
+  await tick(20);
+  assert('sessionless BroadcastChannel control ignored', jumpedTo === null);
+
+  const popup = makeWindow({
+    url: 'http://localhost/sessionless.html?presenter=1&session=strict-session',
+    withSlides: false,
+    bc: 'none',
+  });
+  popup.window.document.documentElement.dataset.session = 'strict-session';
+  loadScript(popup, 'premium-presenter.js');
+  await tick(20);
+  const counter = popup.window.document.getElementById('pp-counter');
+  const storagePayload = JSON.stringify({
+    _t: 1,
+    payload: {
+      type: 'snapshot', index: 1, total: 2,
+      titles: ['One', 'Two'], notes: ['', ''], bodyHtmls: ['', ''],
+    },
+  });
+  popup.window.dispatchEvent(new popup.window.StorageEvent('storage', {
+    key: 'premium-deck-msg',
+    newValue: storagePayload,
+  }));
+  await tick(20);
+  assert('sessionless storage snapshot ignored', counter && counter.textContent === '– / –');
 })();
 
 // ── Timer passivity in popup ─────────────────────────────────────────────────
@@ -186,6 +238,17 @@ await (async () => {
 
   // Read the sessionId that premium-controller.js generated.
   const actualSid = deck.window.document.documentElement.dataset.session;
+  const popupPeer = {
+    closed: false,
+    opener: deck.window,
+    location: { search: '?presenter=1' },
+    postMessage() {},
+  };
+  deck.window.dispatchEvent(new deck.window.MessageEvent('message', {
+    data: { type: 'presenter.discover', popupSessionId: actualSid },
+    source: popupPeer,
+    origin: deck.window.location.origin,
+  }));
 
   // Track recordHeartbeat calls.
   let heartbeatRecorded = null;
@@ -210,6 +273,8 @@ await (async () => {
       popupFocused: true,
       seq: 1,
     },
+    source: popupPeer,
+    origin: deck.window.location.origin,
   }));
   await tick(20);
 

@@ -172,50 +172,70 @@
     if (fallbackPrompt) { fallbackPrompt.remove(); fallbackPrompt = null; }
   }
 
-  function rememberPopupSource(e) {
+  function directTargetOrigin() {
+    return location.protocol === 'http:' || location.protocol === 'https:'
+      ? location.origin
+      : '*';
+  }
+
+  function hasTrustedDirectOrigin(e) {
+    if (location.protocol !== 'http:' && location.protocol !== 'https:') return true;
+    return !!e && e.origin === location.origin;
+  }
+
+  function getOpener() {
+    try { return window.opener && !window.opener.closed ? window.opener : null; }
+    catch (_) { return null; }
+  }
+
+  function isPresenterChildSource(source) {
     try {
-      if (e && e.source && e.source !== window && typeof e.source.postMessage === 'function') {
-        popup = e.source;
-      }
-    } catch (_) {}
+      if (!source || source.opener !== window) return false;
+    } catch (_) { return false; }
+    try {
+      if (!source.location || typeof source.location.search !== 'string') return false;
+      return new URLSearchParams(source.location.search).get('presenter') === '1';
+    } catch (_) {
+      // Opaque file:// WindowProxy access can reject location inspection even
+      // when opener identity is available; source/session checks still apply.
+      return true;
+    }
   }
 
   // ─── Deck-side message handling ────────────────────────────────────────────
 
-  function onDeckMessage(e) {
+  function onDeckMessage(e, transport) {
     if (!e.data) return;
     const type = e.data.type;
     if (!type) return;
 
-    // presenter.discover and presenter.hereIam bypass session filtering:
-    // they are the adoption handshake and must cross session boundaries.
+    // Direct-window adoption is the sole session-boundary exception. It must
+    // come from the same origin (when origins exist) and from a real child
+    // WindowProxy. Once a popup is known, a different source cannot replace it.
     if (type === 'presenter.discover') {
-      rememberPopupSource(e);
+      if (transport !== 'window' || !hasTrustedDirectOrigin(e)) return;
+      try {
+        if (!e.source || e.source === window || typeof e.source.postMessage !== 'function') return;
+        const knownPopup = popup && !popup.closed ? popup : null;
+        if (knownPopup && knownPopup !== e.source) return;
+        if (!knownPopup && !isPresenterChildSource(e.source)) return;
+        popup = e.source;
+      } catch (_) { return; }
       try {
         const reply = { type: 'presenter.hereIam', deckSessionId: getSessionId() };
-        if (e.source && typeof e.source.postMessage === 'function') {
-          e.source.postMessage(reply, '*');
-        } else if (popup && !popup.closed) {
-          popup.postMessage(reply, '*');
-        }
+        e.source.postMessage(reply, directTargetOrigin());
       } catch (_) {}
       return;
     }
 
-    // Shared session filter: drop messages from a known foreign session.
-    // Messages that carry no sessionId (legacy bundles without stamping) pass.
     const msgSid = e.data.sessionId || '';
     const ourSid = getSessionId();
-    if (msgSid && ourSid && msgSid !== ourSid) return;
-
-    // rememberPopupSource only for messages that passed the session gate.
-    if (
-      type === 'presenter.ready' ||
-      type === 'presenter.heartbeat' ||
-      type === 'presenter.closing' ||
-      type === 'control'
-    ) {
-      rememberPopupSource(e);
+    if (!msgSid || !ourSid || msgSid !== ourSid) return;
+    if (transport === 'window') {
+      if (!hasTrustedDirectOrigin(e)) return;
+      try {
+        if (!popup || popup.closed || e.source !== popup) return;
+      } catch (_) { return; }
     }
 
     DIAG.recv++;
@@ -514,6 +534,49 @@
       .replace(/'/g, '&#39;');
   }
 
+  function sanitizeNotesHtml(html) {
+    const template = document.createElement('template');
+    template.innerHTML = String(html == null ? '' : html);
+    const allowedTags = new Set([
+      'A', 'B', 'BLOCKQUOTE', 'BR', 'CODE', 'DD', 'DL', 'DT', 'EM',
+      'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'I', 'LI', 'MARK', 'OL',
+      'P', 'PRE', 'SMALL', 'SPAN', 'STRONG', 'SUB', 'SUP', 'U', 'UL',
+    ]);
+    const dangerous = template.content.querySelectorAll(
+      'script, style, iframe, object, embed, svg, math, form, input, button, ' +
+      'textarea, select, link, meta, base'
+    );
+    dangerous.forEach((el) => el.remove());
+
+    Array.from(template.content.querySelectorAll('*')).forEach((el) => {
+      if (!allowedTags.has(el.tagName)) {
+        const parent = el.parentNode;
+        if (!parent) return;
+        while (el.firstChild) parent.insertBefore(el.firstChild, el);
+        el.remove();
+        return;
+      }
+
+      Array.from(el.attributes).forEach((attr) => {
+        const name = attr.name.toLowerCase();
+        const allowed = name === 'class' || name === 'title' || (
+          el.tagName === 'A' && (name === 'href' || name === 'target' || name === 'rel')
+        );
+        if (!allowed || name.startsWith('on')) el.removeAttribute(attr.name);
+      });
+
+      if (el.tagName === 'A' && el.hasAttribute('href')) {
+        const href = el.getAttribute('href').trim();
+        if (!/^(?:#|https?:|mailto:)/i.test(href)) el.removeAttribute('href');
+      }
+      if (el.tagName === 'A' && (el.getAttribute('target') || '').toLowerCase() === '_blank') {
+        el.setAttribute('target', '_blank');
+        el.setAttribute('rel', 'noopener noreferrer');
+      }
+    });
+    return template.innerHTML;
+  }
+
   function sendReady() {
     postToPeer({ type: 'presenter.ready', sessionId: getSessionId(), seq: nextStateSeq() });
   }
@@ -556,9 +619,10 @@
     } catch (_) {}
     try {
       if (isInPopup()) {
-        if (window.opener && !window.opener.closed) window.opener.postMessage(payload, '*');
+        const opener = getOpener();
+        if (opener) opener.postMessage(payload, directTargetOrigin());
       } else if (popup && !popup.closed) {
-        popup.postMessage(payload, '*');
+        popup.postMessage(payload, directTargetOrigin());
       }
     } catch (_) {}
     try {
@@ -1249,7 +1313,8 @@
   function renderNotes(html, slideEl) {
     const el = document.getElementById('pp-notes');
     if (!el) return;
-    el.innerHTML = html || '<em class="premium-presenter__no-notes">No notes for this slide</em>';
+    const content = html || '<em class="premium-presenter__no-notes">No notes for this slide</em>';
+    el.innerHTML = sanitizeNotesHtml(content);
     // Append compact Terms section when the slide has glossary entries.
     try {
       const glossary = window.PremiumGlossary;
@@ -1378,9 +1443,12 @@
     renderTimeline();
   }
 
-  function onPopupMessage(e) {
+  function onPopupMessage(e, transport) {
     if (!e.data) return;
     if (e.data.type === 'presenter.hereIam') {
+      if (transport !== 'window' || !hasTrustedDirectOrigin(e)) return;
+      const opener = getOpener();
+      if (!opener || e.source !== opener) return;
       const deckSid = e.data.deckSessionId;
       if (deckSid && deckSid !== getSessionId()) {
         document.documentElement.dataset.session = deckSid;
@@ -1391,14 +1459,16 @@
         popupTimerState = null;
         resetRehearsal();
         renderTimer(null);
-        sendReady();
       }
+      if (deckSid) sendReady();
       return;
     }
-    // Single session filter: ignore messages from other sessions
-    // (once adopted via hereIam our sessionId tracks the deck).
-    const msgSid = e.data.sessionId;
-    if (msgSid && msgSid !== getSessionId()) return;
+    const msgSid = e.data.sessionId || '';
+    if (!msgSid || msgSid !== getSessionId()) return;
+    if (transport === 'window') {
+      const opener = getOpener();
+      if (!hasTrustedDirectOrigin(e) || !opener || e.source !== opener) return;
+    }
 
     DIAG.recv++;
     DIAG.lastRecv = e.data.type || '?';
@@ -1411,9 +1481,11 @@
 
   function sendDiscover() {
     try {
-      if (window.opener && !window.opener.closed) {
-        window.opener.postMessage({ type: 'presenter.discover', popupSessionId: getSessionId() }, '*');
-      }
+      const opener = getOpener();
+      if (opener) opener.postMessage(
+        { type: 'presenter.discover', popupSessionId: getSessionId() },
+        directTargetOrigin()
+      );
     } catch (_) {}
   }
 
@@ -1453,8 +1525,8 @@
       postTransportInstalled = true;
       window.addEventListener('message', (e) => {
         if (!e.data || typeof e.data !== 'object') return;
-        if (isInPopup()) onPopupMessage(e);
-        else onDeckMessage(e);
+        if (isInPopup()) onPopupMessage(e, 'window');
+        else onDeckMessage(e, 'window');
       });
       window.addEventListener('storage', (e) => {
         if (e.key !== STORAGE_KEY) return;
@@ -1463,8 +1535,8 @@
         try { parsed = JSON.parse(e.newValue); } catch (_) { return; }
         const payload = parsed && parsed.payload;
         if (!payload) return;
-        if (isInPopup()) onPopupMessage({ data: payload });
-        else onDeckMessage({ data: payload });
+        if (isInPopup()) onPopupMessage({ data: payload }, 'storage');
+        else onDeckMessage({ data: payload }, 'storage');
       });
     }
 
@@ -1472,7 +1544,7 @@
       try { DIAG.opener = !!(window.opener && !window.opener.closed); } catch (_) {}
       try { DIAG.bcAvail = !!(typeof BroadcastChannel === 'function' && getCh()); } catch (_) {}
       try { DIAG.lsAvail = !!localStorage; } catch (_) {}
-      if (ch) ch.addEventListener('message', onPopupMessage);
+      if (ch) ch.addEventListener('message', (e) => onPopupMessage(e, 'broadcast'));
       buildPopupDom();
       updateDiag();
       window.addEventListener('beforeunload', onPopupUnload);
@@ -1481,7 +1553,7 @@
     }
 
     // Deck side.
-    if (ch) ch.addEventListener('message', onDeckMessage);
+    if (ch) ch.addEventListener('message', (e) => onDeckMessage(e, 'broadcast'));
     document.addEventListener('keydown', (e) => {
       if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;

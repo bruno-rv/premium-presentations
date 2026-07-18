@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import validate_contrast
 import validate_deck
+import validate_portability
 import validate_runtime_contract
 from validate_diagrams import validate_deck_diagrams, validate_inline_scripts
 from _common import THEMES_CSS
@@ -102,7 +103,15 @@ def main(argv: list[str]) -> int:
         [f"FAIL: {e}" for e in rt_errors],
     )
 
-    # 4. validate_contrast — repo-wide WCAG gate over every html[data-theme=...]
+    # 4. validate_portability — a bundle must be a genuinely standalone file.
+    portability_errors = validate_portability.validate_portability(text)
+    _section(
+        "validate_portability (embedded offline assets)",
+        not portability_errors,
+        [f"FAIL: {e}" for e in portability_errors],
+    )
+
+    # 5. validate_contrast — repo-wide WCAG gate over every html[data-theme=...]
     # block in the SOURCE premium-themes.css (_common.THEMES_CSS), not this
     # deck's HTML (a linked deck has zero inlined data-theme token blocks, so
     # scanning deck HTML would pass vacuously — see ADR-a).
@@ -115,8 +124,13 @@ def main(argv: list[str]) -> int:
 
     # Layout/diagram/inline findings are already counted inside validate_deck's
     # totals (validate() chains those same checkers), so the verdict sums only
-    # validate_deck + runtime-contract + contrast to avoid double counting.
-    issues = deck_errors + len(rt_errors) + len(contrast_errors)
+    # validate_deck + runtime-contract + portability + contrast.
+    issues = (
+        deck_errors
+        + len(rt_errors)
+        + len(portability_errors)
+        + len(contrast_errors)
+    )
     warnings = deck_warnings
     if issues:
         print(f"{issues} issue(s), {warnings} warning(s)")

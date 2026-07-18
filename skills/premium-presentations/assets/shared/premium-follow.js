@@ -5,13 +5,15 @@
  * wants_follow / validate_runtime_contract.py needs_follow_runtime) — mirrors
  * the existing data-theme="red" attribute-trigger pattern.
  *
- * Portability (AT5, load-bearing): with neither `?present=1` nor `?follow=1`
- * in the URL (file:// open, plain HTTP open, or any other param), this
+ * Portability (AT5, load-bearing): without `?present=1&room=...` or
+ * `?follow=1&room=...` in the URL (file:// open, plain HTTP open, or any
+ * unscoped mode), this
  * module returns immediately — no fetch, no setInterval, no listener bound.
  * Dead code on every deck that isn't actively presenting/following.
  *
- * ?present=1  — POST {id} to /slide on every premium:slidechange.
- * ?follow=1   — single-flight recursive poll of GET /slide, ~1500ms between
+ * ?present=1&room=... — POST {id} to tokenized /slide on each slide change.
+ * ?follow=1&room=...  — single-flight recursive poll of tokenized GET /slide,
+ *               ~1500ms between
  *               polls; navigate via document.getElementById(id).scrollIntoView(),
  *               exactly what PremiumDeckControls.goTo() does. slide-engine.js
  *               binds popstate only (not hashchange), so a programmatic
@@ -39,11 +41,14 @@
   var present = q.get('present') === '1';
   var follow = q.get('follow') === '1';
   if (!present && !follow) return;
+  var room = q.get('room') || '';
+  if (!room) return;
+  var slideEndpoint = '/slide?room=' + encodeURIComponent(room);
 
   if (present) {
     window.addEventListener('premium:slidechange', function (e) {
       try {
-        fetch('/slide', {
+        fetch(slideEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: e.detail && e.detail.id }),
@@ -77,7 +82,7 @@
         advance();
       }, pollTimeoutMs);
 
-      fetch('/slide', { signal: controller.signal })
+      fetch(slideEndpoint, { signal: controller.signal })
         .then(function (r) { return r.json(); })
         .then(function (s) {
           if (mySeq !== pollSeq) return; // superseded by a later poll — ignore

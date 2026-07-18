@@ -110,6 +110,18 @@ class SpecGeneratorTests(unittest.TestCase):
             self.assertTrue(len(notes_cell) > 10, f"Slot {fixed_slot} notes too short: {notes_cell!r}")
             self.assertNotIn("add notes here", notes_cell.lower())
 
+    def test_metadata_title_is_safe_inside_a_markdown_table_cell(self) -> None:
+        template = TEMPLATE_PATH.read_text(encoding="utf-8")
+        title = 'R&D | <Q3> "Launch" {{SHARED}}\nSecond line'
+        spec = self.gen.generate_spec(template, "safe-title", title, 10)
+        self.assertIn(
+            '| **Title** | R&amp;D \\| &lt;Q3&gt; &quot;Launch&quot; '
+            '{{SHARED}}<br>Second line |',
+            spec,
+        )
+        title_rows = [line for line in spec.splitlines() if line.startswith("| **Title** |")]
+        self.assertEqual(len(title_rows), 1)
+
     def test_generated_slide_map_has_deterministic_ids(self) -> None:
         rows = self.map_rows(self.spec_14)
         for i, row in rows.items():

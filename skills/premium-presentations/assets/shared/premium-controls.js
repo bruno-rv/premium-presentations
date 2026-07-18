@@ -345,7 +345,8 @@
       window.PremiumThemeVisuals[normalized] &&
       (safeThemeVisualValue(window.PremiumThemeVisuals[normalized][role]) ||
         safeThemeVisualValue(window.PremiumThemeVisuals[normalized].hero));
-    const file = fromAttr || fromGlobal || (normalized + '-' + role + '.webp');
+    const file = fromAttr || fromGlobal;
+    if (!file) return '';
     if (/^data:image\//i.test(file) || /^blob:/i.test(file)) return file;
     return themeVisualBase() + file;
   }
@@ -357,6 +358,11 @@
       const img = visual.querySelector('.theme-visual__image');
       if (!img) return;
       const src = themeVisualSrc(normalized, role);
+      if (!src) {
+        img.removeAttribute('src');
+        visual.hidden = true;
+        return;
+      }
       visual.hidden = false;
       img.dataset.themeVisualFallback = '';
       if (img.getAttribute('src') !== src) img.setAttribute('src', src);
@@ -381,8 +387,11 @@
       const current = normalizeTheme(document.documentElement.dataset.theme || discoverThemes()[0]);
       if (role !== 'hero' && img.dataset.themeVisualFallback !== 'hero') {
         img.dataset.themeVisualFallback = 'hero';
-        img.setAttribute('src', themeVisualSrc(current, 'hero'));
-        return;
+        const fallback = themeVisualSrc(current, 'hero');
+        if (fallback) {
+          img.setAttribute('src', fallback);
+          return;
+        }
       }
       visual.hidden = true;
     });

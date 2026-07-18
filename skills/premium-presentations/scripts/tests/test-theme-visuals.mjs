@@ -19,7 +19,7 @@ import { ROOT, SHARED, makeWindow } from './_helpers.mjs';
 
 const MANIFEST_PATH = join(ROOT, 'assets', 'shared', 'assets', 'theme-visuals', 'manifest.json');
 const manifest = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8'));
-const THEMES = Object.keys(manifest); // ['editorial', 'warm', 'red', 'cupertino']
+const THEMES = Object.keys(manifest);
 
 // Build roles map: theme → [role, ...] from manifest assets array
 const THEME_ROLES = {};
@@ -85,7 +85,7 @@ const dom = makeWindow({
 const win = dom.window;
 const doc = win.document;
 
-// Set data-theme + data-themes on <html> so discoverThemes() returns all 4
+// Set data-theme + data-themes on <html> so discoverThemes() returns every
 // themes without needing CSS stylesheets.
 doc.documentElement.dataset.theme = 'editorial';
 doc.documentElement.dataset.themes = THEMES.join(',');
@@ -115,16 +115,21 @@ await new Promise((r) => setTimeout(r, 20));
 console.log('\nTest suite: theme-visuals runtime data-URI resolution');
 console.log('Manifest themes:', THEMES.join(', '));
 
-// ── Test 1: manifest theme count sanity check ────────────────────────────────
-// Explicit count guard so a manifest change is a conscious test update, not a
-// silent pass.
+// ── Test 1: manifest role contract sanity check ──────────────────────────────
 
-console.log('\nTest: manifest theme count');
+console.log('\nTest: manifest theme/role contract');
 assert(
-  'manifest has exactly 4 themes',
-  THEMES.length === 4,
-  'got: ' + THEMES.length + ' (' + THEMES.join(', ') + ')'
+  'manifest has at least one theme',
+  THEMES.length > 0,
+  'got: ' + THEMES.length
 );
+for (const theme of THEMES) {
+  assert(
+    `theme "${theme}" has exactly hero and map roles`,
+    [...THEME_ROLES[theme]].sort().join(',') === 'hero,map',
+    'got: ' + THEME_ROLES[theme].join(',')
+  );
+}
 
 // ── Test 2: .theme-visual__image elements injected after init ────────────────
 
@@ -252,6 +257,26 @@ console.log('\nTest: setTheme cycles back to editorial after full cycle');
     'after full cycle + back to editorial, all srcs are data: URIs',
     allDataUri
   );
+}
+
+// ── Test 7: missing mapping never guesses a sidecar filename ─────────────────
+
+console.log('\nTest: unmapped theme does not guess a relative sidecar path');
+{
+  win.PremiumPresentations.setTheme('unmapped-theme');
+  const imgs = doc.querySelectorAll('.theme-visual__image');
+  for (const img of imgs) {
+    const src = img.getAttribute('src') || '';
+    assert(
+      'unmapped theme image has no guessed src',
+      src === '',
+      'got: ' + src
+    );
+    assert(
+      'unmapped theme visual is hidden',
+      img.closest('.theme-visual')?.hidden === true
+    );
+  }
 }
 
 // ── Summary ──────────────────────────────────────────────────────────────────

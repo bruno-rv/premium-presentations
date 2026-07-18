@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import unittest
 from pathlib import Path
@@ -125,26 +126,126 @@ class SkillLayoutTests(unittest.TestCase):
         self.assertNotIn("row index, confirmed by title", documents["SKILL.md"])
         self.assertNotIn("stable data-slide-id", documents["SKILL.md"])
 
-    def test_repository_exposes_claude_and_codex_plugin_manifests(self) -> None:
+    def test_repository_exposes_schema_safe_claude_and_codex_metadata(self) -> None:
+        claude_marketplace = REPO_ROOT / ".claude-plugin" / "marketplace.json"
         claude_manifest = REPO_ROOT / ".claude-plugin" / "plugin.json"
         codex_manifest = REPO_ROOT / ".codex-plugin" / "plugin.json"
         codex_marketplace = REPO_ROOT / ".agents" / "plugins" / "marketplace.json"
-        command_recipe = REPO_ROOT / "commands" / "present-pr.md"
 
+        self.assertTrue(claude_marketplace.exists(), "missing Claude marketplace manifest")
         self.assertTrue(claude_manifest.exists(), "missing Claude plugin manifest")
         self.assertTrue(codex_manifest.exists(), "missing Codex plugin manifest")
         self.assertTrue(codex_marketplace.exists(), "missing Codex marketplace manifest")
-        self.assertTrue(command_recipe.exists(), "missing present-pr command recipe")
 
+        claude = json.loads(claude_manifest.read_text(encoding="utf-8"))
+        claude_market = json.loads(claude_marketplace.read_text(encoding="utf-8"))
         codex = json.loads(codex_manifest.read_text(encoding="utf-8"))
-        self.assertEqual("premium-presentations", codex["name"])
+        codex_market = json.loads(codex_marketplace.read_text(encoding="utf-8"))
+
+        expected_name = "premium-presentations"
+        self.assertEqual(expected_name, claude["name"])
+        self.assertEqual(expected_name, claude_market["name"])
+        self.assertEqual(expected_name, claude_market["plugins"][0]["name"])
+        self.assertEqual(expected_name, codex["name"])
+        self.assertEqual(expected_name, codex_market["name"])
+        self.assertEqual(expected_name, codex_market["plugins"][0]["name"])
+
+        self.assertNotIn("id", claude_market, "Claude marketplace rejects the legacy id field")
+        self.assertEqual(["./skills/premium-presentations"], claude["skills"])
+        self.assertEqual(["./commands/"], claude["commands"])
+        for raw_path in claude["skills"] + claude["commands"]:
+            self.assertTrue((REPO_ROOT / raw_path).exists(), f"unresolved Claude path: {raw_path}")
+        self.assertTrue(
+            any((REPO_ROOT / "commands").glob("*.md")),
+            "Claude commands directory must contain at least one command",
+        )
+
         self.assertEqual("./skills/", codex["skills"])
         self.assertNotIn("commands", codex)
+        codex_skills = REPO_ROOT / codex["skills"]
+        self.assertTrue(codex_skills.is_dir(), f"unresolved Codex skills path: {codex['skills']}")
+        self.assertTrue(any(codex_skills.glob("*/SKILL.md")), "Codex skills path contains no skills")
 
-        marketplace = json.loads(codex_marketplace.read_text(encoding="utf-8"))
-        self.assertEqual("premium-presentations", marketplace["name"])
-        self.assertEqual("premium-presentations", marketplace["plugins"][0]["name"])
-        self.assertEqual({"source": "url", "url": "./"}, marketplace["plugins"][0]["source"])
+        self.assertEqual("./", claude_market["plugins"][0]["source"])
+        self.assertEqual(
+            {"source": "url", "url": "./"},
+            codex_market["plugins"][0]["source"],
+        )
+
+    def test_release_versions_match_across_manifests_package_and_lock(self) -> None:
+        claude = json.loads((REPO_ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+        claude_market = json.loads(
+            (REPO_ROOT / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8")
+        )
+        codex = json.loads((REPO_ROOT / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8"))
+        package = json.loads((ROOT / "scripts" / "package.json").read_text(encoding="utf-8"))
+        lock = json.loads((ROOT / "scripts" / "package-lock.json").read_text(encoding="utf-8"))
+
+        versions = {
+            "Claude plugin": claude["version"],
+            "Claude marketplace": claude_market["metadata"]["version"],
+            "Codex plugin": codex["version"],
+            "package": package["version"],
+            "package-lock": lock["version"],
+            "package-lock root": lock["packages"][""]["version"],
+        }
+        self.assertEqual({"2.0.0"}, set(versions.values()), versions)
+
+    def test_aggregate_script_covers_every_shipped_node_suite_and_python_discovery(self) -> None:
+        package = json.loads((ROOT / "scripts" / "package.json").read_text(encoding="utf-8"))
+        scripts = package["scripts"]
+        self.assertIn("test:all", scripts)
+
+        reachable: set[str] = set()
+        pending = ["test:all"]
+        while pending:
+            name = pending.pop()
+            if name in reachable:
+                continue
+            self.assertIn(name, scripts, f"aggregate script references missing npm script {name!r}")
+            reachable.add(name)
+            pending.extend(re.findall(r"\bnpm run ([\w:-]+)", scripts[name]))
+        aggregate = "\n".join(scripts[name] for name in sorted(reachable))
+
+        node_suites = sorted((ROOT / "scripts" / "tests").glob("*.mjs"))
+        for suite in node_suites:
+            if suite.name == "_helpers.mjs":
+                continue
+            if suite.name.endswith(".test.mjs"):
+                self.assertIn("node --test tests/*.test.mjs", aggregate)
+            else:
+                self.assertIn(f"tests/{suite.name}", aggregate, f"Node suite omitted: {suite.name}")
+        self.assertIn("python3 -m unittest discover -s tests", aggregate)
+
+    def test_public_bundle_script_uses_the_canonical_example(self) -> None:
+        package = json.loads((ROOT / "scripts" / "package.json").read_text(encoding="utf-8"))
+        command = package["scripts"]["test:bundle"]
+        canonical = "../assets/examples/rag-vector-graph/rag-vector-graph-slides.html"
+        self.assertIn(canonical, command)
+        self.assertTrue((ROOT / "scripts" / canonical).is_file(), "canonical bundle fixture is missing")
+
+    def test_ci_runs_the_complete_cross_ecosystem_gate(self) -> None:
+        workflow_path = REPO_ROOT / ".github" / "workflows" / "ci.yml"
+        self.assertTrue(workflow_path.is_file(), "missing CI workflow")
+        workflow = workflow_path.read_text(encoding="utf-8")
+        required_markers = (
+            "actions/setup-node@v4",
+            "node-version: 20",
+            "actions/setup-python@v5",
+            "python-version: '3.12'",
+            "npm ci",
+            "playwright install",
+            "chromium",
+            "npm run test:all",
+            "validate_runtime_contract.py",
+            "validate_contrast.py",
+            "claude plugin validate . --strict",
+            "validate_plugin.py",
+            "npm audit",
+            "git diff --check",
+        )
+        for marker in required_markers:
+            self.assertIn(marker, workflow, f"CI missing required gate: {marker}")
 
 
 if __name__ == "__main__":

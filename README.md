@@ -13,6 +13,10 @@ Codex-specific packaging lives under `.codex-plugin/` and
 - **Portable HTML decks:** generated decks bundle runtime CSS/JS, theme assets,
   search, diagrams, presenter mode, export helpers, and interaction controls
   without CDN or remote-font dependencies.
+- **Guaranteed theme homages:** every registered theme must provide distinct
+  hero and map WebPs. Theme creation installs CSS, both visuals, and the
+  manifest as one validated transaction; every new visual deck embeds the
+  complete registry as data URIs so live theme switching stays standalone.
 - **Presenter workflow:** press `Shift+P` to open the presenter popup with
   current/next slide previews, speaker notes, a slide timeline, rehearsal mode,
   a teleprompter/distance-reading mode, timer controls, and a slide rail.
@@ -31,7 +35,8 @@ Codex-specific packaging lives under `.codex-plugin/` and
   Markdown speaker-notes handouts, and LAN follow-along for the audience.
 - **Validation tooling:** deterministic scripts scaffold, bundle, validate,
   and smoke-test decks and the shared runtime contract, gated by `deck_doctor.py`
-  (structure, layout, diagrams, runtime contract, and WCAG contrast in one report).
+  (structure, layout, diagrams, runtime contract, offline portability, and
+  WCAG contrast in one report).
 - **PR-to-deck recipe:** Claude Code exposes `/present-pr`; Codex can follow
   the same recipe when asked to turn the current branch's diff into a
   `deck_doctor`-validated deck grounded in the real `git diff`.
@@ -138,6 +143,12 @@ Create a deck:
 ./skills/premium-presentations/scripts/new-deck.sh warm my-talk "My Title" 12
 ```
 
+Scaffolding is transactional: titles are escaped for both HTML and generated
+Markdown tables, generation happens in a staging directory, and the final deck
+directory appears only after bundling and validation succeed. The standalone
+deck embeds the hero and map homage for every registered theme, not only the
+initially selected theme.
+
 The generated deck is written to:
 
 ```text
@@ -145,7 +156,8 @@ skills/premium-presentations/assets/decks/my-talk/my-talk-slides.html
 ```
 
 Validate it — `deck_doctor.py` chains every validator (structure, layout,
-diagrams, runtime contract, WCAG contrast) into one health report:
+diagrams, runtime contract, offline portability, WCAG contrast) into one health
+report:
 
 ```bash
 python3 skills/premium-presentations/scripts/deck_doctor.py \
@@ -198,6 +210,32 @@ The presenter popup is local to the speaker. Audience slides stay focused on
 the deck content while the popup handles notes, current/next previews, timeline
 jumps, rehearsal timing, and timer settings.
 
+Create a custom theme with its required homage images:
+
+```bash
+python3 skills/premium-presentations/scripts/generate_theme.py acme \
+  --bg '#0b1220' --text '#f4f6fb' --accent '#22c55e' --surface '#141d33' \
+  --hero-image ./acme-hero.webp --map-image ./acme-map.webp
+```
+
+Persisted generation fails without both valid WebPs. The command validates the
+complete CSS/manifest/file registry before replacing any live file and restores
+the prior registry if a replacement or final validation fails. Use `--dry-run`
+to preview CSS without supplying images.
+
+Share a bundled deck:
+
+```bash
+./skills/premium-presentations/scripts/share-deck.sh \
+  skills/premium-presentations/assets/decks/my-talk/my-talk-slides.html
+```
+
+The LAN fallback serves an isolated temporary copy containing only
+`index.html`. Presenter and follower URLs carry a random room token required
+for every slide-state read and write; the token protects controls, while the
+deck itself remains intentionally readable to devices that can reach the LAN
+server.
+
 ## Layout
 
 ```text
@@ -229,7 +267,8 @@ premium-presentations/          ← repo root
 theme visuals, templates, snippets, and the studio page. Generated decks are
 portable standalone HTML bundles: runtime search, diagrams, PNG export,
 presenter mode, design-power components, controls, and theme assets do not
-require CDNs or remote fonts.
+require CDNs, remote fonts, or sidecar media. Deck Doctor rejects remaining
+fetchable HTML, media, stylesheet, script, `srcset`, and CSS `url()` references.
 The key committed paths are `assets/shared/`, `assets/studio/`, and
 `assets/templates/`.
 
@@ -275,15 +314,18 @@ These commands test the skill package itself (deck-output validation lives in
 `SKILL.md`):
 
 ```bash
-python3 skills/premium-presentations/scripts/tests/test_skill_layout.py
-python3 skills/premium-presentations/scripts/tests/test_runtime_contract.py
-python3 skills/premium-presentations/scripts/tests/test_design_power_contract.py
+npm --prefix skills/premium-presentations/scripts run test:all
 python3 skills/premium-presentations/scripts/validate_runtime_contract.py
-npm --prefix skills/premium-presentations/scripts test
-npm --prefix skills/premium-presentations/scripts run test:presenter
-npm --prefix skills/premium-presentations/scripts run test:popup
+python3 skills/premium-presentations/scripts/validate_contrast.py
+claude plugin validate . --strict
+npm --prefix skills/premium-presentations/scripts audit
 git diff --check
 ```
+
+`test:all` includes every shipped Node suite, full Python test discovery, the
+canonical standalone bundle smoke, theme homages, presenter transports, and all
+five 3D modes. CI additionally runs a pinned Codex plugin validator, so Claude
+Code and Codex packaging fail the same gate as runtime regressions.
 
 Create and validate a smoke deck:
 
@@ -293,3 +335,9 @@ python3 skills/premium-presentations/scripts/deck_doctor.py \
   skills/premium-presentations/assets/decks/smoke-deck/smoke-deck-slides.html
 rm -rf skills/premium-presentations/assets/decks/smoke-deck
 ```
+
+## Acknowledgments
+
+Some animation and visual design ideas were inspired by [Luan Moreno's
+work](https://github.com/luanmorenommaciel). All other features and
+implementation are original to Premium Presentations.

@@ -49,7 +49,7 @@ at the bottom of each table.
 | `premium-flow.js` | Conditional (`.live-flow` markup): phase spotlight cycling over `.flow-node`/`.flow-arrow` ids from `data-flow-phases` JSON, shimmer arrow animation, banner label; pauses off-screen, static under reduced motion |
 | `premium-red-chrome.js` | Conditional (red decks): brand bar + hero mark injection |
 | `premium-glossary.js` | Conditional (`.term-link[data-term]` or `id="glossary"` markup): parses JSON dictionary, injects `#term-popup` modal, click/Esc/focus handlers; `window.PremiumGlossary` API |
-| `premium-follow.js` | Conditional (`data-follow` attribute on `<html>`, set before bundling — an attribute trigger, not a markup-class trigger): LAN follow-along. `?present=1` POSTs the current slide id to `/slide` on every `premium:slidechange`; `?follow=1` runs a single-flight recursive poll of `GET /slide` (~1500ms cadence, 1400ms abort-timeout so a stalled LAN can't pile up unresolved polls, monotonic sequence guard so a late/stale response can't navigate out of order) and navigates via `document.getElementById(id).scrollIntoView()` — the same mechanism `PremiumDeckControls.goTo()` uses (the engine binds `popstate` only, so a `location.hash` assignment would not navigate). With neither param (file:// or plain open), the module returns immediately: 0 fetch, 0 listeners, 0 timers |
+| `premium-follow.js` | Conditional (`data-follow` attribute on `<html>`, set before bundling — an attribute trigger, not a markup-class trigger): tokenized LAN follow-along. `?present=1&room=…` POSTs the current slide id to `/slide?room=…` on every `premium:slidechange`; `?follow=1&room=…` runs a single-flight recursive poll of the same endpoint (~1500ms cadence, 1400ms abort-timeout so a stalled LAN can't pile up unresolved polls, monotonic sequence guard so a late/stale response can't navigate out of order) and navigates via `document.getElementById(id).scrollIntoView()` — the same mechanism `PremiumDeckControls.goTo()` uses (the engine binds `popstate` only, so a `location.hash` assignment would not navigate). Without a mode or room token, the module returns immediately: 0 fetch, 0 listeners, 0 timers |
 
 Linked decks use `../../shared/…` from `assets/decks/<slug>/`.
 
@@ -74,7 +74,8 @@ plus `premium-flow.js` when a file contains `.live-flow` markup, plus
 `premium-follow.js` when `<html>` carries `data-follow`.
 
 **Contrast gate:** `deck_doctor.py` composes `scripts/validate_contrast.py` as
-a 5th section — a stdlib WCAG relative-luminance/contrast-ratio check over
+the 6th section, after offline portability — a stdlib WCAG
+relative-luminance/contrast-ratio check over
 every `html[data-theme="…"]` block in the SOURCE `premium-themes.css`
 (location-independent; not the deck's own HTML, which carries no inlined
 token blocks). Gated pairs: `--text`/`--bg` and `--text`/`--surface` at 4.5:1,
@@ -82,28 +83,44 @@ token blocks). Gated pairs: `--text`/`--bg` and `--text`/`--surface` at 4.5:1,
 heading/UI scale, never body text). Run standalone: `./scripts/validate_contrast.py`.
 
 **Brand theme generation:** `./scripts/generate_theme.py <brand-id> --bg HEX
---text HEX --accent HEX --surface HEX` ports `buildThemeCss`
+--text HEX --accent HEX --surface HEX --hero-image HERO.webp --map-image
+MAP.webp` ports `buildThemeCss`
 (`premium-design-power.js`) to Python and emits the full token set the
 built-in themes carry (not just the JS composer's 11) so a generated theme
 renders identically to a hand-authored one — progress bar, code windows, and
 semantic tags included. Runs the same contrast gate at generation time:
-fail-closed, nothing is appended to `premium-themes.css` on a failing
-palette. `--dry-run` prints the block without appending.
+fail-closed, persisted themes require two distinct valid WebPs, and CSS,
+normalized hero/map assets, plus `theme-visuals/manifest.json` are validated
+and installed transactionally. A failed replacement or final validation
+restores the prior registry. `--dry-run` prints the block without images or
+changes.
 
-**LAN follow-along + `/present-pr`:** `share-deck.sh`'s LAN fallback serves
-via `scripts/lan-sync-server.py` (stdlib `ThreadingHTTPServer`, binds
-`0.0.0.0`, no auth — acceptable for a venue LAN, single presenter, in-memory
-current-slide state only; do not run on an untrusted network) and prints a
-PRESENT url (`?present=1`) plus a FOLLOW url (`?follow=1`) — the latter only
-when the served deck was bundled with `data-follow` (see the
-`premium-follow.js` row above). `/present-pr` (plugin command,
+**LAN follow-along + `/present-pr`:** `share-deck.sh`'s LAN fallback serves an
+isolated temporary directory containing only `index.html` via
+`scripts/lan-sync-server.py` (stdlib `ThreadingHTTPServer`, binds `0.0.0.0`,
+single presenter, in-memory current-slide state only). It prints a PRESENT URL
+(`?present=1&room=…`) plus a FOLLOW URL (`?follow=1&room=…`) — the latter only
+when the served deck was bundled with `data-follow`. The random room token is
+required on every `/slide` request; do not expose this ephemeral service to the
+public internet. `/present-pr` (plugin command,
 `commands/present-pr.md`) turns the current branch's PR/diff into a filled
 Content-First Brief (`references/present-pr-brief.md`) and runs the
 existing scaffold → spec → generate → `deck_doctor.py` pipeline unchanged.
 
 **Live theme switch:** `PremiumPresentations.setTheme('<theme>')` or UI control. The control panel discovers themes from loaded CSS. Dispatches `premium-theme-change` on `<html>`.
 
-**Theme visuals:** `.slide--title` receives a `hero` visual; `.slide--divider` receives a `map` visual. Default linked-mode assets follow `assets/shared/assets/theme-visuals/<theme>-<role>.webp`; bundled standalone decks embed those images as `data:` URIs. Override with `data-theme-visual-<theme>-<role>` or `window.PremiumThemeVisuals` only when the value is a `data:image/...` URI in standalone output; unsafe remote or sidecar paths are ignored. Disable per slide with `data-theme-visual="off"`.
+**Theme visuals:** `.slide--title` receives a `hero` visual;
+`.slide--divider` receives a `map` visual. The CSS theme set must exactly equal
+the keys in `assets/shared/assets/theme-visuals/manifest.json`; every entry has
+exactly one distinct `hero` and `map` WebP safe basename whose file exists and
+passes RIFF chunk, bounds, format, and positive-dimension probing. Bundled
+standalone decks embed the complete
+validated registry as `data:` URIs, so a newly generated visual deck carries
+every theme's homage and updates automatically on live theme switches. There is
+no filename-guess fallback. Override with `data-theme-visual-<theme>-<role>` or
+`window.PremiumThemeVisuals` only when the value is a `data:image/...` URI in
+standalone output; unsafe remote or sidecar paths are ignored. Disable per slide
+with `data-theme-visual="off"`.
 
 ## Partial regeneration
 
@@ -195,11 +212,14 @@ Studio uses the same API for live snippet generation.
 
 To add a theme:
 
-1. Add `html[data-theme="<theme>"]` tokens in `assets/shared/premium-themes.css`.
+1. Prefer `scripts/generate_theme.py` with `--hero-image` and `--map-image`; it
+   updates CSS, normalized visuals, and the manifest transactionally.
 2. Optionally add `assets/templates/<theme>-base.html` for theme-specific chrome
    (themes without one fall back to `assets/templates/premium-base.html`).
-3. Optionally add visuals in `assets/shared/assets/theme-visuals/` using
-   `<theme>-hero.webp` and `<theme>-map.webp`.
+3. For a manual theme, add `html[data-theme="<theme>"]` tokens, distinct
+   `<theme>-hero.webp` and `<theme>-map.webp` files, and exact hero/map entries
+   in `theme-visuals/manifest.json` before running the runtime contract. An
+   incomplete theme is invalid and bundling fails closed.
 4. Keep font stacks portable: use system/local families. Optional runtime font
    stylesheets must be `data:text/css` URLs; remote and sidecar stylesheet
    paths are ignored by the runtime.

@@ -3,17 +3,16 @@
 # Usage: ./scripts/share-deck.sh <deck.html>
 #
 # Primary: deploys via `vercel` CLI (if installed and logged in).
-# Fallback: serves the deck's directory over LAN via lan-sync-server.py
+# Fallback: serves an isolated copy of the deck over LAN via lan-sync-server.py
 #           (stdlib ThreadingHTTPServer + POST/GET /slide follow-along).
 #
-# Follow-along: prints a FOLLOW url (?follow=1) only when the served HTML
-# carries the premium-follow.js bundle marker (deck was bundled with
-# data-follow on <html>) — a deck cannot become followable post-bundle, so a
-# plain deck gets a one-line rebuild hint instead of a dead FOLLOW url.
+# Follow-along: prints a tokenized FOLLOW url (?follow=1&room=...) only when
+# the served HTML carries the premium-follow.js bundle marker (the deck was
+# bundled with data-follow on <html>) — a deck cannot become followable
+# post-bundle, so a plain deck gets a rebuild hint instead of a dead FOLLOW url.
 #
-# Security: the LAN fallback binds 0.0.0.0 with no auth — acceptable for a
-# venue LAN, single presenter, ephemeral in-memory state. Do not use on an
-# untrusted network.
+# Security: the LAN fallback serves a temporary directory containing only
+# index.html and requires a random room token for follow-along reads/writes.
 #
 # ponytail: single file, one provider (Vercel), no auth management —
 #           upgrade path: multi-file decks, other providers, scripted login.
@@ -21,6 +20,13 @@
 set -euo pipefail
 
 SRC="${1:-}"
+LAN_DIR=""
+DEPLOY_DIR=""
+
+cleanup() {
+  if [[ -n "$LAN_DIR" ]]; then rm -rf "$LAN_DIR"; fi
+  if [[ -n "$DEPLOY_DIR" ]]; then rm -rf "$DEPLOY_DIR"; fi
+}
 
 usage() {
   sed -n '2,7p' "$0" | tail -n +2
@@ -34,10 +40,12 @@ usage() {
 SRC="$(cd "$(dirname "$SRC")" && pwd)/$(basename "$SRC")"
 
 serve_lan_fallback() {
-  DIR="$(dirname "$SRC")"
-  FILE="$(basename "$SRC")"
   SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
   IP="$(ipconfig getifaddr en0 2>/dev/null || hostname -I 2>/dev/null | awk '{print $1}' || hostname)"
+  LAN_DIR="$(mktemp -d)"
+  ROOM="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+  trap cleanup EXIT
+  cp "$SRC" "$LAN_DIR/index.html"
 
   PORT=""
   for candidate in 8000 8001 8002 8003 8004 8005 8006 8007 8008 8009 8010; do
@@ -52,24 +60,24 @@ serve_lan_fallback() {
     exit 1
   fi
 
-  echo "Serving $DIR on your local network."
-  echo "PRESENT (same Wi-Fi only): http://$IP:$PORT/$FILE?present=1"
+  echo "Serving an isolated copy of $(basename "$SRC") on your local network."
+  echo "PRESENT (same Wi-Fi only): http://$IP:$PORT/index.html?present=1&room=$ROOM"
   if grep -q '/\* --- premium-follow\.js --- \*/' "$SRC"; then
-    echo "FOLLOW  (same Wi-Fi only): http://$IP:$PORT/$FILE?follow=1"
+    echo "FOLLOW  (same Wi-Fi only): http://$IP:$PORT/index.html?follow=1&room=$ROOM"
   else
     echo "No FOLLOW url: rebuild with data-follow on <html> (bundle_deck.py) to enable follow-along."
   fi
   echo "Press Ctrl-C to stop."
-  exec python3 "$SCRIPT_DIR/lan-sync-server.py" "$DIR" "$PORT"
+  python3 "$SCRIPT_DIR/lan-sync-server.py" "$LAN_DIR" "$PORT" "$ROOM"
 }
 
 if command -v vercel >/dev/null 2>&1; then
-  TMPDIR="$(mktemp -d)"
-  trap 'rm -rf "$TMPDIR"' EXIT
-  cp "$SRC" "$TMPDIR/index.html"
+  DEPLOY_DIR="$(mktemp -d)"
+  trap cleanup EXIT
+  cp "$SRC" "$DEPLOY_DIR/index.html"
 
   echo "Deploying via Vercel..."
-  if ! OUTPUT="$(vercel deploy "$TMPDIR" --yes 2>&1)"; then
+  if ! OUTPUT="$(vercel deploy "$DEPLOY_DIR" --yes 2>&1)"; then
     if grep -qi "not currently logged in\|not authorized\|no existing credentials" <<<"$OUTPUT"; then
       echo "Not logged in to Vercel. Run: vercel login" >&2
     else
@@ -77,6 +85,7 @@ if command -v vercel >/dev/null 2>&1; then
     fi
     echo "Falling back to local network sharing." >&2
     serve_lan_fallback
+    exit $?
   fi
 
   URL="$(grep -Eo 'https://[a-zA-Z0-9.-]+\.vercel\.app' <<<"$OUTPUT" | tail -1)"

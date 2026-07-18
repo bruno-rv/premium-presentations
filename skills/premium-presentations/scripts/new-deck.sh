@@ -44,9 +44,8 @@ if ! [[ "$COUNT" =~ ^[0-9]+$ ]] || [[ "$COUNT" -lt 1 ]]; then
   exit 1
 fi
 
-DECK_DIR="$ROOT/assets/decks/$SLUG"
-SLIDES_FILE="$DECK_DIR/${SLUG}-slides.html"
-SPEC_FILE="$DECK_DIR/${SLUG}-slide-spec.md"
+DECKS_DIR="$ROOT/assets/decks"
+DECK_DIR="$DECKS_DIR/$SLUG"
 THEME_TEMPLATE="$ROOT/assets/templates/${FRAMEWORK}-base.html"
 if [[ -f "$THEME_TEMPLATE" ]]; then
   TEMPLATE="$THEME_TEMPLATE"
@@ -59,17 +58,26 @@ if [[ -e "$DECK_DIR" ]]; then
   exit 1
 fi
 
-mkdir -p "$DECK_DIR"
+mkdir -p "$DECKS_DIR"
+STAGING_DIR="$(mktemp -d "$DECKS_DIR/.${SLUG}.staging.XXXXXX")"
+cleanup() {
+  if [[ -n "${STAGING_DIR:-}" && -d "$STAGING_DIR" ]]; then
+    rm -rf -- "$STAGING_DIR"
+  fi
+}
+trap cleanup EXIT HUP INT TERM
 
-sed \
-  -e "s|{{THEME}}|${FRAMEWORK}|g" \
-  -e "s|{{TITLE}}|${TITLE}|g" \
-  -e "s|{{SHARED}}|../../shared/|g" \
-  -e "s|{{BAR_RIGHT}}||g" \
-  "$TEMPLATE" > "$SLIDES_FILE"
+SLIDES_FILE="$STAGING_DIR/${SLUG}-slides.html"
+SPEC_FILE="$STAGING_DIR/${SLUG}-slide-spec.md"
+
+python3 "$ROOT/scripts/render_template.py" "$TEMPLATE" "$SLIDES_FILE" \
+  --var THEME "$FRAMEWORK" \
+  --var TITLE "$TITLE" \
+  --var SHARED "../../shared/" \
+  --var BAR_RIGHT ""
 
 python3 "$ROOT/scripts/bundle_deck.py" "$SLIDES_FILE" --in-place
-python3 "$ROOT/scripts/validate_deck.py" "$SLIDES_FILE" || exit 1
+python3 "$ROOT/scripts/validate_deck.py" "$SLIDES_FILE"
 
 if [[ "$COUNT" -ge 8 ]]; then
   SPEC_TEMPLATE="$ROOT/references/slide-spec-template.md"
@@ -79,7 +87,23 @@ if [[ "$COUNT" -ge 8 ]]; then
   fi
   cp "$SPEC_TEMPLATE" "$SPEC_FILE"
   python3 "$ROOT/scripts/spec_generator.py" "$SPEC_FILE" "$SLUG" "$TITLE" "$COUNT"
+  SPEC_CREATED=1
+else
+  SPEC_CREATED=0
+fi
 
+if [[ -e "$DECK_DIR" ]]; then
+  echo "Deck already exists: $DECK_DIR" >&2
+  exit 1
+fi
+mv -- "$STAGING_DIR" "$DECK_DIR"
+STAGING_DIR=""
+trap - EXIT HUP INT TERM
+
+SLIDES_FILE="$DECK_DIR/${SLUG}-slides.html"
+SPEC_FILE="$DECK_DIR/${SLUG}-slide-spec.md"
+
+if [[ "$SPEC_CREATED" -eq 1 ]]; then
   echo "Created spec ($COUNT slides): $SPEC_FILE"
 else
   echo "Skipped spec (< 8 slides)"

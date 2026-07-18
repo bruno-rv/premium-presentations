@@ -21,6 +21,7 @@ from _common import (
     ROOT,
     discover_themes,
 )
+from theme_visuals import ThemeVisualsError, load_and_validate_registry
 
 LINK_RE = re.compile(r"<link\b[^>]*>", re.I)
 SCRIPT_RE = re.compile(r"<script\b[^>]*>", re.I)
@@ -137,6 +138,16 @@ def main() -> int:
     themes = discover_themes()
     if not themes:
         errors.append("assets/shared/premium-themes.css declares no html[data-theme=...] selectors")
+    try:
+        registry = load_and_validate_registry(
+            ROOT / "assets" / "shared" / "premium-themes.css",
+            ROOT / "assets" / "shared" / "assets" / "theme-visuals",
+            ROOT / "assets" / "shared" / "assets" / "theme-visuals" / "manifest.json",
+        )
+        if set(registry) != set(themes):
+            errors.append("theme visual registry does not match discovered CSS themes")
+    except (OSError, ThemeVisualsError) as exc:
+        errors.append(f"theme visual registry invalid: {exc}")
 
     premium_base = ROOT / "assets" / "templates" / "premium-base.html"
     for theme in themes:

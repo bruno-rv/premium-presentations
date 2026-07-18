@@ -16,26 +16,30 @@ function makeWindow(options) {
 }
 
 function connectDirectPostMessage(deck, popup) {
+  const targets = { deck: [], popup: [] };
+  deck.window.postMessage = function (data, targetOrigin) {
+    targets.deck.push(targetOrigin);
+    const ev = new deck.window.MessageEvent('message', {
+      data,
+      source: popup.window,
+      origin: popup.window.location.origin,
+    });
+    deck.window.dispatchEvent(ev);
+  };
   Object.defineProperty(popup.window, 'opener', {
-    value: {
-      closed: false,
-      postMessage(data) {
-        const ev = new deck.window.MessageEvent('message', {
-          data,
-          source: popup.window,
-        });
-        deck.window.dispatchEvent(ev);
-      },
-    },
+    value: deck.window,
     configurable: true,
   });
-  popup.window.postMessage = function (data) {
+  popup.window.postMessage = function (data, targetOrigin) {
+    targets.popup.push(targetOrigin);
     const ev = new popup.window.MessageEvent('message', {
       data,
       source: deck.window,
+      origin: deck.window.location.origin,
     });
     popup.window.dispatchEvent(ev);
   };
+  return { deckPeer: deck.window, targets };
 }
 
 console.log('Test: direct window.opener postMessage transport');
@@ -49,12 +53,40 @@ deck.window.eval('new SlideEngine();');
 loadScript(deck, 'premium-presenter.js');
 
 const deckSession = deck.window.document.documentElement.dataset.session;
+const rogueReplies = [];
+const rogueSource = {
+  closed: false,
+  opener: deck.window,
+  location: { search: '?viewer=1' },
+  postMessage(data) { rogueReplies.push(data); },
+};
+deck.window.dispatchEvent(new deck.window.MessageEvent('message', {
+  data: { type: 'presenter.discover', popupSessionId: deckSession },
+  source: rogueSource,
+  origin: deck.window.location.origin,
+}));
+if (rogueReplies.length !== 0) {
+  throw new Error('same-origin non-presenter source received deck adoption reply');
+}
+deck.window.dispatchEvent(new deck.window.MessageEvent('message', {
+  data: {
+    type: 'control', sessionId: deckSession, commandId: 'rogue-before-adoption',
+    action: 'jump', index: 1,
+  },
+  source: rogueSource,
+  origin: deck.window.location.origin,
+}));
+if (deck.window.PremiumDeckControls.getState().index !== 0) {
+  throw new Error('same-origin non-presenter source gained control before adoption');
+}
+console.log('  PASS — same-origin non-presenter source cannot win initial adoption');
+
 const popup = makeWindow({
   url: 'http://localhost/deck.html?presenter=1&session=' + deckSession,
   focused: true,
   withSlides: false,
 });
-connectDirectPostMessage(deck, popup);
+const transport = connectDirectPostMessage(deck, popup);
 loadScript(popup, 'premium-controller.js');
 await new Promise((r) => setTimeout(r, 0));
 loadScript(popup, 'premium-presenter.js');
@@ -66,6 +98,67 @@ if (!list) throw new Error('popup pp-list missing');
 let items = list.querySelectorAll('li');
 if (items.length !== 2) throw new Error('expected 2 rail items after direct snapshot, got ' + items.length);
 console.log('  PASS — popup received initial snapshot via direct postMessage');
+
+if (transport.targets.deck.some((target) => target !== deck.window.location.origin) ||
+    transport.targets.popup.some((target) => target !== popup.window.location.origin)) {
+  throw new Error('HTTP(S) direct postMessage must target location.origin, never wildcard');
+}
+console.log('  PASS — HTTP(S) direct postMessage uses an exact target origin');
+
+function dispatchDeckMessage({ data, source = popup.window, origin = popup.window.location.origin }) {
+  deck.window.dispatchEvent(new deck.window.MessageEvent('message', { data, source, origin }));
+}
+
+const beforeAttack = deck.window.PremiumDeckControls.getState().index;
+dispatchDeckMessage({
+  origin: 'https://evil.example',
+  data: { type: 'control', sessionId: deckSession, commandId: 'evil-origin', action: 'jump', index: 1 },
+});
+if (deck.window.PremiumDeckControls.getState().index !== beforeAttack) {
+  throw new Error('deck accepted a direct control message from a foreign origin');
+}
+
+const unexpectedSource = { postMessage() {}, closed: false };
+dispatchDeckMessage({
+  source: unexpectedSource,
+  data: { type: 'control', sessionId: deckSession, commandId: 'evil-source', action: 'jump', index: 1 },
+});
+if (deck.window.PremiumDeckControls.getState().index !== beforeAttack) {
+  throw new Error('deck accepted a direct control message from an unexpected source window');
+}
+
+dispatchDeckMessage({
+  data: { type: 'control', commandId: 'missing-session', action: 'jump', index: 1 },
+});
+if (deck.window.PremiumDeckControls.getState().index !== beforeAttack) {
+  throw new Error('deck accepted a sessionless direct control message');
+}
+console.log('  PASS — direct controls require exact origin, peer source, and session');
+
+popup.window.dispatchEvent(new popup.window.MessageEvent('message', {
+  origin: deck.window.location.origin,
+  source: transport.deckPeer,
+  data: {
+    type: 'slidechange',
+    sessionId: deckSession,
+    index: 0,
+    total: 2,
+    notes: '<p onclick="window.__hit=1">Keep <strong>formatting</strong>.</p><img src=x onerror="window.__hit=1"><script>window.__hit=1</script><a href="javascript:window.__hit=1">bad</a><a href="https://example.com" target="_BLANK">safe</a>',
+    bodyHtml: '',
+  },
+}));
+const sanitizedNotes = popup.window.document.getElementById('pp-notes');
+if (!sanitizedNotes.querySelector('strong') || !/Keep/.test(sanitizedNotes.textContent)) {
+  throw new Error('safe authored note formatting was not preserved');
+}
+if (sanitizedNotes.querySelector('script, img') || /onerror|onclick|javascript:/i.test(sanitizedNotes.innerHTML)) {
+  throw new Error('remote notes were rendered without sanitization: ' + sanitizedNotes.innerHTML);
+}
+const safeRemoteLink = sanitizedNotes.querySelector('a[href="https://example.com"]');
+if (!safeRemoteLink || !/noopener/.test(safeRemoteLink.getAttribute('rel') || '')) {
+  throw new Error('remote note link with _blank target did not receive noopener protection');
+}
+console.log('  PASS — remote note HTML is allowlist-sanitized before rendering');
 
 items[1].click();
 await new Promise((r) => setTimeout(r, 100));
@@ -162,5 +255,58 @@ if (beforeParallax === afterParallax || afterParallax !== 'on') {
   throw new Error('expected popup 3 shortcut to toggle deck parallax on after focus churn, before=' + beforeParallax + ' after=' + afterParallax);
 }
 console.log('  PASS — popup 3 shortcut toggles deck parallax after focus churn');
+
+const reloadedSession = 'reloaded-session-id';
+deck.window.document.documentElement.dataset.session = reloadedSession;
+dispatchDeckMessage({
+  data: { type: 'presenter.discover', popupSessionId: deckSession },
+});
+await new Promise((r) => setTimeout(r, 100));
+if (popup.window.document.documentElement.dataset.session !== reloadedSession) {
+  throw new Error('popup did not adopt the reloaded deck session');
+}
+console.log('  PASS — same-origin opener handshake re-adopts a reloaded deck session');
+
+console.log('Test: file:// direct transport remains source/session-bound');
+const fileDeck = makeWindow({ url: 'file:///tmp/deck.html', focused: true, animationFrames: false });
+const fileSession = 'file-session-id';
+let fileJumpIndex = 0;
+fileDeck.window.document.documentElement.dataset.session = fileSession;
+fileDeck.window.PremiumDeckControls = {
+  getTitles: () => ['One', 'Two'],
+  getState: () => ({ index: fileJumpIndex, total: 2 }),
+  getNotes: (index) => index === 0 ? 'One note' : 'Two note',
+  getSummary: () => '',
+  goTo: (index) => { fileJumpIndex = index; },
+  next: () => {},
+  prev: () => {},
+};
+loadScript(fileDeck, 'premium-presenter.js');
+const filePopup = makeWindow({
+  url: 'file:///tmp/deck.html?presenter=1&session=' + fileSession,
+  focused: true,
+  withSlides: false,
+});
+const fileTransport = connectDirectPostMessage(fileDeck, filePopup);
+filePopup.window.document.documentElement.dataset.session = fileSession;
+loadScript(filePopup, 'premium-presenter.js');
+await new Promise((r) => setTimeout(r, 100));
+if (filePopup.window.document.querySelectorAll('#pp-list li').length !== 2) {
+  throw new Error('file:// popup did not receive its direct snapshot');
+}
+if (fileTransport.targets.deck.some((target) => target !== '*') ||
+    fileTransport.targets.popup.some((target) => target !== '*')) {
+  throw new Error('file:// direct postMessage should use wildcard targetOrigin');
+}
+const fileBefore = fileJumpIndex;
+fileDeck.window.dispatchEvent(new fileDeck.window.MessageEvent('message', {
+  data: { type: 'control', commandId: 'file-missing-session', action: 'jump', index: 1 },
+  source: filePopup.window,
+  origin: 'null',
+}));
+if (fileJumpIndex !== fileBefore) {
+  throw new Error('file:// deck accepted a sessionless direct control');
+}
+console.log('  PASS — file:// uses wildcard delivery but still requires peer source and session');
 
 process.exit(0);

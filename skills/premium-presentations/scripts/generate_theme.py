@@ -14,6 +14,7 @@ validate_contrast.check_palette() is rejected, nothing is appended.
 
 Usage:
   ./scripts/generate_theme.py <brand-id> --bg HEX --text HEX --accent HEX --surface HEX
+                              --hero-image HERO.webp --map-image MAP.webp
                               [--font-display STACK] [--css PATH] [--dry-run]
 """
 
@@ -21,15 +22,19 @@ from __future__ import annotations
 
 import argparse
 import colorsys
-import os
 import re
 import sys
-import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _common import THEME_RE, THEMES_CSS
+from theme_visuals import (
+    MANIFEST_PATH,
+    VISUALS_DIR,
+    ThemeVisualsError,
+    install_theme_atomic,
+)
 from validate_contrast import (
     check_palette,
     parse_theme_blocks,
@@ -232,18 +237,6 @@ def build_theme_css(
     return "\n".join(lines), tokens
 
 
-def _atomic_write(path: Path, content: str) -> None:
-    """Write *content* to *path* via temp-file + os.replace (no partial writes)."""
-    fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write(content)
-        os.replace(tmp_name, path)
-    except BaseException:
-        Path(tmp_name).unlink(missing_ok=True)
-        raise
-
-
 def _compose_append(css_block: str, existing: str) -> str:
     sep = "" if existing.endswith("\n") else "\n"
     return existing + sep + "\n" + css_block + "\n"
@@ -265,6 +258,22 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--surface", required=True, help="Surface (card/panel) hex color")
     parser.add_argument("--font-display", default=_DEFAULT_FONT_DISPLAY, help="Display font stack")
     parser.add_argument("--css", type=Path, default=THEMES_CSS, help="Target premium-themes.css path")
+    parser.add_argument(
+        "--hero-image", type=Path,
+        help="Required hero homage WebP for persisted themes",
+    )
+    parser.add_argument(
+        "--map-image", type=Path,
+        help="Required map homage WebP for persisted themes",
+    )
+    parser.add_argument(
+        "--visuals-dir", type=Path, default=VISUALS_DIR,
+        help="Target theme-visuals directory",
+    )
+    parser.add_argument(
+        "--manifest", type=Path,
+        help="Target manifest (defaults to MANIFEST.json inside --visuals-dir)",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Print the block, do not append")
     parser.add_argument(
         "--replace", action="store_true",
@@ -297,6 +306,17 @@ def main(argv: list[str]) -> int:
     if args.dry_run:
         print(css_block)
         return 0
+
+    if args.hero_image is None or args.map_image is None:
+        print(
+            "Error: persisted themes require both --hero-image and --map-image WebP files",
+            file=sys.stderr,
+        )
+        return 1
+
+    manifest_path = args.manifest or (
+        MANIFEST_PATH if args.visuals_dir == VISUALS_DIR else args.visuals_dir / "manifest.json"
+    )
 
     existing_css = args.css.read_text(encoding="utf-8")
     matches = [b for b in parse_theme_blocks(existing_css) if b[0] == brand_id]
@@ -340,7 +360,19 @@ def main(argv: list[str]) -> int:
             print(f"  - {error}", file=sys.stderr)
         return 1
 
-    _atomic_write(args.css, candidate)
+    try:
+        install_theme_atomic(
+            theme=brand_id,
+            candidate_css=candidate,
+            css_path=args.css,
+            hero_image=args.hero_image,
+            map_image=args.map_image,
+            visuals_dir=args.visuals_dir,
+            manifest_path=manifest_path,
+        )
+    except (OSError, ThemeVisualsError) as exc:
+        print(f"Error: theme install failed; nothing changed: {exc}", file=sys.stderr)
+        return 1
 
     print(brand_id)
     return 0

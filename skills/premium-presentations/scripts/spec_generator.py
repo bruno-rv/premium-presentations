@@ -10,6 +10,7 @@ table for the requested slide count.
 
 from __future__ import annotations
 
+import html
 import re
 import sys
 from pathlib import Path
@@ -70,6 +71,13 @@ PATTERN_SPEAKER_NOTES = (
     "Mark the items that typically block teams longest; those are where coaching time goes. "
     "Close: 'Everything checked here means you're ready to move to the next module.'",
 )
+
+
+def escape_markdown_table_cell(value: str) -> str:
+    """Escape user text for one Markdown table cell without adding new rows."""
+    escaped = html.escape(str(value), quote=True)
+    escaped = escaped.replace("\\", "\\\\").replace("|", "\\|")
+    return escaped.replace("\r\n", "<br>").replace("\r", "<br>").replace("\n", "<br>")
 
 
 def is_content_slide(i: int, count: int) -> bool:
@@ -144,7 +152,7 @@ def slide_rows(count: int) -> list[str]:
 def generate_spec(text: str, slug: str, title: str, count: int) -> str:
     text = text.replace("{CODE}", slug.upper().replace("-", " "))
     text = text.replace("{code}", slug)
-    text = text.replace("{Full title}", title)
+    text = text.replace("{Full title}", escape_markdown_table_cell(title))
     text = text.replace("{N}", str(max(15, count // 2)))
 
     table = TABLE_HEADER + "\n" + "\n".join(slide_rows(count))

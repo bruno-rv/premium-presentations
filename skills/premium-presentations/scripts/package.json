@@ -16,10 +16,16 @@
     "test": "node --test tests/*.test.mjs",
     "test:presenter": "node tests/presenter-smoke.mjs",
     "test:popup": "node tests/test-popup-bc.mjs && node tests/test-popup-e2e.mjs && node tests/test-popup-postmessage.mjs && node tests/test-popup-storage.mjs && node tests/test-popup-timer.mjs && node tests/test-presenter-seq.mjs && node tests/test-slide-content.mjs && node tests/test-glossary.mjs",
-    "test:bundle": "node tests/verify_bundle.mjs",
-    "test:theme-visuals": "node tests/test-theme-visuals.mjs"
+    "test:bundle": "node tests/verify_bundle.mjs ../assets/examples/rag-vector-graph/rag-vector-graph-slides.html",
+    "test:theme-visuals": "node tests/test-theme-visuals.mjs",
+    "test:3d": "node --test tests/test_3d_modes.mjs",
+    "test:python": "python3 -m unittest discover -s tests",
+    "test:all": "npm run test && npm run test:presenter && npm run test:popup && npm run test:bundle && npm run test:theme-visuals && npm run test:3d && npm run test:python"
   },
   "devDependencies": {
     "jsdom": "^25.0.0"
+  },
+  "overrides": {
+    "form-data": "4.0.6"
   }
 }

@@ -93,11 +93,13 @@ table lives in `references/runtime.md`. Conditional additions:
   composer output, layout variants, density checks, motion profiles,
   data visualization blocks, and visual asset audits.
 
-Runtime 3D modes (`off/ambient/tilt/depth`) cycle with the `3` key; author a
+Runtime 3D modes (`off/ambient/tilt/depth/card`) cycle with the `3` key; author a
 deck default with `data-3d="<mode>"` on `<html>` — see `references/runtime.md`.
 Motion profile defaults can also be authored with `data-motion-profile="<name>"`.
 Generated decks are portable standalone HTML: do not add CDN scripts, remote
-font links, or runtime `http(s)` asset dependencies.
+font links, sidecar media, or runtime `http(s)` asset dependencies. Deck Doctor
+rejects fetchable HTML attributes, `srcset`, and CSS `url()` references that
+remain after bundling.
 
 Run `./scripts/validate_runtime_contract.py` after template, theme, bundler,
 or shared runtime edits — required, not optional: it checks the repo-wide
@@ -226,21 +228,25 @@ python3 scripts/export_handout.py assets/decks/<slug>/<slug>-slides.html
   `new-deck.sh` → spec → generate → `deck_doctor.py` pipeline verbatim. No
   diff-to-slide bypass.
 - **Brand theme generation:** `./scripts/generate_theme.py <brand-id> --bg
-  HEX --text HEX --accent HEX --surface HEX` appends a full-token
-  `html[data-theme="<brand-id>"]{…}` block to `premium-themes.css`,
-  discoverable by `list-themes.py` like any built-in theme. Fail-closed: a
-  palette that fails the WCAG contrast gate is rejected and nothing is
-  appended. See `references/runtime.md` for the derivation and gated pairs.
+  HEX --text HEX --accent HEX --surface HEX --hero-image HERO.webp --map-image
+  MAP.webp` installs a full-token `html[data-theme="<brand-id>"]{…}` block,
+  two normalized homage assets, and its manifest entry as one validated
+  transaction. CSS theme discovery and the visual registry must match exactly;
+  a palette, asset, replacement, or final registry failure restores the prior
+  state. `--dry-run` previews CSS without images. See `references/runtime.md`
+  for the derivation and gated pairs.
 - **Contrast gate:** `deck_doctor.py` composes `scripts/validate_contrast.py`
-  as a 5th section — a repo-wide WCAG check over every theme block in
+  as the 6th section, after offline portability — a repo-wide WCAG check over
+  every theme block in
   `premium-themes.css`. Run standalone with `./scripts/validate_contrast.py`.
 - **LAN follow-along:** `./scripts/share-deck.sh <deck.html>` falls back to
-  `scripts/lan-sync-server.py` (stdlib, binds `0.0.0.0`, **no auth** —
-  acceptable for a venue LAN only, do not use on an untrusted network) and
-  prints a PRESENT url plus a FOLLOW url. Follow-along requires the deck be
-  bundled with `data-follow` on `<html>` before sharing (see
-  `references/runtime.md`); a plain deck stays inert on `file://` with no
-  server and no param.
+  `scripts/lan-sync-server.py` (stdlib, binds `0.0.0.0`) using an isolated
+  temporary directory that contains only `index.html`. It prints PRESENT and
+  FOLLOW URLs carrying a cryptographically random room token required for all
+  `/slide` reads and writes. Do not expose the ephemeral server to the public
+  internet. Follow-along requires the deck be bundled with `data-follow` on
+  `<html>` before sharing (see `references/runtime.md`); a plain deck stays
+  inert on `file://` with no server and no param.
 
 ## Inspectable example
 

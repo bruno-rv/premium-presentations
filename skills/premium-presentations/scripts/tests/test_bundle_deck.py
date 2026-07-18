@@ -15,6 +15,9 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parent.parent.parent
 BUNDLER_PATH = ROOT / "scripts" / "bundle_deck.py"
 SHARED = ROOT / "assets" / "shared"
+sys.path.insert(0, str(ROOT / "scripts"))
+
+from _common import discover_themes  # noqa: E402
 
 
 def load_bundler():
@@ -92,6 +95,61 @@ def _deck_without_live_flow() -> str:
 
 def bundle_string(bundler, html: str, html_path: Path) -> str:
     return bundler.bundle_html(html, html_path)
+
+
+class BundleAssetContainmentTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.bundler = load_bundler()
+
+    def test_allows_assets_inside_deck_and_shared_roots(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+            deck_dir = base / "deck"
+            shared = base / "shared"
+            deck_dir.mkdir()
+            shared.mkdir()
+            html_path = deck_dir / "deck.html"
+            (deck_dir / "local.css").write_text("body{}", encoding="utf-8")
+            (shared / "runtime.js").write_text("", encoding="utf-8")
+            with patch.object(self.bundler, "SHARED", shared):
+                self.assertEqual(
+                    self.bundler.resolve_asset(html_path, "local.css"),
+                    (deck_dir / "local.css").resolve(),
+                )
+                self.assertEqual(
+                    self.bundler.resolve_asset(html_path, "../shared/runtime.js"),
+                    (shared / "runtime.js").resolve(),
+                )
+
+    def test_rejects_parent_traversal_outside_allowed_roots(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+            deck_dir = base / "deck"
+            shared = base / "shared"
+            deck_dir.mkdir()
+            shared.mkdir()
+            html_path = deck_dir / "deck.html"
+            (base / "secret.css").write_text("secret", encoding="utf-8")
+            with patch.object(self.bundler, "SHARED", shared):
+                with self.assertRaisesRegex(ValueError, "outside allowed roots"):
+                    self.bundler.resolve_asset(html_path, "../secret.css")
+
+    def test_rejects_symlink_escape_outside_allowed_roots(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+            deck_dir = base / "deck"
+            shared = base / "shared"
+            outside = base / "outside"
+            deck_dir.mkdir()
+            shared.mkdir()
+            outside.mkdir()
+            (outside / "secret.js").write_text("secret", encoding="utf-8")
+            (deck_dir / "linked.js").symlink_to(outside / "secret.js")
+            html_path = deck_dir / "deck.html"
+            with patch.object(self.bundler, "SHARED", shared):
+                with self.assertRaisesRegex(ValueError, "outside allowed roots"):
+                    self.bundler.resolve_asset(html_path, "linked.js")
 
 
 class BundleGlossaryTests(unittest.TestCase):
@@ -478,25 +536,21 @@ class BundleThemeVisualsEmbedTests(unittest.TestCase):
                     f"Embed block must contain theme key {theme!r}",
                 )
 
-    def test_manifest_has_exactly_four_themes(self) -> None:
-        """Manifest declares exactly 4 themes — conscious gate so new themes fail loudly."""
-        self.assertEqual(
-            len(self.manifest),
-            4,
-            f"Expected exactly 4 themes in manifest.json, got {len(self.manifest)}: "
-            f"{list(self.manifest.keys())}. Update this test if adding a new theme.",
+    def test_manifest_theme_set_matches_css_discovery(self) -> None:
+        self.assertEqual(set(self.manifest), set(discover_themes()))
+
+    # ------------------------------------------------------------------
+    # Test 3: the CLI exposes no visual-embedding bypass
+    # ------------------------------------------------------------------
+
+    def test_cli_help_exposes_no_visual_embedding_bypass(self) -> None:
+        result = subprocess.run(
+            [sys.executable, str(BUNDLER_PATH), "--help"],
+            capture_output=True,
+            text=True,
         )
-
-    # ------------------------------------------------------------------
-    # Test 3: --no-embed-visuals skips the embed block
-    # ------------------------------------------------------------------
-
-    def test_no_embed_visuals_flag_omits_block(self) -> None:
-        """--no-embed-visuals CLI flag produces output with no embed marker (PLAN §6 item 3)."""
-        bundled, rc = self._bundle_via_cli(_make_visual_deck(), extra_args=["--no-embed-visuals"])
-        self.assertEqual(rc, 0, f"Bundler exited non-zero with --no-embed-visuals: {bundled}")
-        self.assertNotIn(_EMBED_MARKER, bundled,
-                         "--no-embed-visuals must omit the theme-visuals-embed block")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("--no-embed-visuals", result.stdout)
 
     # ------------------------------------------------------------------
     # Test 4: re-bundle idempotent — exactly one embed block

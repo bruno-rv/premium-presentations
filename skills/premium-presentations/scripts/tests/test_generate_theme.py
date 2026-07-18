@@ -9,12 +9,14 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import generate_theme  # noqa: E402
+import theme_visuals  # noqa: E402
 from _common import THEMES_CSS, discover_themes  # noqa: E402
 from validate_contrast import check_palette, scan_themes_css  # noqa: E402
 
@@ -137,6 +139,22 @@ class CliIntegrationTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.css_copy = Path(self.tmp.name) / "premium-themes.css"
         shutil.copy(THEMES_CSS, self.css_copy)
+        source_visuals = ROOT / "assets" / "shared" / "assets" / "theme-visuals"
+        self.visuals = Path(self.tmp.name) / "theme-visuals"
+        shutil.copytree(source_visuals, self.visuals)
+        self.manifest = self.visuals / "manifest.json"
+        self.hero = Path(self.tmp.name) / "input-hero.webp"
+        self.map = Path(self.tmp.name) / "input-map.webp"
+        shutil.copy2(source_visuals / "editorial-hero.webp", self.hero)
+        shutil.copy2(source_visuals / "editorial-map.webp", self.map)
+
+    def _visual_args(self) -> list[str]:
+        return [
+            "--hero-image", str(self.hero),
+            "--map-image", str(self.map),
+            "--visuals-dir", str(self.visuals),
+            "--manifest", str(self.manifest),
+        ]
 
     def test_at2_theme_appended_and_discoverable(self) -> None:
         rc = generate_theme.main(
@@ -144,7 +162,7 @@ class CliIntegrationTests(unittest.TestCase):
                 "brand-aa", "--bg", "#0b1220", "--text", "#f4f6fb",
                 "--accent", "#22c55e", "--surface", "#141d33",
                 "--css", str(self.css_copy),
-            ]
+            ] + self._visual_args()
         )
         self.assertEqual(rc, 0)
         themes = discover_themes(self.css_copy)
@@ -157,7 +175,7 @@ class CliIntegrationTests(unittest.TestCase):
                 "brand-bad", "--bg", "#ffffff", "--text", "#cccccc",
                 "--accent", "#dddddd", "--surface", "#ffffff",
                 "--css", str(self.css_copy),
-            ]
+            ] + self._visual_args()
         )
         self.assertNotEqual(rc, 0)
         after = self.css_copy.read_text(encoding="utf-8")
@@ -185,7 +203,83 @@ class CliIntegrationTests(unittest.TestCase):
         flat: list[str] = [brand_id]
         for k, v in args.items():
             flat += [k, v]
-        return flat + ["--css", str(self.css_copy)]
+        return flat + ["--css", str(self.css_copy)] + self._visual_args()
+
+    def test_persisted_theme_requires_both_homage_images(self) -> None:
+        before = self.css_copy.read_bytes()
+        rc = generate_theme.main(
+            [
+                "brand-no-images", "--bg", "#0b1220", "--text", "#f4f6fb",
+                "--accent", "#22c55e", "--surface", "#141d33",
+                "--css", str(self.css_copy),
+                "--visuals-dir", str(self.visuals),
+                "--manifest", str(self.manifest),
+            ]
+        )
+        self.assertNotEqual(rc, 0)
+        self.assertEqual(before, self.css_copy.read_bytes())
+
+    def test_install_normalizes_assets_and_updates_manifest(self) -> None:
+        rc = generate_theme.main(self._gen_args("brand-visual"))
+        self.assertEqual(rc, 0)
+        self.assertEqual(
+            (self.visuals / "brand-visual-hero.webp").read_bytes(), self.hero.read_bytes()
+        )
+        self.assertEqual(
+            (self.visuals / "brand-visual-map.webp").read_bytes(), self.map.read_bytes()
+        )
+        registry = theme_visuals.load_and_validate_registry(
+            self.css_copy, self.visuals, self.manifest
+        )
+        self.assertEqual(set(registry["brand-visual"]), {"hero", "map"})
+
+    def test_partial_commit_failure_rolls_back_css_assets_and_manifest(self) -> None:
+        before_css = self.css_copy.read_bytes()
+        before_manifest = self.manifest.read_bytes()
+        real_replace = theme_visuals._replace_staged
+        calls = 0
+
+        def fail_second(staged: Path, target: Path) -> None:
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                raise OSError("injected commit failure")
+            real_replace(staged, target)
+
+        with patch.object(theme_visuals, "_replace_staged", side_effect=fail_second):
+            rc = generate_theme.main(self._gen_args("brand-rollback"))
+
+        self.assertNotEqual(rc, 0)
+        self.assertEqual(before_css, self.css_copy.read_bytes())
+        self.assertEqual(before_manifest, self.manifest.read_bytes())
+        self.assertFalse((self.visuals / "brand-rollback-hero.webp").exists())
+        self.assertFalse((self.visuals / "brand-rollback-map.webp").exists())
+
+    def test_final_committed_validation_failure_rolls_back_every_target(self) -> None:
+        before_css = self.css_copy.read_bytes()
+        before_manifest = self.manifest.read_bytes()
+        real_validate = theme_visuals.load_and_validate_registry
+        calls = 0
+
+        def fail_committed_view(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            if calls == 3:
+                raise theme_visuals.ThemeVisualsError("injected final validation failure")
+            return real_validate(*args, **kwargs)
+
+        with patch.object(
+            theme_visuals,
+            "load_and_validate_registry",
+            side_effect=fail_committed_view,
+        ):
+            rc = generate_theme.main(self._gen_args("brand-final-validation"))
+
+        self.assertNotEqual(rc, 0)
+        self.assertEqual(before_css, self.css_copy.read_bytes())
+        self.assertEqual(before_manifest, self.manifest.read_bytes())
+        self.assertFalse((self.visuals / "brand-final-validation-hero.webp").exists())
+        self.assertFalse((self.visuals / "brand-final-validation-map.webp").exists())
 
     def test_duplicate_generated_name_fails_without_replace(self) -> None:
         rc1 = generate_theme.main(self._gen_args("brand-dup"))
@@ -264,6 +358,14 @@ class FontInjectionCliTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.css_copy = Path(self.tmp.name) / "premium-themes.css"
         shutil.copy(THEMES_CSS, self.css_copy)
+        source_visuals = ROOT / "assets" / "shared" / "assets" / "theme-visuals"
+        self.visuals = Path(self.tmp.name) / "theme-visuals"
+        shutil.copytree(source_visuals, self.visuals)
+        self.manifest = self.visuals / "manifest.json"
+        self.hero = Path(self.tmp.name) / "input-hero.webp"
+        self.map = Path(self.tmp.name) / "input-map.webp"
+        shutil.copy2(source_visuals / "editorial-hero.webp", self.hero)
+        shutil.copy2(source_visuals / "editorial-map.webp", self.map)
 
     def _sha(self) -> str:
         return hashlib.sha256(self.css_copy.read_bytes()).hexdigest()
@@ -274,6 +376,10 @@ class FontInjectionCliTests(unittest.TestCase):
             "--accent", "#22c55e", "--surface", "#141d33",
             "--font-display", font_display,
             "--css", str(self.css_copy),
+            "--hero-image", str(self.hero),
+            "--map-image", str(self.map),
+            "--visuals-dir", str(self.visuals),
+            "--manifest", str(self.manifest),
         ]
 
     def _assert_rejected_untouched(self, brand_id: str, font_display: str) -> None:

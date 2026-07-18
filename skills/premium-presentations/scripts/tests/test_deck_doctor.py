@@ -103,6 +103,15 @@ class DeckDoctorTests(unittest.TestCase):
         self.assertIn("Spec not found", err)
         self.assertIn(str(bogus_spec), err)
 
+    def test_relative_media_reference_fails_portability_gate(self) -> None:
+        html = _make_deck_html(2).replace(
+            "</body>", '<img src="images/missing.webp" alt="">\n</body>'
+        )
+        rc, out = run_doctor(html, SPEC_2_ROWS)
+        self.assertEqual(rc, 1)
+        self.assertIn("[✗] validate_portability", out)
+        self.assertIn("images/missing.webp", out)
+
     def test_layout_validation_runs_once_and_rejects_layout_errors(self) -> None:
         sweeps = 0
 

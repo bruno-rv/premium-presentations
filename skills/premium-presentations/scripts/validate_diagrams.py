@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import re
 import sys
+from html.parser import HTMLParser
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -100,22 +101,47 @@ def validate_shared_diagram_engine(shared_dir: Path) -> tuple[list[str], list[st
     return errors, warnings
 
 
-def validate_inline_scripts(html: str) -> tuple[list[str], list[str]]:
-    """Detect `</script>` inside inline script bodies (breaks HTML parsing)."""
-    errors: list[str] = []
-    warnings: list[str] = []
-    for match in re.finditer(
-        r"<script\b([^>]*)>([\s\S]*?)</script>", html, re.I
-    ):
-        attrs, body = match.group(1), match.group(2)
-        if re.search(r"\bsrc=", attrs, re.I):
-            continue
-        if re.search(r"</script>", body, re.I):
-            errors.append(
-                "Inline <script> contains literal </script> — breaks controls/shortcuts; re-bundle with bundle_deck.py"
+class _ScriptStructureParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.open_script_lines: list[int] = []
+        self.errors: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag.lower() != "script":
+            return
+        line, _ = self.getpos()
+        if self.open_script_lines:
+            self.errors.append(f"Unexpected nested <script> start at line {line}")
+        self.open_script_lines.append(line)
+
+    def handle_startendtag(
+        self, tag: str, attrs: list[tuple[str, str | None]]
+    ) -> None:
+        if tag.lower() == "script":
+            line, _ = self.getpos()
+            self.errors.append(f"Self-closing <script/> is invalid at line {line}")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag.lower() != "script":
+            return
+        line, _ = self.getpos()
+        if not self.open_script_lines:
+            self.errors.append(
+                f"Unexpected </script> at line {line}; an earlier literal close likely ended script data"
             )
-            break
-    return errors, warnings
+            return
+        self.open_script_lines.pop()
+
+
+def validate_inline_scripts(html: str) -> tuple[list[str], list[str]]:
+    """Validate script structure using HTML's raw-text parsing semantics."""
+    parser = _ScriptStructureParser()
+    parser.feed(html)
+    parser.close()
+    for line in parser.open_script_lines:
+        parser.errors.append(f"Unclosed <script> opened at line {line}")
+    return parser.errors, []
 
 
 def validate_deck_diagrams(

@@ -96,16 +96,20 @@ console.log('Test: cycle order via e.code Digit3 + persistence');
 {
   const d = await makeDeck();
   const seen = [mode(d)];
-  for (let i = 0; i < 4; i++) { pressDigit3(d); seen.push(mode(d)); }
-  assert(seen.join('>') === 'off>ambient>tilt>depth>off', 'forward cycle off>ambient>tilt>depth>off');
+  for (let i = 0; i < 5; i++) { pressDigit3(d); seen.push(mode(d)); }
+  assert(seen.join('>') === 'off>ambient>tilt>depth>card>off', 'forward cycle covers all five modes including card');
   pressDigit3(d, true);
-  assert(mode(d) === 'depth', 'Shift+3 cycles backward (off -> depth)');
-  assert(d.window.localStorage.getItem(SCOPED_KEY) === 'depth', 'cycle persists to scoped key');
+  assert(mode(d) === 'card', 'Shift+3 cycles backward (off -> card)');
+  assert(d.window.localStorage.getItem(SCOPED_KEY) === 'card', 'cycle persists card to scoped key');
   assert(d.window.localStorage.getItem('premium-parallax') === null, 'legacy unscoped key never written');
   const toast = d.window.document.getElementById('premium-3d-toast');
-  assert(!!toast && toast.textContent === '3D: DEPTH', 'toast shows current mode via textContent');
+  assert(!!toast && toast.textContent === '3D: CARD', 'toast shows current mode via textContent');
   const sel = d.window.document.getElementById('premium-3d');
-  assert(!!sel && sel.value === 'depth', '#premium-3d select synced');
+  assert(!!sel && sel.value === 'card', '#premium-3d select synced');
+  assert(
+    d.window.PremiumPresentations.MODES_3D.join('>') === 'off>ambient>tilt>depth>card',
+    'public mode registry exposes exactly the five supported modes',
+  );
 }
 
 console.log('Test: compat wrappers + API surface');

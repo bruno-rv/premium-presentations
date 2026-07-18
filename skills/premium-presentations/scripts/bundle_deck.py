@@ -25,6 +25,7 @@ from _common import JS_BUNDLE_ORDER as JS_ORDER
 from _common import REQUIRED_CSS
 from _common import REQUIRED_JS
 from _common import ROOT, SHARED
+from theme_visuals import load_and_validate_registry
 
 _HTML_TAG_RE = re.compile(r"<html\b[^>]*>", re.I)
 
@@ -40,7 +41,14 @@ def is_remote_url(href: str) -> bool:
 def resolve_asset(html_path: Path, href: str) -> Path | None:
     if is_remote_url(href):
         return None
-    return (html_path.parent / href).resolve()
+    resolved = (html_path.parent / href).resolve()
+    allowed_roots = (html_path.parent.resolve(), SHARED.resolve())
+    if not any(resolved == root or resolved.is_relative_to(root) for root in allowed_roots):
+        raise ValueError(
+            f"Local asset resolves outside allowed roots (deck directory or assets/shared): "
+            f"{href!r} -> {resolved}"
+        )
+    return resolved
 
 
 def strip_exports(js: str) -> str:
@@ -330,45 +338,12 @@ def has_visual_slides(html: str) -> bool:
 
 
 def load_theme_visuals_map() -> dict[str, dict[str, Path]]:
-    """Return {theme: {role: Path}} built from manifest.json.
-
-    Falls back to globbing <theme>-hero.webp / <theme>-map.webp only when
-    the manifest file is missing.  Missing manifest-listed asset files are
-    reported immediately so the caller can fail hard.
-    """
+    """Return the validated, exact CSS-theme/manifest homage registry."""
     manifest_path = _manifest_path()
     visuals_dir = manifest_path.parent
-
-    if manifest_path.is_file():
-        raw = json.loads(manifest_path.read_text(encoding="utf-8"))
-        result: dict[str, dict[str, Path]] = {}
-        for theme, meta in raw.items():
-            role_map: dict[str, Path] = {}
-            for entry in meta.get("assets", []):
-                role = entry["role"]
-                src = entry["src"]
-                asset_path = visuals_dir / src
-                if not asset_path.is_file():
-                    raise FileNotFoundError(
-                        f"theme-visuals embed: manifest lists {src!r} "
-                        f"(theme={theme!r}, role={role!r}) but the file "
-                        f"does not exist: {asset_path}"
-                    )
-                role_map[role] = asset_path
-            if role_map:
-                result[theme] = role_map
-        return result
-
-    # Fallback: glob for <theme>-hero.webp / <theme>-map.webp.
-    result = {}
-    for webp in sorted(visuals_dir.glob("*-hero.webp")):
-        theme = webp.stem[: -len("-hero")]
-        map_path = visuals_dir / f"{theme}-map.webp"
-        role_map = {"hero": webp}
-        if map_path.is_file():
-            role_map["map"] = map_path
-        result[theme] = role_map
-    return result
+    return load_and_validate_registry(
+        SHARED / "premium-themes.css", visuals_dir, manifest_path
+    )
 
 
 def strip_theme_visuals_embed(html: str) -> str:
@@ -533,23 +508,21 @@ def unstandalone_html(html: str) -> str:
     return html
 
 
-def bundle_html(html: str, html_path: Path, *, embed_visuals: bool = True) -> str:
+def bundle_html(html: str, html_path: Path) -> str:
     html = strip_remote_resource_links(html)
     html = strip_unsafe_portable_attrs(html)
     html = strip_default_cover_meta(html)
 
     # Already-bundled detection: if the deck is standalone AND either has the
-    # embed block (visuals already embedded) or embed is disabled, return as-is.
-    # If it's standalone but missing the embed block and embed_visuals is True,
-    # fall through so we can inject the embed block (same pattern as REQUIRED_JS
-    # auto-inject on re-bundle).
+    # embed block, return as-is. A standalone visual deck missing the block is
+    # always repaired; there is intentionally no visual-embedding bypass.
     is_standalone = (
         "/* --- premium-themes.css --- */" in html
         and "/* --- slide-engine.js --- */" in html
     )
     has_embed = "/* --- theme-visuals-embed --- */" in html
     if is_standalone:
-        needs_embed = embed_visuals and not has_embed
+        needs_embed = has_visual_slides(html) and not has_embed
         missing = missing_required_modules(html)
         if not needs_embed and not missing:
             return html  # already fully bundled
@@ -610,7 +583,7 @@ def bundle_html(html: str, html_path: Path, *, embed_visuals: bool = True) -> st
     use_follow = wants_follow(html)
     # has_visual_slides uses a quote-bounded class-attribute regex (safe post-inline),
     # but capturing pre-inline keeps it consistent with the other detection flags.
-    use_embed = embed_visuals and has_visual_slides(html)
+    use_embed = has_visual_slides(html)
 
     html = inline_stylesheets(html, html_path)
     html = inject_required_styles(html)
@@ -725,11 +698,6 @@ def main() -> int:
         action="store_true",
         help="Re-bundle even if the HTML looks already standalone",
     )
-    parser.add_argument(
-        "--no-embed-visuals",
-        action="store_true",
-        help="Skip embedding theme visuals as base64 data URIs (visuals will 404 outside the repo)",
-    )
     args = parser.parse_args()
 
     html_path = args.html.resolve()
@@ -741,16 +709,14 @@ def main() -> int:
     if not args.in_place and out_path is None:
         out_path = html_path.with_name(html_path.stem + ".standalone.html")
 
-    embed_visuals = not args.no_embed_visuals
-
     original = read_text(html_path)
     if args.force:
         # Strip any previous inlined content + standalone marker so the bundler
         # re-inlines from shared/ source. Re-link to ../../shared/ first.
         linked = unstandalone_html(original)
-        bundled = bundle_html(linked, html_path, embed_visuals=embed_visuals)
+        bundled = bundle_html(linked, html_path)
     else:
-        bundled = bundle_html(original, html_path, embed_visuals=embed_visuals)
+        bundled = bundle_html(original, html_path)
 
     if bundled == original and not args.force:
         print(f"Already standalone (no ../../shared/ links): {html_path}")
