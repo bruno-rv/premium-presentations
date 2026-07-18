@@ -16,7 +16,9 @@ from _common import ROOT, discover_themes
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--themes-css",
         "--css",
+        dest="css",
         type=Path,
         default=ROOT / "assets" / "shared" / "premium-themes.css",
         help="Path to premium-themes.css",

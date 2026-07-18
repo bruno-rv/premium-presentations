@@ -169,6 +169,9 @@ class SkillLayoutTests(unittest.TestCase):
         self.assertIn("--output-dir", command)
         self.assertIn("$skill_root/scripts/new-deck.sh", command)
         self.assertIn("$skill_root/scripts/deck_doctor.py", command)
+        self.assertIn('themes_css="$project_root/assets/shared/premium-themes.css"', command)
+        self.assertIn('themes_css="$skill_root/assets/shared/premium-themes.css"', command)
+        self.assertIn('--themes-css "$themes_css"', command)
 
     def test_shared_recipe_captures_workspace_before_skill_root(self) -> None:
         documents = {
@@ -185,6 +188,9 @@ class SkillLayoutTests(unittest.TestCase):
                     'cp "$skill_root/assets/shared/premium-themes.css" "$workspace_theme_css"',
                     document,
                 )
+                self.assertIn('themes_css="$workspace_root/assets/shared/premium-themes.css"', document)
+                self.assertIn('themes_css="$skill_root/assets/shared/premium-themes.css"', document)
+                self.assertIn('--themes-css "$themes_css"', document)
 
         skill = documents["SKILL.md"]
         self.assertIn("workspace_root", skill)

@@ -67,8 +67,12 @@ Use `assets/templates/diagram-slide.snippet.html`. Validator enforces:
 absolute `skill_root`, run:
 
 ```bash
+themes_css="$workspace_root/assets/shared/premium-themes.css"
+if [ ! -f "$themes_css" ]; then
+  themes_css="$skill_root/assets/shared/premium-themes.css"
+fi
 python3 "$skill_root/scripts/list-themes.py" \
-  --css "$skill_root/assets/shared/premium-themes.css"
+  --themes-css "$themes_css"
 ```
 
 Or inspect `html[data-theme="..."]` selectors in the bundled registry. Do not
@@ -101,6 +105,7 @@ mkdir -p "$(dirname "$workspace_theme_css")"
 if [ ! -f "$workspace_theme_css" ]; then
   cp "$skill_root/assets/shared/premium-themes.css" "$workspace_theme_css"
 fi
+themes_css="$workspace_theme_css"
 python3 "$skill_root/scripts/generate_theme.py" <brand-id> \
   --bg HEX --text HEX --accent HEX --surface HEX \
   --themes-css "$workspace_theme_css"
@@ -135,9 +140,13 @@ deck path explicitly:
 ```bash
 workspace_root="$(pwd -P)"
 skill_root="$(cd "<absolute-skill-root>" && pwd -P)"
+themes_css="$workspace_root/assets/shared/premium-themes.css"
+if [ ! -f "$themes_css" ]; then
+  themes_css="$skill_root/assets/shared/premium-themes.css"
+fi
 deck_dir="$workspace_root/assets/decks/<slug>"
 "$skill_root/scripts/new-deck.sh" --output-dir "$deck_dir" \
-  --themes-css "$skill_root/assets/shared/premium-themes.css" \
+  --themes-css "$themes_css" \
   <theme> <slug> "<title>" <count>
 python3 "$skill_root/scripts/deck_doctor.py" \
   "$deck_dir/<slug>-slides.html" "$deck_dir/<slug>-slide-spec.md"

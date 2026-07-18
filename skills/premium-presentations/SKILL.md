@@ -28,6 +28,10 @@ framework from memory.
 ```bash
 workspace_root="$(pwd -P)"
 skill_root="$(cd "<absolute-skill-root>" && pwd -P)"
+themes_css="$workspace_root/assets/shared/premium-themes.css"
+if [ ! -f "$themes_css" ]; then
+  themes_css="$skill_root/assets/shared/premium-themes.css"
+fi
 ```
 
    Keep `skill_root` read-only and put decks, specs, themes, and exports under
@@ -38,7 +42,7 @@ skill_root="$(cd "<absolute-skill-root>" && pwd -P)"
 
 ```bash
 python3 "$skill_root/scripts/list-themes.py" \
-  --css "$skill_root/assets/shared/premium-themes.css"
+  --themes-css "$themes_css"
 ```
 
 Themes come from `html[data-theme="..."]` selectors in
@@ -66,7 +70,7 @@ slug="<slug>"
 deck_dir="$workspace_root/assets/decks/$slug"
 "$skill_root/scripts/new-deck.sh" \
   --output-dir "$deck_dir" \
-  --themes-css "$skill_root/assets/shared/premium-themes.css" \
+  --themes-css "$themes_css" \
   <theme> "$slug" "<title>" <slide_count>
 ```
 
@@ -268,6 +272,7 @@ python3 "$skill_root/scripts/export_handout.py" \
   if [ ! -f "$workspace_theme_css" ]; then
     cp "$skill_root/assets/shared/premium-themes.css" "$workspace_theme_css"
   fi
+  themes_css="$workspace_theme_css"
   python3 "$skill_root/scripts/generate_theme.py" <brand-id> \
     --bg HEX --text HEX --accent HEX --surface HEX \
     --themes-css "$workspace_theme_css"

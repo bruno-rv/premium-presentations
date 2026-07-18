@@ -30,6 +30,10 @@ if [ -z "$project_root" ]; then
   exit 1
 fi
 deck_root="$project_root/assets/decks"
+themes_css="$project_root/assets/shared/premium-themes.css"
+if [ ! -f "$themes_css" ]; then
+  themes_css="$skill_root/assets/shared/premium-themes.css"
+fi
 cd "$project_root"
 ```
 
@@ -133,7 +137,7 @@ deck_dir="$deck_root/$slug"
 
 "$skill_root/scripts/new-deck.sh" \
   --output-dir "$deck_dir" \
-  --themes-css "$skill_root/assets/shared/premium-themes.css" \
+  --themes-css "$themes_css" \
   <theme> "$slug" "$title" "$count"
 ```
 
