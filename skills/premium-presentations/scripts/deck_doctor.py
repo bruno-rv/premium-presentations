@@ -44,6 +44,9 @@ def _section(title: str, ok: bool, lines: list[str]) -> None:
 
 
 def main(argv: list[str]) -> int:
+    if argv and argv[0] in ("--help", "-h"):
+        print("Usage: deck_doctor.py <deck.html> [slide-spec.md]")
+        return 0
     if not argv or len(argv) > 2:
         print("Usage: deck_doctor.py <deck.html> [slide-spec.md]", file=sys.stderr)
         return 1

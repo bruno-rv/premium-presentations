@@ -178,4 +178,5 @@ if [[ -f "$SPEC_FILE" ]]; then
 else
   echo "Validate: python3 scripts/validate_deck.py \"$SLIDES_FILE\""
 fi
-echo "Open:     open \"$SLIDES_FILE\""
+echo "Open:     $SLIDES_FILE"
+echo "          (open \"\$file\" on macOS, xdg-open \"\$file\" on Linux)"

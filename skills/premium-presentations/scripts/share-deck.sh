@@ -41,6 +41,8 @@ SRC="$(cd "$(dirname "$SRC")" && pwd)/$(basename "$SRC")"
 
 serve_lan_fallback() {
   SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+  # macOS -> Linux -> last resort: on platforms where neither `ipconfig` nor
+  # `hostname -I` resolves, this prints the hostname, not an IP address.
   IP="$(ipconfig getifaddr en0 2>/dev/null || hostname -I 2>/dev/null | awk '{print $1}' || hostname)"
   LAN_DIR="$(mktemp -d)"
   ROOM="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"

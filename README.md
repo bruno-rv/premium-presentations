@@ -89,9 +89,12 @@ python3 "$skill_root/scripts/bootstrap.py" --check
 ```
 
 If the check reports missing Playwright or Chromium, install both with the
-active Python interpreter (the command is explicit and mutating):
+active Python interpreter (the command is explicit and mutating). On
+externally-managed Python installs (Homebrew, Debian/Ubuntu) `pip install`
+fails outside a virtual environment (PEP 668), so create one first:
 
 ```bash
+python3 -m venv .venv && source .venv/bin/activate
 python3 "$skill_root/scripts/bootstrap.py" --install-browser-deps
 ```
 
@@ -226,10 +229,11 @@ python3 skills/premium-presentations/scripts/export_handout.py \
 Each writes a sidecar file (`og-cover.png`, `my-talk.pdf`, `my-talk-handout.md`)
 next to the deck. The standalone deck HTML does not reference them automatically.
 
-Open the studio:
+Open the studio (`open` on macOS, `xdg-open` on Linux):
 
 ```bash
-open skills/premium-presentations/assets/studio/index.html
+open skills/premium-presentations/assets/studio/index.html   # macOS
+xdg-open skills/premium-presentations/assets/studio/index.html  # Linux
 ```
 
 The Studio includes a Design Lab for theme composition, layout/component
@@ -280,7 +284,8 @@ The LAN fallback serves an isolated temporary copy containing only
 `index.html`. Presenter and follower URLs carry a random room token required
 for every slide-state read and write; the token protects controls, while the
 deck itself remains intentionally readable to devices that can reach the LAN
-server.
+server. The `vercel` CLI is optional and auto-detected; without it, or if it
+fails, the script falls back to the LAN server.
 
 ## Layout
 

@@ -154,7 +154,7 @@ Install Node 20, Python 3.12, project requirements, Playwright Chromium, and Cla
 npm run test:all
 npm audit
 claude plugin validate . --strict
-python3 /Users/bruno/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py .
+python3 $HOME/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py .
 ```
 
 ### Task 4: Integration, documentation, and independent review
@@ -181,7 +181,7 @@ npm run test:all
 python3 scripts/validate_runtime_contract.py
 python3 scripts/test_theme_visuals.py
 claude plugin validate . --strict
-python3 /Users/bruno/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py .
+python3 $HOME/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py .
 npm audit
 git diff --check
 ```
