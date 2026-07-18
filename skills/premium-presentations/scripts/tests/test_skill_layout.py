@@ -190,7 +190,7 @@ class SkillLayoutTests(unittest.TestCase):
             "package-lock": lock["version"],
             "package-lock root": lock["packages"][""]["version"],
         }
-        self.assertEqual({"2.0.0"}, set(versions.values()), versions)
+        self.assertEqual({"2.0.1"}, set(versions.values()), versions)
 
     def test_aggregate_script_covers_every_shipped_node_suite_and_python_discovery(self) -> None:
         package = json.loads((ROOT / "scripts" / "package.json").read_text(encoding="utf-8"))

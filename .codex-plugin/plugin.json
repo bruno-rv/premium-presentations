@@ -1,6 +1,6 @@
 {
   "name": "premium-presentations",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Generate polished, browser-rendered HTML slide decks with presenter mode, theme assets, export helpers, and offline validation.",
   "author": {
     "name": "Bruno Rodrigues Veloso",

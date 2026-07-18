@@ -1,7 +1,7 @@
 {
   "name": "premium-presentations",
   "description": "Generate magazine-quality themed HTML slide decks: runtime theme switching, cursor-tracked 3D modes, presenter view with rehearsal timeline, annotations, offline diagrams. Self-contained single-file presentations with zero network dependencies.",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "author": {
     "name": "Bruno Rodrigues Veloso",
     "url": "https://github.com/bruno-rv"
