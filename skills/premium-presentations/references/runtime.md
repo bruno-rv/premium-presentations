@@ -91,14 +91,27 @@ token blocks). Gated pairs: `--text`/`--bg` and `--text`/`--surface` at 4.5:1,
 heading/UI scale, never body text). Run standalone:
 `python3 "$skill_root/scripts/validate_contrast.py"`.
 
-**Brand theme generation:** `python3 "$skill_root/scripts/generate_theme.py" <brand-id> --bg HEX
---text HEX --accent HEX --surface HEX` ports `buildThemeCss`
-(`premium-design-power.js`) to Python and emits the full token set the
-built-in themes carry (not just the JS composer's 11) so a generated theme
-renders identically to a hand-authored one — progress bar, code windows, and
-semantic tags included. Runs the same contrast gate at generation time:
-fail-closed, nothing is appended to `premium-themes.css` on a failing
-palette. `--dry-run` prints the block without appending.
+**Brand theme generation:** keep the bundled registry read-only. Copy it to a
+workspace-owned registry once, then pass that explicit path to the generator so
+all built-in themes remain available:
+
+```bash
+workspace_theme_css="$workspace_root/assets/shared/premium-themes.css"
+mkdir -p "$(dirname "$workspace_theme_css")"
+if [ ! -f "$workspace_theme_css" ]; then
+  cp "$skill_root/assets/shared/premium-themes.css" "$workspace_theme_css"
+fi
+python3 "$skill_root/scripts/generate_theme.py" <brand-id> \
+  --bg HEX --text HEX --accent HEX --surface HEX \
+  --themes-css "$workspace_theme_css"
+```
+
+This ports `buildThemeCss` (`premium-design-power.js`) to Python and emits the
+full token set the built-in themes carry (not just the JS composer's 11) so a
+generated theme renders identically to a hand-authored one — progress bar, code
+windows, and semantic tags included. It runs the same contrast gate at
+generation time: fail-closed, nothing is appended to the workspace registry
+on a failing palette. `--dry-run` prints the block without appending.
 
 **LAN follow-along + `/present-pr`:** `share-deck.sh`'s LAN fallback serves
 via `scripts/lan-sync-server.py` (stdlib `ThreadingHTTPServer`, binds
@@ -123,7 +136,7 @@ deck path explicitly:
 workspace_root="$(pwd -P)"
 skill_root="$(cd "<absolute-skill-root>" && pwd -P)"
 deck_dir="$workspace_root/assets/decks/<slug>"
-python3 "$skill_root/scripts/new-deck.sh" --output-dir "$deck_dir" \
+"$skill_root/scripts/new-deck.sh" --output-dir "$deck_dir" \
   --themes-css "$skill_root/assets/shared/premium-themes.css" \
   <theme> <slug> "<title>" <count>
 python3 "$skill_root/scripts/deck_doctor.py" \

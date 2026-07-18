@@ -258,12 +258,26 @@ python3 "$skill_root/scripts/export_handout.py" \
   (`references/present-pr-brief.md`) from real `git diff`/`git log`/touched-file
   content, then run the existing `new-deck.sh` → spec → generate →
   `deck_doctor.py` pipeline verbatim. No diff-to-slide bypass.
-- **Brand theme generation:** `python3 "$skill_root/scripts/generate_theme.py" <brand-id> --bg
-  HEX --text HEX --accent HEX --surface HEX` appends a full-token
-  `html[data-theme="<brand-id>"]{…}` block to `premium-themes.css`,
-  discoverable by `list-themes.py` like any built-in theme. Fail-closed: a
-  palette that fails the WCAG contrast gate is rejected and nothing is
-  appended. See `references/runtime.md` for the derivation and gated pairs.
+- **Brand theme generation:** keep the bundled registry read-only. Copy it to
+  a workspace-owned registry once, then pass that explicit path to the theme
+  generator so all built-in themes remain available:
+
+  ```bash
+  workspace_theme_css="$workspace_root/assets/shared/premium-themes.css"
+  mkdir -p "$(dirname "$workspace_theme_css")"
+  if [ ! -f "$workspace_theme_css" ]; then
+    cp "$skill_root/assets/shared/premium-themes.css" "$workspace_theme_css"
+  fi
+  python3 "$skill_root/scripts/generate_theme.py" <brand-id> \
+    --bg HEX --text HEX --accent HEX --surface HEX \
+    --themes-css "$workspace_theme_css"
+  ```
+
+  This appends a full-token `html[data-theme="<brand-id>"]{…}` block to the
+  workspace registry, discoverable by `list-themes.py` like any built-in
+  theme. Fail-closed: a palette that fails the WCAG contrast gate is rejected
+  and nothing is appended. See `references/runtime.md` for the derivation and
+  gated pairs.
 - **Contrast gate:** `deck_doctor.py` composes `scripts/validate_contrast.py`
   as a 5th section — a repo-wide WCAG check over every theme block in
   `premium-themes.css`. Run standalone with `python3 "$skill_root/scripts/validate_contrast.py"`.

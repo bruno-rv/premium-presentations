@@ -180,12 +180,26 @@ class SkillLayoutTests(unittest.TestCase):
                 self.assertIn("workspace root", document.lower())
                 self.assertIn("skill root", document.lower())
                 self.assertIn("Codex", document)
+                self.assertIn('--themes-css "$workspace_theme_css"', document)
+                self.assertIn(
+                    'cp "$skill_root/assets/shared/premium-themes.css" "$workspace_theme_css"',
+                    document,
+                )
 
         skill = documents["SKILL.md"]
         self.assertIn("workspace_root", skill)
         self.assertIn("skill_root", skill)
         self.assertIn("absolute skill root", skill.lower())
         self.assertNotIn("cd skills/premium-presentations", skill)
+
+    def test_runtime_recipe_executes_new_deck_shell_directly(self) -> None:
+        runtime = (ROOT / "references" / "runtime.md").read_text(encoding="utf-8")
+
+        self.assertNotIn('python3 "$skill_root/scripts/new-deck.sh"', runtime)
+        self.assertRegex(
+            runtime,
+            r'(?m)^"\$skill_root/scripts/new-deck\.sh"\s+--output-dir',
+        )
 
 
 if __name__ == "__main__":
