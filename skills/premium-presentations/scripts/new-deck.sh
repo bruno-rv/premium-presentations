@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Scaffold a Premium Presentations HTML deck.
-# Usage: ./scripts/new-deck.sh <theme> <slug> "<title>" [slide_count]
+# Usage: ./scripts/new-deck.sh [--output-dir DIR] [--themes-css FILE] <theme> <slug> "<title>" [slide_count]
 #
 # Examples:
 #   ./scripts/list-themes.py
@@ -9,22 +9,56 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-FRAMEWORK="${1:-}"
-SLUG="${2:-}"
-TITLE="${3:-}"
-COUNT="${4:-10}"
+OUTPUT_DIR=""
+THEMES_CSS_FILE=""
 
 usage() {
   sed -n '2,7p' "$0" | tail -n +2
   exit 1
 }
 
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --output-dir)
+      [[ $# -ge 2 ]] || usage
+      OUTPUT_DIR="$2"
+      shift 2
+      ;;
+    --themes-css)
+      [[ $# -ge 2 ]] || usage
+      THEMES_CSS_FILE="$2"
+      shift 2
+      ;;
+    --)
+      shift
+      break
+      ;;
+    -*)
+      usage
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+FRAMEWORK="${1:-}"
+SLUG="${2:-}"
+TITLE="${3:-}"
+COUNT="${4:-10}"
+
 [[ -z "$FRAMEWORK" || -z "$SLUG" || -z "$TITLE" ]] && usage
 
 THEMES=()
-while IFS= read -r theme; do
-  [[ -n "$theme" ]] && THEMES+=("$theme")
-done < <(python3 "$ROOT/scripts/list-themes.py")
+if [[ -n "$THEMES_CSS_FILE" ]]; then
+  while IFS= read -r theme; do
+    [[ -n "$theme" ]] && THEMES+=("$theme")
+  done < <(python3 "$ROOT/scripts/list-themes.py" --css "$THEMES_CSS_FILE")
+else
+  while IFS= read -r theme; do
+    [[ -n "$theme" ]] && THEMES+=("$theme")
+  done < <(python3 "$ROOT/scripts/list-themes.py")
+fi
 if [[ "${#THEMES[@]}" -eq 0 ]]; then
   echo "No themes found in assets/shared/premium-themes.css" >&2
   exit 1
@@ -44,7 +78,12 @@ if ! [[ "$COUNT" =~ ^[0-9]+$ ]] || [[ "$COUNT" -lt 1 ]]; then
   exit 1
 fi
 
-DECK_DIR="$ROOT/assets/decks/$SLUG"
+if [[ -n "$OUTPUT_DIR" ]]; then
+  mkdir -p "$OUTPUT_DIR"
+  DECK_DIR="$(cd "$OUTPUT_DIR" && pwd)"
+else
+  DECK_DIR="$ROOT/assets/decks/$SLUG"
+fi
 SLIDES_FILE="$DECK_DIR/${SLUG}-slides.html"
 SPEC_FILE="$DECK_DIR/${SLUG}-slide-spec.md"
 THEME_TEMPLATE="$ROOT/assets/templates/${FRAMEWORK}-base.html"
@@ -54,7 +93,11 @@ else
   TEMPLATE="$ROOT/assets/templates/premium-base.html"
 fi
 
-if [[ -e "$DECK_DIR" ]]; then
+if [[ -z "$OUTPUT_DIR" && -e "$DECK_DIR" ]]; then
+  echo "Deck already exists: $DECK_DIR" >&2
+  exit 1
+fi
+if [[ -n "$OUTPUT_DIR" && ( -e "$SLIDES_FILE" || -e "$SPEC_FILE" ) ]]; then
   echo "Deck already exists: $DECK_DIR" >&2
   exit 1
 fi
@@ -68,7 +111,11 @@ sed \
   -e "s|{{BAR_RIGHT}}||g" \
   "$TEMPLATE" > "$SLIDES_FILE"
 
-python3 "$ROOT/scripts/bundle_deck.py" "$SLIDES_FILE" --in-place
+BUNDLE_ARGS=("$SLIDES_FILE" --in-place --shared-root "$ROOT/assets/shared")
+if [[ -n "$THEMES_CSS_FILE" ]]; then
+  BUNDLE_ARGS+=(--themes-css "$THEMES_CSS_FILE")
+fi
+python3 "$ROOT/scripts/bundle_deck.py" "${BUNDLE_ARGS[@]}"
 python3 "$ROOT/scripts/validate_deck.py" "$SLIDES_FILE" || exit 1
 
 if [[ "$COUNT" -ge 8 ]]; then
@@ -90,7 +137,7 @@ echo "Deck scaffolded (Premium Presentations):"
 echo "  Directory: $DECK_DIR"
 echo "  Slides:    $SLIDES_FILE (standalone single file)"
 echo "  Theme:     $FRAMEWORK (switch live in deck controls)"
-echo "  Re-bundle: python3 scripts/bundle_deck.py \"$SLIDES_FILE\" --in-place  (after editing assets/shared/)"
+echo "  Re-bundle: python3 scripts/bundle_deck.py \"$SLIDES_FILE\" --in-place --shared-root \"$ROOT/assets/shared\"  (after editing shared assets)"
 echo "  Target:    $COUNT slides"
 echo ""
 if [[ -f "$SPEC_FILE" ]]; then

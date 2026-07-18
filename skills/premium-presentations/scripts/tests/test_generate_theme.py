@@ -307,5 +307,25 @@ class FontInjectionCliTests(unittest.TestCase):
         self.assertIn("--font-display: 'Helvetica Neue', Arial, sans-serif;", css_text)
 
 
+class WorkspaceThemesCssTests(unittest.TestCase):
+    def test_themes_css_option_writes_only_explicit_workspace_registry(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace_css = Path(tmp) / "themes.css"
+            shutil.copy(THEMES_CSS, workspace_css)
+            before = THEMES_CSS.read_bytes()
+
+            rc = generate_theme.main(
+                [
+                    "workspace-brand", "--bg", "#0b1220", "--text", "#f4f6fb",
+                    "--accent", "#22c55e", "--surface", "#141d33",
+                    "--themes-css", str(workspace_css),
+                ]
+            )
+
+            self.assertEqual(rc, 0)
+            self.assertIn("workspace-brand", workspace_css.read_text(encoding="utf-8"))
+            self.assertEqual(before, THEMES_CSS.read_bytes())
+
+
 if __name__ == "__main__":
     unittest.main()

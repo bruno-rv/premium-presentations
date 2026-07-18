@@ -769,5 +769,46 @@ class EscapeForHtmlStyleTests(unittest.TestCase):
         self.assertNotIn("</style", escaped.lower())
 
 
+class BundleExternalWorkspaceTests(unittest.TestCase):
+    def test_external_deck_uses_explicit_shared_root_and_themes_css(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            shared = root / "framework" / "shared"
+            shutil.copytree(SHARED, shared)
+            custom_css = root / "workspace" / "themes.css"
+            custom_css.parent.mkdir(parents=True)
+            custom_css.write_text(
+                (SHARED / "premium-themes.css").read_text(encoding="utf-8")
+                + "\n/* workspace-theme-registry */\n",
+                encoding="utf-8",
+            )
+            deck = root / "workspace" / "deck.html"
+            deck.write_text(_make_minimal_deck(), encoding="utf-8")
+            output = root / "workspace" / "deck.standalone.html"
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(BUNDLER_PATH),
+                    str(deck),
+                    "--shared-root",
+                    str(shared),
+                    "--themes-css",
+                    str(custom_css),
+                    "--output",
+                    str(output),
+                ],
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            bundled = output.read_text(encoding="utf-8")
+            self.assertIn("workspace-theme-registry", bundled)
+            self.assertIn("/* --- premium-themes.css --- */", bundled)
+            self.assertEqual(bundled.count("/* --- premium-themes.css --- */"), 1)
+            self.assertNotIn('../../shared/premium-themes.css', bundled)
+
+
 if __name__ == "__main__":
     unittest.main()

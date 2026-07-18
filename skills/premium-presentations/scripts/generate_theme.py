@@ -14,7 +14,7 @@ validate_contrast.check_palette() is rejected, nothing is appended.
 
 Usage:
   ./scripts/generate_theme.py <brand-id> --bg HEX --text HEX --accent HEX --surface HEX
-                              [--font-display STACK] [--css PATH] [--dry-run]
+                              [--font-display STACK] [--themes-css PATH] [--dry-run]
 """
 
 from __future__ import annotations
@@ -264,7 +264,10 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--accent", required=True, help="Accent hex color")
     parser.add_argument("--surface", required=True, help="Surface (card/panel) hex color")
     parser.add_argument("--font-display", default=_DEFAULT_FONT_DISPLAY, help="Display font stack")
-    parser.add_argument("--css", type=Path, default=THEMES_CSS, help="Target premium-themes.css path")
+    parser.add_argument(
+        "--themes-css", "--css", dest="css", type=Path, default=THEMES_CSS,
+        help="Target premium-themes.css path",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Print the block, do not append")
     parser.add_argument(
         "--replace", action="store_true",
