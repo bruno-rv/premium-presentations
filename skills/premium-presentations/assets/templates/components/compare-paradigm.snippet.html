@@ -1,4 +1,23 @@
-<!-- Compare split — paradigm / A vs B (frm P9 / AL-7, era slide AL-2) -->
+<!-- Compare split — paradigm / A vs B (frm P9 / AL-7, era slide AL-2)
+
+     IMPORTANT — compare-split is `flex:1; align-items:stretch` in
+     premium-components.css: it stretches to fill all remaining slide height
+     by design, regardless of content. A sparse panel (badge+title+one line)
+     then reads as dead space, and a `.compare-callout` (margin-top:auto)
+     gets pinned to the stretched bottom edge, where it can collide with a
+     fixed corner element (Side Notes panel, dot nav). Two ways to keep it
+     clean — pick one per slide, don't leave a panel sparse and stretched:
+
+       1. Fill each panel with a 3–5 item <ul> of concrete, specific facts
+          (this is the default below — the pattern used throughout the
+          shipped rag-vector-graph example deck).
+       2. If the content genuinely doesn't fill the space, add
+          style="flex:none" on .compare-split so the row sizes to its own
+          content and is centered by .content-center-wrap instead of
+          stretching.
+
+     validate_deck.py's compare-split density check will WARN if a slide
+     does neither. -->
 <section class="slide slide--content">
   <p class="slide__label reveal">Context</p>
   <h2 class="slide__heading reveal">The year the <span class="gradient-gold">paradigm</span> shifted</h2>
@@ -8,7 +27,11 @@
         <span class="compare-panel__badge">↓ Sinking</span>
         <h3 class="compare-panel__title">Era of experimentation</h3>
         <p class="compare-panel__lead">PoCs, side projects, pilots without scale.</p>
-        <p class="compare-callout">“Should we try AI?” — the question that died.</p>
+        <ul style="margin-top:.75rem;font-size:.88rem;line-height:1.65;color:var(--text-dim)">
+          <li>“Should we try AI?” — the question that died</li>
+          <li>Demos that never left a laptop</li>
+          <li>No SLA, no on-call, no budget line</li>
+        </ul>
       </div>
       <div class="compare-split__pillar" aria-hidden="true">
         <div class="compare-split__connector"></div>
@@ -19,7 +42,11 @@
         <span class="compare-panel__badge">↑ Emerging</span>
         <h3 class="compare-panel__title">Era of production</h3>
         <p class="compare-panel__lead">Scale, reliability, 24/7 operation.</p>
-        <p class="compare-callout">“How do we scale AI into operations?”</p>
+        <ul style="margin-top:.75rem;font-size:.88rem;line-height:1.65;color:var(--text-dim)">
+          <li>“How do we scale AI into operations?”</li>
+          <li>On-call rotations, SLAs, real budget</li>
+          <li>Measured against production KPIs, not demos</li>
+        </ul>
       </div>
     </div>
   </div>

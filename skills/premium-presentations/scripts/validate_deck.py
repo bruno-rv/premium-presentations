@@ -126,6 +126,40 @@ def validate_deck_variety(text: str) -> tuple[list[str], int]:
     return messages, len(deck_markers)
 
 
+COMPARE_SPLIT_OPEN_RE = re.compile(r'<div class="compare-split\b[^"]*"([^>]*)>', re.I)
+
+
+def validate_compare_split_density(text: str) -> list[str]:
+    """compare-split is `flex:1; align-items:stretch` by design (premium-components.css)
+    — it stretches to fill all remaining slide height regardless of content. A panel
+    with only a badge+title+one line reads as dead space with nothing anchoring the
+    bottom edge (or a `.compare-callout` pinned there, which can collide with a fixed
+    corner element like a Side Notes panel). Flag slides that neither fill the panel
+    (a `<ul>` list of concrete items) nor opt out of the stretch (`style="flex:none"`
+    on `.compare-split`)."""
+    messages: list[str] = []
+    opens = list(SLIDE_OPEN_RE.finditer(text))
+    for idx, match in enumerate(opens):
+        end = opens[idx + 1].start() if idx + 1 < len(opens) else len(text)
+        chunk = text[match.start():end]
+        if "compare-split" not in chunk:
+            continue
+        split_match = COMPARE_SPLIT_OPEN_RE.search(chunk)
+        if not split_match:
+            continue
+        attrs = split_match.group(1)
+        has_flex_override = bool(re.search(r"flex\s*:\s*none", attrs, re.I))
+        has_list = "<ul" in chunk or "<ol" in chunk
+        if not has_flex_override and not has_list:
+            messages.append(
+                f"slide {idx + 1}: compare-split panel(s) look sparse (no <ul>/<ol> "
+                'list) with no `style="flex:none"` override — compare-split stretches '
+                "flex:1 to fill the slide by design, so thin content reads as dead "
+                "space (see references/components.md, P9 compare-paradigm)"
+            )
+    return messages
+
+
 def load_bundle(html_path: Path, text: str) -> str:
     parts = [text]
     for href in re.findall(
@@ -227,6 +261,8 @@ def validate(html_path: Path, spec_path: str = "", strict_variety: bool = False)
         errors.extend(v_msgs)
     else:
         warnings.extend(v_msgs)
+
+    warnings.extend(validate_compare_split_density(text))
 
     slides_with_notes = len(re.findall(r'<aside\s[^>]*class=["\'][^"\']*\bnotes\b', text, re.I))
     if slides > 0 and slides_with_notes < slides:
