@@ -156,6 +156,37 @@ class SkillLayoutTests(unittest.TestCase):
         self.assertEqual("premium-presentations", marketplace["plugins"][0]["name"])
         self.assertEqual({"source": "url", "url": "./"}, marketplace["plugins"][0]["source"])
 
+    def test_present_pr_uses_explicit_claude_roots_and_workspace_output(self) -> None:
+        command = (REPO_ROOT / "commands" / "present-pr.md").read_text(encoding="utf-8")
+
+        self.assertIn("${CLAUDE_PLUGIN_ROOT}", command)
+        self.assertIn("${CLAUDE_PROJECT_DIR}", command)
+        self.assertNotIn("./skills/premium-presentations", command)
+        self.assertNotRegex(
+            command,
+            r"(?m)^\s*(?:python3\s+)?skills/premium-presentations/",
+        )
+        self.assertIn("--output-dir", command)
+        self.assertIn("$skill_root/scripts/new-deck.sh", command)
+        self.assertIn("$skill_root/scripts/deck_doctor.py", command)
+
+    def test_shared_recipe_captures_workspace_before_skill_root(self) -> None:
+        documents = {
+            "SKILL.md": (ROOT / "SKILL.md").read_text(encoding="utf-8"),
+            "runtime.md": (ROOT / "references" / "runtime.md").read_text(encoding="utf-8"),
+        }
+        for name, document in documents.items():
+            with self.subTest(document=name):
+                self.assertIn("workspace root", document.lower())
+                self.assertIn("skill root", document.lower())
+                self.assertIn("Codex", document)
+
+        skill = documents["SKILL.md"]
+        self.assertIn("workspace_root", skill)
+        self.assertIn("skill_root", skill)
+        self.assertIn("absolute skill root", skill.lower())
+        self.assertNotIn("cd skills/premium-presentations", skill)
+
 
 if __name__ == "__main__":
     unittest.main()

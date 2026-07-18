@@ -63,9 +63,18 @@ Use `assets/templates/diagram-slide.snippet.html`. Validator enforces:
 - Runtime: `fitMermaidDiagrams`, `bindMermaidFit`, `bindDiagramZoom`, `reportDiagramFit`
 - **Diagram zoom:** scroll/pinch on canvas, drag to pan when zoomed, toolbar **+ / − / %**, double-click reset; **`+` `−` `0`** on diagram slides
 
-**Theme discovery:** run `./scripts/list-themes.py`, or inspect `html[data-theme="..."]` selectors in `assets/shared/premium-themes.css`. Do not hardcode the current theme names in generators or skill instructions.
+**Theme discovery:** after capturing `workspace_root` and resolving the
+absolute `skill_root`, run:
 
-**Runtime contract:** run `./scripts/validate_runtime_contract.py` after any
+```bash
+python3 "$skill_root/scripts/list-themes.py" \
+  --css "$skill_root/assets/shared/premium-themes.css"
+```
+
+Or inspect `html[data-theme="..."]` selectors in the bundled registry. Do not
+hardcode the current theme names in generators or skill instructions.
+
+**Runtime contract:** run `python3 "$skill_root/scripts/validate_runtime_contract.py"` after any
 template, theme, bundler, or shared runtime edit. It verifies discovered theme
 scaffold templates, preview templates, and generated deck HTML files carry the
 common CSS/JS stack, plus red brand modules where the active template/deck is
@@ -79,9 +88,10 @@ every `html[data-theme="…"]` block in the SOURCE `premium-themes.css`
 (location-independent; not the deck's own HTML, which carries no inlined
 token blocks). Gated pairs: `--text`/`--bg` and `--text`/`--surface` at 4.5:1,
 `--text-dim`/`--bg` at 4.5:1, `--accent`/`--bg` at 3.0:1 (accent is
-heading/UI scale, never body text). Run standalone: `./scripts/validate_contrast.py`.
+heading/UI scale, never body text). Run standalone:
+`python3 "$skill_root/scripts/validate_contrast.py"`.
 
-**Brand theme generation:** `./scripts/generate_theme.py <brand-id> --bg HEX
+**Brand theme generation:** `python3 "$skill_root/scripts/generate_theme.py" <brand-id> --bg HEX
 --text HEX --accent HEX --surface HEX` ports `buildThemeCss`
 (`premium-design-power.js`) to Python and emits the full token set the
 built-in themes carry (not just the JS composer's 11) so a generated theme
@@ -100,6 +110,25 @@ when the served deck was bundled with `data-follow` (see the
 `commands/present-pr.md`) turns the current branch's PR/diff into a filled
 Content-First Brief (`references/present-pr-brief.md`) and runs the
 existing scaffold → spec → generate → `deck_doctor.py` pipeline unchanged.
+Claude resolves bundled tools from `${CLAUDE_PLUGIN_ROOT}` and writes the deck
+under `${CLAUDE_PROJECT_DIR}/assets/decks/<slug>`; it never writes into the
+plugin cache.
+
+**Provider-neutral paths:** Codex captures the workspace root before locating
+or changing to the skill root, then invokes the discovered absolute skill root
+for every script. Keep the skill root read-only and pass the workspace-owned
+deck path explicitly:
+
+```bash
+workspace_root="$(pwd -P)"
+skill_root="$(cd "<absolute-skill-root>" && pwd -P)"
+deck_dir="$workspace_root/assets/decks/<slug>"
+python3 "$skill_root/scripts/new-deck.sh" --output-dir "$deck_dir" \
+  --themes-css "$skill_root/assets/shared/premium-themes.css" \
+  <theme> <slug> "<title>" <count>
+python3 "$skill_root/scripts/deck_doctor.py" \
+  "$deck_dir/<slug>-slides.html" "$deck_dir/<slug>-slide-spec.md"
+```
 
 **Live theme switch:** `PremiumPresentations.setTheme('<theme>')` or UI control. The control panel discovers themes from loaded CSS. Dispatches `premium-theme-change` on `<html>`.
 
@@ -110,13 +139,17 @@ existing scaffold → spec → generate → `deck_doctor.py` pipeline unchanged.
 For an existing initialized deck, use the same provider-neutral commands from
 the skill root for Claude Code and Codex:
 
+The command sequence is `partial_regen.py init`, `partial_regen.py plan`,
+`partial_regen.py apply`, and `partial_regen.py rollback`.
+
 ```bash
-cd skills/premium-presentations
-python3 scripts/partial_regen.py init --deck DECK --spec SPEC
-python3 scripts/partial_regen.py init --deck DECK --spec SPEC --apply
-python3 scripts/partial_regen.py plan --deck DECK --spec SPEC --json
-python3 scripts/partial_regen.py apply --deck DECK --spec SPEC --fragment slide-3=slide-3.html
-python3 scripts/partial_regen.py rollback --deck DECK --backup BACKUP_DIRECTORY
+workspace_root="$(pwd -P)"
+skill_root="$(cd "<absolute-skill-root>" && pwd -P)"
+python3 "$skill_root/scripts/partial_regen.py" init --deck DECK --spec SPEC
+python3 "$skill_root/scripts/partial_regen.py" init --deck DECK --spec SPEC --apply
+python3 "$skill_root/scripts/partial_regen.py" plan --deck DECK --spec SPEC --json
+python3 "$skill_root/scripts/partial_regen.py" apply --deck DECK --spec SPEC --fragment slide-3=slide-3.html
+python3 "$skill_root/scripts/partial_regen.py" rollback --deck DECK --backup BACKUP_DIRECTORY
 ```
 
 Initialization is always explicit: inspect the preview and assigned IDs before

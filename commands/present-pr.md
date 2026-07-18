@@ -11,6 +11,32 @@ slides. This funnels into the **existing** `premium-presentations` skill
 pipeline verbatim: `new-deck.sh` → spec → generate → `deck_doctor.py`. Do
 **not** emit slides directly and do **not** bypass the spec contract.
 
+## 0. Set provider paths
+
+Claude Code keeps the installed plugin immutable. Capture its bundled skill
+from `CLAUDE_PLUGIN_ROOT`, and write every generated artifact beneath the
+active project in `CLAUDE_PROJECT_DIR`:
+
+```bash
+plugin_root="${CLAUDE_PLUGIN_ROOT}"
+if [ -z "$plugin_root" ]; then
+  echo "present-pr: CLAUDE_PLUGIN_ROOT is required" >&2
+  exit 1
+fi
+skill_root="$plugin_root/skills/premium-presentations"
+project_root="${CLAUDE_PROJECT_DIR}"
+if [ -z "$project_root" ]; then
+  echo "present-pr: CLAUDE_PROJECT_DIR is required" >&2
+  exit 1
+fi
+deck_root="$project_root/assets/decks"
+cd "$project_root"
+```
+
+The `cd` is deliberately after both roots are captured. All subsequent
+commands use these absolute paths; do not substitute cwd-relative
+`skills/premium-presentations` paths.
+
 ## 1. Determine the base ref
 
 Resolve one `base` commit and reuse it for every diff/log below — never
@@ -76,7 +102,7 @@ docstring — read it if present; it grounds the "why" behind the change.
 
 ## 3. Fill the recipe Content-First Brief
 
-Copy `skills/premium-presentations/references/present-pr-brief.md` and fill
+Copy `$skill_root/references/present-pr-brief.md` and fill
 every `{…}` field from the content gathered in step 2:
 
 - **Topic archetype:** code change / process (fixed).
@@ -100,7 +126,15 @@ to step 4.
 ## 4. Run the existing pipeline (do not skip any step)
 
 ```bash
-./skills/premium-presentations/scripts/new-deck.sh <theme> <slug> "<title>" <count>
+slug="<slug>"
+title="<title>"
+count="<count>"
+deck_dir="$deck_root/$slug"
+
+"$skill_root/scripts/new-deck.sh" \
+  --output-dir "$deck_dir" \
+  --themes-css "$skill_root/assets/shared/premium-themes.css" \
+  <theme> "$slug" "$title" "$count"
 ```
 
 Use the filled brief to author the slide spec content (Narrative Arc, Slide
@@ -108,9 +142,9 @@ Map, Evidence Data) exactly as any other deck build would, following
 `SKILL.md`'s Content-First Brief → spec → generate workflow. Then gate:
 
 ```bash
-python3 skills/premium-presentations/scripts/deck_doctor.py \
-  skills/premium-presentations/assets/decks/<slug>/<slug>-slides.html \
-  skills/premium-presentations/assets/decks/<slug>/<slug>-slide-spec.md
+python3 "$skill_root/scripts/deck_doctor.py" \
+  "$deck_dir/${slug}-slides.html" \
+  "$deck_dir/${slug}-slide-spec.md"
 ```
 
 `deck_doctor.py` must exit **0** before the deck is delivered. Non-zero exit
@@ -124,5 +158,12 @@ deck build, no exception for this recipe.
   fallback is not a degraded path — it is the primary mechanism for local
   review decks.
 - This command produces exactly one deliverable: a gate-passing deck under
-  `assets/decks/<slug>/`. It never modifies shared runtime, themes, or
-  validators.
+  `$project_root/assets/decks/<slug>/`. It never modifies the plugin's shared
+  runtime, themes, or validators. If the user asks for exports, pass the same
+  absolute deck path to the bundled scripts:
+
+  ```bash
+  python3 "$skill_root/scripts/export_pdf.py" "$deck_dir/${slug}-slides.html"
+  python3 "$skill_root/scripts/og_cover.py" "$deck_dir/${slug}-slides.html"
+  python3 "$skill_root/scripts/export_handout.py" "$deck_dir/${slug}-slides.html"
+  ```

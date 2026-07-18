@@ -20,13 +20,25 @@ framework from memory.
 
 ## Start
 
-1. Work from the directory containing this `SKILL.md`. If the current workspace
-   is elsewhere, locate this folder through the skill path, the user-provided
-   path, or `PREMIUM_PRESENTATIONS_REPO`.
-2. Discover themes dynamically:
+1. Capture the workspace root before locating or changing to the skill root.
+   Codex should substitute the absolute skill root it discovered for
+   `<absolute-skill-root>`; Claude Code supplies the equivalent path through
+   `${CLAUDE_PLUGIN_ROOT}` in `commands/present-pr.md`.
 
 ```bash
-./scripts/list-themes.py
+workspace_root="$(pwd -P)"
+skill_root="$(cd "<absolute-skill-root>" && pwd -P)"
+```
+
+   Keep `skill_root` read-only and put decks, specs, themes, and exports under
+   `workspace_root`. If the current workspace is elsewhere, locate this folder
+   through the skill path, the user-provided path, or `PREMIUM_PRESENTATIONS_REPO`
+   before assigning `skill_root`.
+2. Discover themes dynamically from the bundled registry:
+
+```bash
+python3 "$skill_root/scripts/list-themes.py" \
+  --css "$skill_root/assets/shared/premium-themes.css"
 ```
 
 Themes come from `html[data-theme="..."]` selectors in
@@ -50,7 +62,12 @@ Do not assign components to slides until this brief is complete. The routing tab
 **Step 2 — Scaffold and spec**
 
 ```bash
-./scripts/new-deck.sh <theme> <slug> "<title>" <slide_count>
+slug="<slug>"
+deck_dir="$workspace_root/assets/decks/$slug"
+"$skill_root/scripts/new-deck.sh" \
+  --output-dir "$deck_dir" \
+  --themes-css "$skill_root/assets/shared/premium-themes.css" \
+  <theme> "$slug" "<title>" <slide_count>
 ```
 
 For 8+ slides, use the generated slide spec as the contract. Derive act structure
@@ -64,19 +81,21 @@ it for catalog addition after review. Forcing a poor-fit catalog pattern is wors
 **Step 3 — Validate (hard gate)**
 
 ```bash
-python3 scripts/deck_doctor.py assets/decks/<slug>/<slug>-slides.html assets/decks/<slug>/<slug>-slide-spec.md
+python3 "$skill_root/scripts/deck_doctor.py" \
+  "$deck_dir/${slug}-slides.html" \
+  "$deck_dir/${slug}-slide-spec.md"
 ```
 
 Exit 1 → fix the reported issues in deck or spec, re-bundle if the fix touched
 `assets/shared/` or `assets/templates/`, re-run. Repeat until exit 0. A deck is
 not done until deck doctor exits 0 — never deliver a deck with failing
-validation. `scripts/validate_deck.py` and `./scripts/validate_runtime_contract.py`
-stay available for isolated debugging of one check.
+validation. `validate_deck.py` and `validate_runtime_contract.py` under
+`$skill_root/scripts/` stay available for isolated debugging of one check.
 
 Use lowercase hyphenated slugs. For unspecified themes, use the first theme
 returned by `list-themes.py` unless the topic clearly calls for another
-discovered theme. `assets/decks/` is generated output and ignored by git; commit
-a finished deck only when the user explicitly asks.
+discovered theme. `$workspace_root/assets/decks/` is generated output and
+ignored by git; commit a finished deck only when the user explicitly asks.
 
 ## Runtime Contract
 
@@ -99,7 +118,7 @@ Motion profile defaults can also be authored with `data-motion-profile="<name>"`
 Generated decks are portable standalone HTML: do not add CDN scripts, remote
 font links, or runtime `http(s)` asset dependencies.
 
-Run `./scripts/validate_runtime_contract.py` after template, theme, bundler,
+Run `python3 "$skill_root/scripts/validate_runtime_contract.py"` after template, theme, bundler,
 or shared runtime edits — required, not optional: it checks the repo-wide
 contract (templates + every deck under `assets/`), which `deck_doctor.py`
 does not, since doctor only scopes runtime-contract checks to the one deck
@@ -143,16 +162,20 @@ Load only the reference needed for the current task.
 Before completion, run the gate — see Step 3. For shared runtime, theme, or
 template edits, re-bundle affected generated HTML files first (so bundled
 decks carry the new runtime, not a stale one), then run
-`./scripts/validate_runtime_contract.py` (repo-wide; see Runtime Contract) —
+`validate_runtime_contract.py` (repo-wide; see Runtime Contract) —
 a required pass for those edits, not a fallback — then re-run the gate:
 
 ```bash
-python3 scripts/bundle_deck.py assets/decks/<slug>/<slug>-slides.html --in-place --force
-./scripts/validate_runtime_contract.py
-python3 scripts/deck_doctor.py assets/decks/<slug>/<slug>-slides.html assets/decks/<slug>/<slug>-slide-spec.md
+python3 "$skill_root/scripts/bundle_deck.py" \
+  "$deck_dir/${slug}-slides.html" --in-place --force \
+  --shared-root "$skill_root/assets/shared"
+python3 "$skill_root/scripts/validate_runtime_contract.py"
+python3 "$skill_root/scripts/deck_doctor.py" \
+  "$deck_dir/${slug}-slides.html" \
+  "$deck_dir/${slug}-slide-spec.md"
 ```
 
-Debugging only, one check at a time: `python3 scripts/validate_deck.py <deck.html> <spec.md>`,
+Debugging only, one check at a time: `python3 "$skill_root/scripts/validate_deck.py" <deck.html> <spec.md>`,
 `git diff --check` (skill-package CI checks live in `README.md`).
 
 When changing browser behavior, run a browser smoke test for navigation, theme
@@ -161,16 +184,21 @@ visuals, and controls.
 ## Partial Regeneration (editing an existing deck)
 
 Use this provider-neutral CLI only for replacing existing authored slides from
-an edited Slide Map. Never hand-edit an initialized baseline deck. Run these
-commands from the skill root:
+an edited Slide Map. Never hand-edit an initialized baseline deck. Capture the
+workspace root before locating the skill, then invoke the discovered absolute
+`skill_root`; the commands work from any current directory:
+
+The command sequence is `partial_regen.py init`, `partial_regen.py plan`,
+`partial_regen.py apply`, and `partial_regen.py rollback`.
 
 ```bash
-cd skills/premium-presentations
-python3 scripts/partial_regen.py init --deck DECK --spec SPEC
-python3 scripts/partial_regen.py init --deck DECK --spec SPEC --apply
-python3 scripts/partial_regen.py plan --deck DECK --spec SPEC --json
-python3 scripts/partial_regen.py apply --deck DECK --spec SPEC --fragment slide-3=slide-3.html
-python3 scripts/partial_regen.py rollback --deck DECK --backup BACKUP_DIRECTORY
+workspace_root="$(pwd -P)"
+skill_root="$(cd "<absolute-skill-root>" && pwd -P)"
+python3 "$skill_root/scripts/partial_regen.py" init --deck DECK --spec SPEC
+python3 "$skill_root/scripts/partial_regen.py" init --deck DECK --spec SPEC --apply
+python3 "$skill_root/scripts/partial_regen.py" plan --deck DECK --spec SPEC --json
+python3 "$skill_root/scripts/partial_regen.py" apply --deck DECK --spec SPEC --fragment slide-3=slide-3.html
+python3 "$skill_root/scripts/partial_regen.py" rollback --deck DECK --backup BACKUP_DIRECTORY
 ```
 
 Initialization is explicit: run the preview first, review its assigned stable
@@ -199,9 +227,12 @@ install chromium` (see `scripts/requirements.txt`) — they degrade with a
 clear message, not a crash, when Playwright is absent.
 
 ```bash
-python3 scripts/export_pdf.py assets/decks/<slug>/<slug>-slides.html
-python3 scripts/og_cover.py assets/decks/<slug>/<slug>-slides.html
-python3 scripts/export_handout.py assets/decks/<slug>/<slug>-slides.html
+python3 "$skill_root/scripts/export_pdf.py" \
+  "$deck_dir/${slug}-slides.html"
+python3 "$skill_root/scripts/og_cover.py" \
+  "$deck_dir/${slug}-slides.html"
+python3 "$skill_root/scripts/export_handout.py" \
+  "$deck_dir/${slug}-slides.html"
 ```
 
 - `export_pdf.py`: drives the deck's own `?print-pdf=1` layout headlessly —
@@ -219,13 +250,15 @@ python3 scripts/export_handout.py assets/decks/<slug>/<slug>-slides.html
 ## Agent-Native Extras
 
 - **PR-to-deck workflow:** `commands/present-pr.md` defines the Claude Code
-  `/present-pr` command. Codex uses the same skill source; when asked to turn
-  the current branch's PR/diff into a premium deck, follow that command recipe:
-  fill the Content-First Brief (`references/present-pr-brief.md`) from real
-  `git diff`/`git log`/touched-file content, then run the existing
-  `new-deck.sh` → spec → generate → `deck_doctor.py` pipeline verbatim. No
-  diff-to-slide bypass.
-- **Brand theme generation:** `./scripts/generate_theme.py <brand-id> --bg
+  `/present-pr` command. Codex uses the same skill source; capture
+  `workspace_root` first, resolve the discovered absolute `skill_root`, and
+  pass `$workspace_root/assets/decks/<slug>` to the scaffold, validator, and
+  any export script. When asked to turn the current branch's PR/diff into a
+  premium deck, follow that command recipe: fill the Content-First Brief
+  (`references/present-pr-brief.md`) from real `git diff`/`git log`/touched-file
+  content, then run the existing `new-deck.sh` → spec → generate →
+  `deck_doctor.py` pipeline verbatim. No diff-to-slide bypass.
+- **Brand theme generation:** `python3 "$skill_root/scripts/generate_theme.py" <brand-id> --bg
   HEX --text HEX --accent HEX --surface HEX` appends a full-token
   `html[data-theme="<brand-id>"]{…}` block to `premium-themes.css`,
   discoverable by `list-themes.py` like any built-in theme. Fail-closed: a
@@ -233,9 +266,9 @@ python3 scripts/export_handout.py assets/decks/<slug>/<slug>-slides.html
   appended. See `references/runtime.md` for the derivation and gated pairs.
 - **Contrast gate:** `deck_doctor.py` composes `scripts/validate_contrast.py`
   as a 5th section — a repo-wide WCAG check over every theme block in
-  `premium-themes.css`. Run standalone with `./scripts/validate_contrast.py`.
-- **LAN follow-along:** `./scripts/share-deck.sh <deck.html>` falls back to
-  `scripts/lan-sync-server.py` (stdlib, binds `0.0.0.0`, **no auth** —
+  `premium-themes.css`. Run standalone with `python3 "$skill_root/scripts/validate_contrast.py"`.
+- **LAN follow-along:** `"$skill_root/scripts/share-deck.sh" <deck.html>` falls back to
+  `"$skill_root/scripts/lan-sync-server.py"` (stdlib, binds `0.0.0.0`, **no auth** —
   acceptable for a venue LAN only, do not use on an untrusted network) and
   prints a PRESENT url plus a FOLLOW url. Follow-along requires the deck be
   bundled with `data-follow` on `<html>` before sharing (see
