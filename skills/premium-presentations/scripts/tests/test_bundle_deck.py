@@ -823,5 +823,167 @@ class EscapeForHtmlStyleTests(unittest.TestCase):
         self.assertNotIn("</style", escaped.lower())
 
 
+class BundleExternalWorkspaceTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.bundler = load_bundler()
+
+    def test_explicit_shared_root_wins_over_project_local_shared_asset(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            deck = root / "project" / "assets" / "decks" / "talk" / "deck.html"
+            deck.parent.mkdir(parents=True)
+            local_shared = root / "project" / "assets" / "shared"
+            local_shared.mkdir(parents=True)
+            framework_shared = root / "framework" / "shared"
+            framework_shared.mkdir(parents=True)
+            (local_shared / "premium-themes.css").write_text("local", encoding="utf-8")
+            (framework_shared / "premium-themes.css").write_text(
+                "framework", encoding="utf-8"
+            )
+
+            resolved = self.bundler.resolve_asset(
+                deck,
+                "../../shared/premium-themes.css",
+                shared_root=framework_shared,
+            )
+
+            self.assertEqual(resolved, (framework_shared / "premium-themes.css").resolve())
+
+    def test_shared_asset_traversal_outside_explicit_root_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            deck = root / "project" / "assets" / "decks" / "talk" / "deck.html"
+            deck.parent.mkdir(parents=True)
+            framework_shared = root / "framework" / "shared"
+            framework_shared.mkdir(parents=True)
+            secret = root / "framework" / "secret.css"
+            secret.write_text("must not be read", encoding="utf-8")
+
+            self.assertIsNone(
+                self.bundler.resolve_asset(
+                    deck,
+                    "../../shared/../../secret.css",
+                    shared_root=framework_shared,
+                )
+            )
+
+    def test_noncanonical_shared_path_is_ignored_with_explicit_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            deck = root / "project" / "assets" / "decks" / "talk" / "deck.html"
+            deck.parent.mkdir(parents=True)
+            framework_shared = root / "framework" / "shared"
+            framework_shared.mkdir(parents=True)
+            # This is where the deck-relative candidate would land if the
+            # explicit-root guard accidentally fell through to legacy logic.
+            local_secret = deck.parent / "secret.css"
+            local_secret.write_text("must not be inlined", encoding="utf-8")
+            href = "attacker/shared/../../secret.css"
+
+            self.assertIsNone(
+                self.bundler.resolve_asset(deck, href, shared_root=framework_shared)
+            )
+            html = f'<link rel="stylesheet" href="{href}">'
+            self.assertEqual(
+                self.bundler.inline_stylesheets(
+                    html, deck, shared_root=framework_shared
+                ),
+                html,
+            )
+
+    def test_external_deck_uses_explicit_shared_root_and_themes_css(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            shared = root / "framework" / "shared"
+            shutil.copytree(SHARED, shared)
+            custom_css = root / "workspace" / "themes.css"
+            custom_css.parent.mkdir(parents=True)
+            custom_css.write_text(
+                (SHARED / "premium-themes.css").read_text(encoding="utf-8")
+                + "\n/* workspace-theme-registry */\n",
+                encoding="utf-8",
+            )
+            deck = root / "workspace" / "deck.html"
+            deck.write_text(_make_minimal_deck(), encoding="utf-8")
+            output = root / "workspace" / "deck.standalone.html"
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(BUNDLER_PATH),
+                    str(deck),
+                    "--shared-root",
+                    str(shared),
+                    "--themes-css",
+                    str(custom_css),
+                    "--output",
+                    str(output),
+                ],
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            bundled = output.read_text(encoding="utf-8")
+            self.assertIn("workspace-theme-registry", bundled)
+            self.assertIn("/* --- premium-themes.css --- */", bundled)
+            self.assertEqual(bundled.count("/* --- premium-themes.css --- */"), 1)
+            self.assertNotIn('../../shared/premium-themes.css', bundled)
+
+
+class BundleStylesheetHrefNormalizationTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.bundler = load_bundler()
+
+    def _query_hash_deck(self) -> str:
+        return _make_minimal_deck().replace(
+            f'{_SHARED_LINK}premium-themes.css',
+            f'{_SHARED_LINK}premium-themes.css?v=1#canonical',
+        )
+
+    def test_query_hash_shared_stylesheet_without_explicit_root_inlines_once(self) -> None:
+        deck_dir = ROOT / "assets" / "decks" / "_test_bundle_tmp"
+        deck_dir.mkdir(parents=True, exist_ok=True)
+        html_path = deck_dir / "deck.html"
+        try:
+            html = self._query_hash_deck()
+            html_path.write_text(html, encoding="utf-8")
+            bundled = self.bundler.bundle_html(html, html_path)
+        finally:
+            html_path.unlink(missing_ok=True)
+            try:
+                deck_dir.rmdir()
+            except OSError:
+                pass
+
+        self.assertEqual(bundled.count("/* --- premium-themes.css --- */"), 1)
+        self.assertNotIn("premium-themes.css?v=1#canonical", bundled)
+
+    def test_query_hash_shared_stylesheet_with_explicit_root_and_custom_registry_inlines_once(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            shared = root / "framework" / "shared"
+            shutil.copytree(SHARED, shared)
+            custom_css = root / "workspace" / "themes.css"
+            custom_css.parent.mkdir(parents=True)
+            custom_css.write_text("custom-theme-registry", encoding="utf-8")
+            deck = root / "workspace" / "deck.html"
+            html = self._query_hash_deck()
+            deck.write_text(html, encoding="utf-8")
+
+            bundled = self.bundler.bundle_html(
+                html,
+                deck,
+                shared_root=shared,
+                themes_css=custom_css,
+            )
+
+            self.assertEqual(bundled.count("/* --- premium-themes.css --- */"), 1)
+            self.assertIn("custom-theme-registry", bundled)
+            self.assertNotIn("premium-themes.css?v=1#canonical", bundled)
+
+
 if __name__ == "__main__":
     unittest.main()

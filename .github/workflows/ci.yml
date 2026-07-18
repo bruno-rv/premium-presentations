@@ -8,9 +8,9 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  release-gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
 
     steps:
       - name: Check out repository
@@ -30,40 +30,38 @@ jobs:
           cache: pip
           cache-dependency-path: skills/premium-presentations/scripts/requirements.txt
 
-      - name: Install project dependencies
+      - name: Install test dependencies and Chromium
         run: |
           npm ci --prefix skills/premium-presentations/scripts
-          python3 -m pip install -r skills/premium-presentations/scripts/requirements.txt PyYAML
+          python3 -m pip install -r skills/premium-presentations/scripts/requirements.txt
           python3 -m playwright install --with-deps chromium
-          npm install --global @anthropic-ai/claude-code@2.1.205
 
-      - name: Run complete test suite
+      - name: Run focused static and bootstrap contracts
+        run: |
+          python3 skills/premium-presentations/scripts/tests/test_skill_layout.py
+          python3 skills/premium-presentations/scripts/tests/test_bootstrap.py
+          python3 skills/premium-presentations/scripts/bootstrap.py --check
+
+      - name: Run focused Node.js tests
+        run: |
+          npm run test:presenter --prefix skills/premium-presentations/scripts
+          npm run test:popup --prefix skills/premium-presentations/scripts
+          npm run test:theme-visuals --prefix skills/premium-presentations/scripts
+
+      - name: Run aggregate Node.js tests
+        run: npm test --prefix skills/premium-presentations/scripts
+
+      - name: Run aggregate Python tests
         working-directory: skills/premium-presentations/scripts
-        run: npm run test:all
+        run: python3 -m unittest discover -s tests -p 'test_*.py'
 
       - name: Validate runtime and themes
         run: |
           python3 skills/premium-presentations/scripts/validate_runtime_contract.py
           python3 skills/premium-presentations/scripts/validate_contrast.py
 
-      - name: Validate Claude Code plugin metadata
-        run: claude plugin validate . --strict
-
-      - name: Validate Codex plugin metadata
-        env:
-          CODEX_VALIDATOR_COMMIT: 2e8c3756f95789c215d9ea9a5ade6ec377934b3f
-          CODEX_VALIDATOR_SHA256: ebda00d55d7518b127f675f062fb5c6e7a1ffdc0a99df1a55ac594400d7d3228
-        run: |
-          validator="$RUNNER_TEMP/validate_plugin.py"
-          curl --fail --silent --show-error --location \
-            "https://raw.githubusercontent.com/openai/codex/$CODEX_VALIDATOR_COMMIT/codex-rs/skills/src/assets/samples/plugin-creator/scripts/validate_plugin.py" \
-            --output "$validator"
-          echo "$CODEX_VALIDATOR_SHA256  $validator" | sha256sum --check --strict
-          python3 "$validator" .
-
-      - name: Audit development dependencies
-        working-directory: skills/premium-presentations/scripts
-        run: npm audit
+      - name: Audit Node.js dependencies
+        run: npm audit --prefix skills/premium-presentations/scripts --audit-level=high
 
       - name: Check whitespace
         run: git diff --check

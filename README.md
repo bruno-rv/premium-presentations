@@ -41,8 +41,8 @@ Codex-specific packaging lives under `.codex-plugin/` and
   the same recipe when asked to turn the current branch's diff into a
   `deck_doctor`-validated deck grounded in the real `git diff`.
 
-A full worked example — a 20-slide deck with a generated cover, PDF, and
-speaker-notes handout already checked in — lives at
+A full worked example — a 20-slide deck whose PDF, cover, and speaker-notes
+handout are reproducible but intentionally untracked — lives at
 `skills/premium-presentations/assets/examples/rag-vector-graph/`.
 
 ## Preview
@@ -60,6 +60,40 @@ speaker-notes handout already checked in — lives at
 ![Presenter view](docs/screenshot-presenter.png)
 
 ## Install
+
+### Requirements and bootstrap
+
+Use Python **3.10+**, Node.js **18+**, and Bash. The supported host platforms
+are macOS and Linux; Windows users should run the shell workflows from WSL.
+After installing or upgrading the plugin, restart Claude Code or Codex so it
+reloads the marketplace package and skill instructions.
+If `python3` resolves to an older system interpreter, substitute a supported
+executable such as `python3.11` in the bootstrap commands below.
+
+Marketplace users do not modify the installed plugin cache. Start a new Claude
+Code or Codex session after installation or upgrade and ask the agent to use
+Premium Presentations; the skill resolves its absolute installed root and
+writes generated output under the workspace.
+
+### Source checkout validation
+
+The following commands are for a source checkout or CI only. They install
+test-only Node dependencies in that checkout and inspect browser-backed
+prerequisites:
+
+```bash
+workspace_root="$(pwd -P)"
+skill_root="$workspace_root/skills/premium-presentations"
+npm --prefix "$skill_root/scripts" ci
+python3 "$skill_root/scripts/bootstrap.py" --check
+```
+
+If the check reports missing Playwright or Chromium, install both with the
+active Python interpreter (the command is explicit and mutating):
+
+```bash
+python3 "$skill_root/scripts/bootstrap.py" --install-browser-deps
+```
 
 ### Codex plugin
 
@@ -104,7 +138,10 @@ Add to `~/.claude/settings.json`:
 }
 ```
 
-### Manual Claude skill link
+### Manual Claude skill link (source clone)
+
+This manual shell workflow is for a source clone. Marketplace users should
+start a new session and ask the installed skill to locate its absolute root.
 
 Clone the repo and link the skill subdirectory:
 
@@ -120,13 +157,17 @@ For local validation scripts that use Node dependencies:
 npm --prefix skills/premium-presentations/scripts ci
 ```
 
-For browser-rendering checks, install the Python validation dependency and its
-managed Chromium once (this Chromium also powers `og_cover.py`, `export_pdf.py`,
-and layout validation):
+For browser-rendering checks, use the bootstrap command above to install the
+Python validation dependency and its managed Chromium (the same Chromium powers
+`og_cover.py`, `export_pdf.py`, and layout validation). Keep the plugin cache
+read-only and write generated decks and exports under the workspace instead:
 
 ```bash
-python3 -m pip install -r skills/premium-presentations/scripts/requirements.txt
-python3 -m playwright install chromium
+workspace_root="$(pwd -P)"
+skill_root="$workspace_root/skills/premium-presentations"
+"$skill_root/scripts/new-deck.sh" \
+  --output-dir "$workspace_root/assets/decks/my-talk" \
+  editorial my-talk "My Title" 12
 ```
 
 ## Use
@@ -154,6 +195,11 @@ The generated deck is written to:
 ```text
 skills/premium-presentations/assets/decks/my-talk/my-talk-slides.html
 ```
+
+That path is the legacy source-clone destination. When using an installed
+plugin, pass `--output-dir` as in the workspace-safe example above; the bundled
+skill root remains read-only while the workspace owns the deck, spec, themes,
+and exported artifacts.
 
 Validate it — `deck_doctor.py` chains every validator (structure, layout,
 diagrams, runtime contract, offline portability, WCAG contrast) into one health
@@ -334,6 +380,58 @@ Create and validate a smoke deck:
 python3 skills/premium-presentations/scripts/deck_doctor.py \
   skills/premium-presentations/assets/decks/smoke-deck/smoke-deck-slides.html
 rm -rf skills/premium-presentations/assets/decks/smoke-deck
+```
+
+## CI release gate
+
+The GitHub Actions release gate runs on Node.js 20 and Python 3.12. It
+installs the locked Node dependencies with `npm ci`, installs the Python
+requirements and managed Chromium, then runs the focused static/bootstrap
+contracts and the aggregate Node.js and Python test suites. It also runs
+`npm audit`, the runtime and contrast validators, and `git diff --check`.
+
+The static contracts cover the Claude-compatible and Codex plugin manifests;
+the bootstrap check confirms that the CI interpreter can see Playwright and
+its managed Chromium. The workflow intentionally does not perform provider
+CLI installs: Claude marketplace installs and Codex marketplace add/install
+checks need isolated local configuration roots and are documented as a
+separate release exercise.
+
+To run the same source-checkout gate locally, use a temporary Python 3.10+
+virtual environment and put its `bin` directory first on `PATH`. This keeps
+child commands that invoke `python3` on the same interpreter as the parent:
+
+```bash
+venv_dir="$(mktemp -d "${TMPDIR:-/tmp}/premium-presentations-venv.XXXXXX")"
+trap 'rm -rf -- "$venv_dir"' EXIT
+python3 -m venv "$venv_dir"
+source "$venv_dir/bin/activate"
+export PATH="$venv_dir/bin:$PATH"
+python3 --version  # requires Python 3.10+
+npm ci --prefix skills/premium-presentations/scripts
+python3 -m pip install -r skills/premium-presentations/scripts/requirements.txt
+if [ "$(uname -s)" = "Linux" ]; then
+  # CI uses Ubuntu and installs the browser's OS packages as well.
+  python3 -m playwright install --with-deps chromium
+else
+  # macOS uses Playwright's managed Chromium; --with-deps is Linux/CI-only.
+  python3 -m playwright install chromium
+fi
+python3 skills/premium-presentations/scripts/tests/test_skill_layout.py
+python3 skills/premium-presentations/scripts/tests/test_bootstrap.py
+python3 skills/premium-presentations/scripts/bootstrap.py --check
+npm run test:presenter --prefix skills/premium-presentations/scripts
+npm run test:popup --prefix skills/premium-presentations/scripts
+npm run test:theme-visuals --prefix skills/premium-presentations/scripts
+npm test --prefix skills/premium-presentations/scripts
+(
+  cd skills/premium-presentations/scripts
+  python3 -m unittest discover -s tests -p 'test_*.py'
+)
+python3 skills/premium-presentations/scripts/validate_runtime_contract.py
+python3 skills/premium-presentations/scripts/validate_contrast.py
+npm audit --prefix skills/premium-presentations/scripts --audit-level=high
+git diff --check
 ```
 
 ## Acknowledgments

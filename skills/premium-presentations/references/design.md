@@ -55,6 +55,20 @@ Editorial, technical, high-polish.
 - Missing `prefers-reduced-motion` support (provided by `premium-deck.css`).
 - Course-specific branding unless explicitly requested.
 - Closing footer-note rows, "NEXT:" citations, or lesson-pill rows.
+- Sparse `compare-split` panels (badge+title+one line only). `compare-split`
+  is `flex:1; align-items:stretch` by design — it stretches to fill the
+  slide's remaining height regardless of content, so thin panels read as
+  dead space, and a `.compare-callout` gets pinned to the stretched bottom
+  edge where it can collide with fixed chrome. Fill each panel with a
+  3–5 item `<ul>` of concrete facts, or add `style="flex:none"` on
+  `.compare-split` to size it to its own content instead. `deck_doctor.py`
+  warns on this; fix before delivery.
+- Decorative shapes with no text and no recognizable connective structure
+  (bordered rects/bars standing in for "text lines," floating unlabeled
+  boxes). They read as broken/empty UI, not deliberate design. A visual
+  element must either carry real visible text/labels, form a recognizable
+  connected diagram (nodes + lines), or be removed in favor of a
+  single-column content slide.
 
 ## Density
 

@@ -31,3 +31,6 @@ PLAN-*.md
 graphify-out/
 PORTABILITY-AUDIT-*.md
 AUDIT-REVIEW-LOG.md
+
+# Local process reports — keep task/fix evidence out of the distributed plugin
+.superpowers/sdd/*-report.md

@@ -8,6 +8,7 @@ Replaces Mermaid module imports with inlined premium-mermaid.js.
 Usage:
   ./scripts/bundle_deck.py assets/decks/my-talk/my-talk-slides.html
   ./scripts/bundle_deck.py assets/decks/my-talk/my-talk-slides.html -o out.html --in-place
+  ./scripts/bundle_deck.py /workspace/deck.html --shared-root /path/to/assets/shared
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ import base64
 import json
 import re
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -38,17 +39,102 @@ def is_remote_url(href: str) -> bool:
     return bool(re.match(r"^https?://", href, re.I)) or href.startswith("//")
 
 
-def resolve_asset(html_path: Path, href: str) -> Path | None:
+def _strip_url_suffix(href: str) -> str:
+    """Return a local asset path without URL query or fragment components."""
+    return href.split("?", 1)[0].split("#", 1)[0]
+
+
+def _asset_basename(href: str) -> str:
+    return PurePosixPath(_strip_url_suffix(href)).name
+
+
+def _normalize_shared_root(shared_root: Path | None) -> Path:
+    """Resolve an explicit framework/shared directory to its shared assets."""
+    if shared_root is None:
+        return SHARED
+    shared_root = shared_root.resolve()
+    if (shared_root / "premium-themes.css").is_file():
+        return shared_root
+    for candidate in (shared_root / "assets" / "shared", shared_root / "shared"):
+        if candidate.is_dir():
+            return candidate
+    return shared_root
+
+
+def _canonical_shared_relative(href: str) -> PurePosixPath | None:
+    """Return the path below ``shared/`` for a canonical shared link."""
+    path = PurePosixPath(_strip_url_suffix(href))
+    parts = path.parts
+    if "shared" not in parts:
+        return None
+    shared_idx = parts.index("shared")
+    if any(part not in ("..", ".") for part in parts[:shared_idx]):
+        return None
+    return PurePosixPath(*parts[shared_idx + 1:])
+
+
+def _resolve_shared_asset(
+    shared_root: Path, relative: PurePosixPath
+) -> Path | None:
+    """Resolve a shared asset, rejecting paths escaping the explicit root."""
+    shared = _normalize_shared_root(shared_root).resolve()
+    resolved = (shared / Path(*relative.parts)).resolve()
+    try:
+        resolved.relative_to(shared)
+    except ValueError:
+        return None
+    return resolved
+
+
+def resolve_asset(
+    html_path: Path,
+    href: str,
+    *,
+    shared_root: Path | None = None,
+    themes_css: Path | None = None,
+) -> Path | None:
     if is_remote_url(href):
         return None
-    resolved = (html_path.parent / href).resolve()
-    allowed_roots = (html_path.parent.resolve(), SHARED.resolve())
-    if not any(resolved == root or resolved.is_relative_to(root) for root in allowed_roots):
-        raise ValueError(
-            f"Local asset resolves outside allowed roots (deck directory or assets/shared): "
-            f"{href!r} -> {resolved}"
-        )
-    return resolved
+    effective_shared = _normalize_shared_root(shared_root).resolve()
+    allowed_roots = (html_path.parent.resolve(), SHARED.resolve(), effective_shared)
+
+    def _checked(resolved: Path | None) -> Path | None:
+        if resolved is None:
+            return None
+        if not any(resolved == root or resolved.is_relative_to(root) for root in allowed_roots):
+            raise ValueError(
+                f"Local asset resolves outside allowed roots (deck directory or shared assets): "
+                f"{href!r} -> {resolved}"
+            )
+        return resolved
+
+    href_path = PurePosixPath(_strip_url_suffix(href))
+    canonical_relative = _canonical_shared_relative(href)
+    if shared_root is not None and "shared" in href_path.parts:
+        if canonical_relative is None:
+            return None
+        if (
+            themes_css is not None
+            and canonical_relative == PurePosixPath("premium-themes.css")
+        ):
+            return _checked(themes_css.resolve())
+        return _checked(_resolve_shared_asset(shared_root, canonical_relative))
+
+    if themes_css is not None and _asset_basename(href) == "premium-themes.css":
+        return _checked(themes_css.resolve())
+
+    candidate = (html_path.parent / Path(*href_path.parts)).resolve()
+    if candidate.is_file():
+        return _checked(candidate)
+
+    # A deck copied outside the skill tree still carries ../../shared/ links.
+    # Resolve that well-known framework path from the explicit read-only root.
+    parts = href_path.parts
+    if "shared" in parts:
+        shared_idx = parts.index("shared")
+        relative = Path(*parts[shared_idx + 1:])
+        return _checked((effective_shared / relative).resolve())
+    return _checked(candidate)
 
 
 def strip_exports(js: str) -> str:
@@ -72,7 +158,13 @@ def strip_usage_docblock(content: str) -> str:
     return re.sub(r"^/\*\*[\s\S]*?\*/\s*\n", "", content, count=1)
 
 
-def inline_stylesheets(html: str, html_path: Path) -> str:
+def inline_stylesheets(
+    html: str,
+    html_path: Path,
+    *,
+    shared_root: Path | None = None,
+    themes_css: Path | None = None,
+) -> str:
     pattern = (
         r'<link\s+[^>]*\brel=["\']stylesheet["\'][^>]*\bhref=["\']([^"\']+)["\']'
         r'[^>]*/?\s*>'
@@ -80,13 +172,19 @@ def inline_stylesheets(html: str, html_path: Path) -> str:
 
     def repl(match: re.Match[str]) -> str:
         href = match.group(1)
-        css_path = resolve_asset(html_path, href)
+        css_path = resolve_asset(
+            html_path, href, shared_root=shared_root, themes_css=themes_css
+        )
         if css_path is None:
             return match.group(0)
         if not css_path.is_file():
             raise FileNotFoundError(f"Stylesheet not found: {css_path}")
         css = escape_for_html_style(read_text(css_path))
-        return f"<style>\n/* --- {css_path.name} --- */\n{css}\n</style>"
+        # Keep the runtime module name stable when --themes-css points at a
+        # workspace-owned registry, so required-module detection does not
+        # append the read-only framework registry a second time.
+        module_name = _asset_basename(href)
+        return f"<style>\n/* --- {module_name} --- */\n{css}\n</style>"
 
     return re.sub(pattern, repl, html, flags=re.I)
 
@@ -113,12 +211,18 @@ def missing_required_modules(html: str) -> list[str]:
     return missing
 
 
-def build_missing_required_styles(html: str) -> str:
+def build_missing_required_styles(
+    html: str,
+    *,
+    shared_root: Path | None = None,
+    themes_css: Path | None = None,
+) -> str:
     chunks = []
+    shared = _normalize_shared_root(shared_root)
     for name in REQUIRED_CSS:
         if has_stylesheet_module(html, name):
             continue
-        css_path = SHARED / name
+        css_path = themes_css if name == "premium-themes.css" and themes_css else shared / name
         if not css_path.is_file():
             raise FileNotFoundError(f"Required stylesheet not found: {css_path}")
         css = escape_for_html_style(read_text(css_path))
@@ -126,8 +230,15 @@ def build_missing_required_styles(html: str) -> str:
     return "\n".join(chunks)
 
 
-def inject_required_styles(html: str) -> str:
-    styles = build_missing_required_styles(html)
+def inject_required_styles(
+    html: str,
+    *,
+    shared_root: Path | None = None,
+    themes_css: Path | None = None,
+) -> str:
+    styles = build_missing_required_styles(
+        html, shared_root=shared_root, themes_css=themes_css
+    )
     if not styles:
         return html
     head_end = html.lower().find("</head>")
@@ -136,11 +247,19 @@ def inject_required_styles(html: str) -> str:
     return html[:head_end] + styles + "\n" + html[head_end:]
 
 
-def collect_script_srcs(html: str, html_path: Path) -> list[tuple[str, Path]]:
+def collect_script_srcs(
+    html: str,
+    html_path: Path,
+    *,
+    shared_root: Path | None = None,
+    themes_css: Path | None = None,
+) -> list[tuple[str, Path]]:
     pattern = r'<script\s+[^>]*\bsrc=["\']([^"\']+)["\'][^>]*>\s*</script>'
     found: list[tuple[str, Path]] = []
     for href in re.findall(pattern, html, flags=re.I):
-        js_path = resolve_asset(html_path, href)
+        js_path = resolve_asset(
+            html_path, href, shared_root=shared_root, themes_css=themes_css
+        )
         if js_path is None:
             continue
         if not js_path.is_file():
@@ -213,8 +332,8 @@ def wants_follow(html: str) -> bool:
     return "data-follow" in root_tag
 
 
-def build_mermaid_module() -> str:
-    mermaid_path = SHARED / "premium-mermaid.js"
+def build_mermaid_module(shared_root: Path | None = None) -> str:
+    mermaid_path = _normalize_shared_root(shared_root) / "premium-mermaid.js"
     if not mermaid_path.is_file():
         raise FileNotFoundError(f"Missing {mermaid_path}")
     body = escape_for_html_script(
@@ -326,9 +445,9 @@ _EMBED_BLOCK_RE = re.compile(
 # when it does NOT start with https?:, data:, blob:, file:, or /.
 _RELATIVE_PATH_RE = re.compile(r"^(?!https?:|data:|blob:|file:|/)")
 
-def _manifest_path() -> Path:
+def _manifest_path(shared_root: Path | None = None) -> Path:
     # Resolved at call time so tests can patch the module-level SHARED.
-    return SHARED / "assets" / "theme-visuals" / "manifest.json"
+    return _normalize_shared_root(shared_root) / "assets" / "theme-visuals" / "manifest.json"
 
 
 def has_visual_slides(html: str) -> bool:
@@ -337,9 +456,14 @@ def has_visual_slides(html: str) -> bool:
     return bool(_VISUAL_CLASS_RE.search(html))
 
 
-def load_theme_visuals_map() -> dict[str, dict[str, Path]]:
-    """Return the validated, exact CSS-theme/manifest homage registry."""
-    manifest_path = _manifest_path()
+def load_theme_visuals_map(shared_root: Path | None = None) -> dict[str, dict[str, Path]]:
+    """Return the validated, exact CSS-theme/manifest homage registry.
+
+    Falls back to globbing <theme>-hero.webp / <theme>-map.webp only when
+    the manifest file is missing.  Missing manifest-listed asset files are
+    reported immediately so the caller can fail hard.
+    """
+    manifest_path = _manifest_path(shared_root)
     visuals_dir = manifest_path.parent
     return load_and_validate_registry(
         SHARED / "premium-themes.css", visuals_dir, manifest_path
@@ -423,13 +547,13 @@ def warn_relative_visual_overrides(html: str) -> None:
             )
 
 
-def _build_theme_visuals_payload() -> str:
+def _build_theme_visuals_payload(shared_root: Path | None = None) -> str:
     """Encode all manifest theme visuals as data: URIs and return the <script> block.
 
     Raises FileNotFoundError if any manifest-listed asset file is absent.
     Called only when the deck has already been confirmed to have visual slides.
     """
-    theme_map = load_theme_visuals_map()
+    theme_map = load_theme_visuals_map(shared_root)
 
     payload: dict[str, dict[str, str]] = {}
     for theme, role_map in theme_map.items():
@@ -458,7 +582,9 @@ def build_standalone_runtime_marker() -> str:
     )
 
 
-def build_theme_visuals_embed(html: str) -> str:
+def build_theme_visuals_embed(
+    html: str, shared_root: Path | None = None
+) -> str:
     """Build the <script> embed block when the deck has visual slides.
 
     Returns an empty string when the deck has no slide--title or
@@ -467,7 +593,7 @@ def build_theme_visuals_embed(html: str) -> str:
     """
     if not has_visual_slides(html):
         return ""
-    return _build_theme_visuals_payload()
+    return _build_theme_visuals_payload(shared_root)
 
 
 def unstandalone_html(html: str) -> str:
@@ -508,7 +634,14 @@ def unstandalone_html(html: str) -> str:
     return html
 
 
-def bundle_html(html: str, html_path: Path) -> str:
+def bundle_html(
+    html: str,
+    html_path: Path,
+    *,
+    embed_visuals: bool = True,
+    shared_root: Path | None = None,
+    themes_css: Path | None = None,
+) -> str:
     html = strip_remote_resource_links(html)
     html = strip_unsafe_portable_attrs(html)
     html = strip_default_cover_meta(html)
@@ -535,7 +668,7 @@ def bundle_html(html: str, html_path: Path) -> str:
         # them "seen").
         if needs_embed:
             warn_relative_visual_overrides(html)
-            embed_block = build_theme_visuals_embed(html)
+            embed_block = build_theme_visuals_embed(html, shared_root)
             if embed_block:
                 controls_marker = "/* --- premium-controls.js --- */"
                 idx = html.find(controls_marker)
@@ -554,12 +687,14 @@ def bundle_html(html: str, html_path: Path) -> str:
                         html = html[:idx_body] + embed_block + "\n" + html[idx_body:]
 
         if missing:
-            html = inject_required_styles(html)
+            html = inject_required_styles(
+                html, shared_root=shared_root, themes_css=themes_css
+            )
             missing_js = [name for name in REQUIRED_JS if not has_script_module(html, name)]
             if missing_js:
                 js_paths = []
                 for name in missing_js:
-                    p = SHARED / name
+                    p = _normalize_shared_root(shared_root) / name
                     if not p.is_file():
                         raise FileNotFoundError(f"Required script not found: {p}")
                     js_paths.append(p)
@@ -585,9 +720,15 @@ def bundle_html(html: str, html_path: Path) -> str:
     # but capturing pre-inline keeps it consistent with the other detection flags.
     use_embed = has_visual_slides(html)
 
-    html = inline_stylesheets(html, html_path)
-    html = inject_required_styles(html)
-    scripts = collect_script_srcs(html, html_path)
+    html = inline_stylesheets(
+        html, html_path, shared_root=shared_root, themes_css=themes_css
+    )
+    html = inject_required_styles(
+        html, shared_root=shared_root, themes_css=themes_css
+    )
+    scripts = collect_script_srcs(
+        html, html_path, shared_root=shared_root, themes_css=themes_css
+    )
     html = remove_local_script_tags(html)
     html = remove_mermaid_module(html)
 
@@ -598,28 +739,28 @@ def bundle_html(html: str, html_path: Path) -> str:
             seen_paths.add(p)
             script_paths.append(p)
     if use_journey:
-        journey_path = SHARED / "premium-journey.js"
+        journey_path = _normalize_shared_root(shared_root) / "premium-journey.js"
         if journey_path.is_file() and journey_path not in seen_paths:
             seen_paths.add(journey_path)
             script_paths.append(journey_path)
     if use_flow:
-        flow_path = SHARED / "premium-flow.js"
+        flow_path = _normalize_shared_root(shared_root) / "premium-flow.js"
         if flow_path.is_file() and flow_path not in seen_paths:
             seen_paths.add(flow_path)
             script_paths.append(flow_path)
     if use_glossary:
-        glossary_path = SHARED / "premium-glossary.js"
+        glossary_path = _normalize_shared_root(shared_root) / "premium-glossary.js"
         if glossary_path.is_file() and glossary_path not in seen_paths:
             seen_paths.add(glossary_path)
             script_paths.append(glossary_path)
     if use_follow:
-        follow_path = SHARED / "premium-follow.js"
+        follow_path = _normalize_shared_root(shared_root) / "premium-follow.js"
         if follow_path.is_file() and follow_path not in seen_paths:
             seen_paths.add(follow_path)
             script_paths.append(follow_path)
     # Inject any REQUIRED_JS modules absent from old bundles (added after initial generation).
     for name in REQUIRED_JS:
-        req_path = SHARED / name
+        req_path = _normalize_shared_root(shared_root) / name
         if req_path in seen_paths:
             continue
         if not req_path.is_file():
@@ -633,7 +774,7 @@ def bundle_html(html: str, html_path: Path) -> str:
 
     # Build the theme-visuals embed block using the pre-inline detection flag.
     # load_theme_visuals_map() / base64 encoding only runs when needed.
-    embed_block = _build_theme_visuals_payload() if use_embed else ""
+    embed_block = _build_theme_visuals_payload(shared_root) if use_embed else ""
 
     footer_parts: list[str] = []
     footer_parts.append(build_standalone_runtime_marker())
@@ -647,7 +788,7 @@ def bundle_html(html: str, html_path: Path) -> str:
 
     if use_mermaid:
         html = strip_slideengine_bootstraps(html)
-        footer_parts.append(build_mermaid_module())
+        footer_parts.append(build_mermaid_module(shared_root))
     elif "new SlideEngine" not in html:
         # SlideEngine MUST boot even if journey init throws (defensive try/catch
         # prevents one bad init from killing all later DOMContentLoaded listeners,
@@ -698,6 +839,21 @@ def main() -> int:
         action="store_true",
         help="Re-bundle even if the HTML looks already standalone",
     )
+    parser.add_argument(
+        "--no-embed-visuals",
+        action="store_true",
+        help="Skip embedding theme visuals as base64 data URIs (visuals will 404 outside the repo)",
+    )
+    parser.add_argument(
+        "--shared-root",
+        type=Path,
+        help="Read-only framework shared-assets directory (for decks outside the skill tree)",
+    )
+    parser.add_argument(
+        "--themes-css",
+        type=Path,
+        help="Theme registry to inline instead of the framework premium-themes.css",
+    )
     args = parser.parse_args()
 
     html_path = args.html.resolve()
@@ -709,14 +865,30 @@ def main() -> int:
     if not args.in_place and out_path is None:
         out_path = html_path.with_name(html_path.stem + ".standalone.html")
 
+    embed_visuals = not args.no_embed_visuals
+    shared_root = args.shared_root.resolve() if args.shared_root else None
+    themes_css = args.themes_css.resolve() if args.themes_css else None
+
     original = read_text(html_path)
     if args.force:
         # Strip any previous inlined content + standalone marker so the bundler
         # re-inlines from shared/ source. Re-link to ../../shared/ first.
         linked = unstandalone_html(original)
-        bundled = bundle_html(linked, html_path)
+        bundled = bundle_html(
+            linked,
+            html_path,
+            embed_visuals=embed_visuals,
+            shared_root=shared_root,
+            themes_css=themes_css,
+        )
     else:
-        bundled = bundle_html(original, html_path)
+        bundled = bundle_html(
+            original,
+            html_path,
+            embed_visuals=embed_visuals,
+            shared_root=shared_root,
+            themes_css=themes_css,
+        )
 
     if bundled == original and not args.force:
         print(f"Already standalone (no ../../shared/ links): {html_path}")

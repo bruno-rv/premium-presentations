@@ -15,7 +15,9 @@ from slide_html import parse_slide_spans
 
 SCRIPTS = Path(__file__).resolve().parent.parent
 SKILL_ROOT = SCRIPTS.parent
-SUBPROCESS_TIMEOUT = 120
+# Each CLI mutation runs Deck Doctor, including Playwright layout checks. The
+# hosted Ubuntu runner can take more than two minutes for that validation.
+SUBPROCESS_TIMEOUT = 240
 
 
 class PartialRegenE2ETests(unittest.TestCase):
@@ -38,7 +40,7 @@ class PartialRegenE2ETests(unittest.TestCase):
     )
     def test_subprocess_timeout_is_actionable(self, _run: mock.Mock) -> None:
         with self.assertRaisesRegex(
-            AssertionError, "partial regeneration command timed out after 120 seconds"
+            AssertionError, "partial regeneration command timed out after 240 seconds"
         ):
             self.run_command(["tool"], label="partial regeneration command")
 

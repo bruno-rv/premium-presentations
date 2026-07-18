@@ -558,6 +558,19 @@ def _metadata_targets(
     return [(deck.parent / item["target"], item) for item in entries]
 
 
+def _metadata_spec_basename(
+    deck: Path, metadata: Mapping[str, object]
+) -> str:
+    entries = metadata["targets"]
+    names = {item["target"] for item in entries}
+    if len(names) != 2 or deck.name not in names:
+        raise RegenInputError("initialization backup target set is unexpected")
+    spec_names = names - {deck.name}
+    if len(spec_names) != 1:
+        raise RegenInputError("initialization backup target set is unexpected")
+    return _validate_basename(next(iter(spec_names)), "spec")
+
+
 def _rollback_recovery_targets(
     metadata: object, targets: Sequence[tuple[Path, Mapping[str, str]]]
 ) -> list[tuple[Path, Mapping[str, str]]]:
@@ -611,7 +624,10 @@ def _prepared_backups(deck: Path) -> list[Path]:
             metadata = candidate / name
             if metadata.is_file() and not metadata.is_symlink():
                 try:
-                    if json.loads(metadata.read_text(encoding="utf-8")).get("status") == "prepared":
+                    value = json.loads(metadata.read_text(encoding="utf-8"))
+                    if not isinstance(value, dict):
+                        raise RegenInputError("transaction metadata is invalid")
+                    if value.get("status") == "prepared":
                         prepared.append(candidate)
                         break
                 except (OSError, json.JSONDecodeError):
@@ -929,10 +945,16 @@ def _rollback(deck: Path, requested: Path) -> PlanResult:
     metadata = _metadata(backup)
     spec_basename: str | None = None
     if metadata["operation"] == "init":
-        state = load_state(deck.read_text(encoding="utf-8"))
-        if state["deck"] != deck.name:
-            raise RegenInputError("embedded state does not match rollback deck")
-        spec_basename = _validate_basename(state["spec"], "spec")
+        try:
+            state = load_state(deck.read_text(encoding="utf-8"))
+        except (RegenInputError, UnicodeError):
+            if metadata["status"] != "prepared":
+                raise
+            spec_basename = _metadata_spec_basename(deck, metadata)
+        else:
+            if state["deck"] != deck.name:
+                raise RegenInputError("embedded state does not match rollback deck")
+            spec_basename = _validate_basename(state["spec"], "spec")
     targets = _metadata_targets(deck, metadata, spec_basename=spec_basename)
     rollback_path = backup / "rollback-metadata.json"
     if rollback_path.exists():
