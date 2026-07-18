@@ -355,12 +355,26 @@ CLI installs: Claude marketplace installs and Codex marketplace add/install
 checks need isolated local configuration roots and are documented as a
 separate release exercise.
 
-To run the same source-checkout gate locally (after selecting Python 3.10+):
+To run the same source-checkout gate locally, use a temporary Python 3.10+
+virtual environment and put its `bin` directory first on `PATH`. This keeps
+child commands that invoke `python3` on the same interpreter as the parent:
 
 ```bash
+venv_dir="$(mktemp -d "${TMPDIR:-/tmp}/premium-presentations-venv.XXXXXX")"
+trap 'rm -rf -- "$venv_dir"' EXIT
+python3 -m venv "$venv_dir"
+source "$venv_dir/bin/activate"
+export PATH="$venv_dir/bin:$PATH"
+python3 --version  # requires Python 3.10+
 npm ci --prefix skills/premium-presentations/scripts
 python3 -m pip install -r skills/premium-presentations/scripts/requirements.txt
-python3 -m playwright install chromium
+if [ "$(uname -s)" = "Linux" ]; then
+  # CI uses Ubuntu and installs the browser's OS packages as well.
+  python3 -m playwright install --with-deps chromium
+else
+  # macOS uses Playwright's managed Chromium; --with-deps is Linux/CI-only.
+  python3 -m playwright install chromium
+fi
 python3 skills/premium-presentations/scripts/tests/test_skill_layout.py
 python3 skills/premium-presentations/scripts/tests/test_bootstrap.py
 python3 skills/premium-presentations/scripts/bootstrap.py --check

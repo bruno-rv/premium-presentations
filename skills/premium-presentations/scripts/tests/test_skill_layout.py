@@ -239,6 +239,7 @@ class SkillLayoutTests(unittest.TestCase):
         required_markers = (
             "node-version: 20",
             "python-version: '3.12'",
+            "timeout-minutes: 20",
             "npm ci --prefix skills/premium-presentations/scripts",
             "npm audit",
             "python3 -m pip install -r skills/premium-presentations/scripts/requirements.txt",
@@ -270,6 +271,12 @@ class SkillLayoutTests(unittest.TestCase):
         self.assertIn("bootstrap.py --check", section)
         self.assertIn("Claude-compatible", section)
         self.assertIn("CLI installs", section)
+        self.assertIn("python3 -m venv", section)
+        self.assertIn("PATH=", section)
+        self.assertIn("--with-deps", section)
+        self.assertIn("Linux", section)
+        self.assertIn("macOS", section)
+        self.assertIn("activate", section)
 
 
 if __name__ == "__main__":
