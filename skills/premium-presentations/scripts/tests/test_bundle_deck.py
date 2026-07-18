@@ -806,12 +806,37 @@ class BundleExternalWorkspaceTests(unittest.TestCase):
             secret = root / "framework" / "secret.css"
             secret.write_text("must not be read", encoding="utf-8")
 
-            with self.assertRaises(ValueError):
+            self.assertIsNone(
                 self.bundler.resolve_asset(
                     deck,
                     "../../shared/../../secret.css",
                     shared_root=framework_shared,
                 )
+            )
+
+    def test_noncanonical_shared_path_is_ignored_with_explicit_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            deck = root / "project" / "assets" / "decks" / "talk" / "deck.html"
+            deck.parent.mkdir(parents=True)
+            framework_shared = root / "framework" / "shared"
+            framework_shared.mkdir(parents=True)
+            # This is where the deck-relative candidate would land if the
+            # explicit-root guard accidentally fell through to legacy logic.
+            local_secret = deck.parent / "secret.css"
+            local_secret.write_text("must not be inlined", encoding="utf-8")
+            href = "attacker/shared/../../secret.css"
+
+            self.assertIsNone(
+                self.bundler.resolve_asset(deck, href, shared_root=framework_shared)
+            )
+            html = f'<link rel="stylesheet" href="{href}">'
+            self.assertEqual(
+                self.bundler.inline_stylesheets(
+                    html, deck, shared_root=framework_shared
+                ),
+                html,
+            )
 
     def test_external_deck_uses_explicit_shared_root_and_themes_css(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

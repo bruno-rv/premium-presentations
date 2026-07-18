@@ -63,16 +63,16 @@ def _canonical_shared_relative(href: str) -> PurePosixPath | None:
     return PurePosixPath(*parts[shared_idx + 1:])
 
 
-def _resolve_shared_asset(shared_root: Path, relative: PurePosixPath) -> Path:
-    """Resolve a shared asset and reject paths escaping the explicit root."""
+def _resolve_shared_asset(
+    shared_root: Path, relative: PurePosixPath
+) -> Path | None:
+    """Resolve a shared asset, rejecting paths escaping the explicit root."""
     shared = _normalize_shared_root(shared_root).resolve()
     resolved = (shared / Path(*relative.parts)).resolve()
     try:
         resolved.relative_to(shared)
-    except ValueError as exc:
-        raise ValueError(
-            f"Shared asset path escapes explicit shared root: {relative}"
-        ) from exc
+    except ValueError:
+        return None
     return resolved
 
 
@@ -86,8 +86,11 @@ def resolve_asset(
     if is_remote_url(href):
         return None
 
+    href_path = PurePosixPath(href.split("?", 1)[0].split("#", 1)[0])
     canonical_relative = _canonical_shared_relative(href)
-    if shared_root is not None and canonical_relative is not None:
+    if shared_root is not None and "shared" in href_path.parts:
+        if canonical_relative is None:
+            return None
         if (
             themes_css is not None
             and canonical_relative == PurePosixPath("premium-themes.css")
