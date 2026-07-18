@@ -38,6 +38,15 @@ def is_remote_url(href: str) -> bool:
     return bool(re.match(r"^https?://", href, re.I)) or href.startswith("//")
 
 
+def _strip_url_suffix(href: str) -> str:
+    """Return a local asset path without URL query or fragment components."""
+    return href.split("?", 1)[0].split("#", 1)[0]
+
+
+def _asset_basename(href: str) -> str:
+    return PurePosixPath(_strip_url_suffix(href)).name
+
+
 def _normalize_shared_root(shared_root: Path | None) -> Path:
     """Resolve an explicit framework/shared directory to its shared assets."""
     if shared_root is None:
@@ -53,7 +62,7 @@ def _normalize_shared_root(shared_root: Path | None) -> Path:
 
 def _canonical_shared_relative(href: str) -> PurePosixPath | None:
     """Return the path below ``shared/`` for a canonical shared link."""
-    path = PurePosixPath(href.split("?", 1)[0].split("#", 1)[0])
+    path = PurePosixPath(_strip_url_suffix(href))
     parts = path.parts
     if "shared" not in parts:
         return None
@@ -86,7 +95,7 @@ def resolve_asset(
     if is_remote_url(href):
         return None
 
-    href_path = PurePosixPath(href.split("?", 1)[0].split("#", 1)[0])
+    href_path = PurePosixPath(_strip_url_suffix(href))
     canonical_relative = _canonical_shared_relative(href)
     if shared_root is not None and "shared" in href_path.parts:
         if canonical_relative is None:
@@ -98,16 +107,16 @@ def resolve_asset(
             return themes_css.resolve()
         return _resolve_shared_asset(shared_root, canonical_relative)
 
-    if themes_css is not None and Path(href).name == "premium-themes.css":
+    if themes_css is not None and _asset_basename(href) == "premium-themes.css":
         return themes_css.resolve()
 
-    candidate = (html_path.parent / href).resolve()
+    candidate = (html_path.parent / Path(*href_path.parts)).resolve()
     if candidate.is_file():
         return candidate
 
     # A deck copied outside the skill tree still carries ../../shared/ links.
     # Resolve that well-known framework path from the explicit read-only root.
-    parts = Path(href).parts
+    parts = href_path.parts
     if "shared" in parts:
         shared = _normalize_shared_root(shared_root)
         shared_idx = parts.index("shared")
@@ -162,7 +171,7 @@ def inline_stylesheets(
         # Keep the runtime module name stable when --themes-css points at a
         # workspace-owned registry, so required-module detection does not
         # append the read-only framework registry a second time.
-        module_name = Path(href).name
+        module_name = _asset_basename(href)
         return f"<style>\n/* --- {module_name} --- */\n{css}\n</style>"
 
     return re.sub(pattern, repl, html, flags=re.I)

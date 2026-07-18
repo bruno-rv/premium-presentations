@@ -78,7 +78,9 @@ if ! [[ "$COUNT" =~ ^[0-9]+$ ]] || [[ "$COUNT" -lt 1 ]]; then
   exit 1
 fi
 
+DECK_DIR_PREEXISTED=0
 if [[ -n "$OUTPUT_DIR" ]]; then
+  [[ -e "$OUTPUT_DIR" ]] && DECK_DIR_PREEXISTED=1
   mkdir -p "$OUTPUT_DIR"
   DECK_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 else
@@ -102,14 +104,39 @@ if [[ -n "$OUTPUT_DIR" && ( -e "$SLIDES_FILE" || -e "$SPEC_FILE" ) ]]; then
   exit 1
 fi
 
+cleanup_partial_output() {
+  status=$?
+  trap - EXIT
+  if [[ "$status" -ne 0 ]]; then
+    rm -f "$SLIDES_FILE" "$SPEC_FILE" || true
+    if [[ "$DECK_DIR_PREEXISTED" -eq 0 ]]; then
+      rmdir "$DECK_DIR" 2>/dev/null || true
+    fi
+  fi
+  exit "$status"
+}
+trap cleanup_partial_output EXIT
+
 mkdir -p "$DECK_DIR"
 
-sed \
-  -e "s|{{THEME}}|${FRAMEWORK}|g" \
-  -e "s|{{TITLE}}|${TITLE}|g" \
-  -e "s|{{SHARED}}|../../shared/|g" \
-  -e "s|{{BAR_RIGHT}}||g" \
-  "$TEMPLATE" > "$SLIDES_FILE"
+python3 - "$TEMPLATE" "$SLIDES_FILE" "$FRAMEWORK" "$TITLE" <<'PY'
+from pathlib import Path
+import sys
+
+template_path = Path(sys.argv[1])
+output_path = Path(sys.argv[2])
+theme = sys.argv[3]
+title = sys.argv[4]
+content = template_path.read_text(encoding="utf-8")
+for token, value in {
+    "{{THEME}}": theme,
+    "{{TITLE}}": title,
+    "{{SHARED}}": "../../shared/",
+    "{{BAR_RIGHT}}": "",
+}.items():
+    content = content.replace(token, value)
+output_path.write_text(content, encoding="utf-8")
+PY
 
 BUNDLE_ARGS=("$SLIDES_FILE" --in-place --shared-root "$ROOT/assets/shared")
 if [[ -n "$THEMES_CSS_FILE" ]]; then

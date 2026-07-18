@@ -878,5 +878,58 @@ class BundleExternalWorkspaceTests(unittest.TestCase):
             self.assertNotIn('../../shared/premium-themes.css', bundled)
 
 
+class BundleStylesheetHrefNormalizationTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.bundler = load_bundler()
+
+    def _query_hash_deck(self) -> str:
+        return _make_minimal_deck().replace(
+            f'{_SHARED_LINK}premium-themes.css',
+            f'{_SHARED_LINK}premium-themes.css?v=1#canonical',
+        )
+
+    def test_query_hash_shared_stylesheet_without_explicit_root_inlines_once(self) -> None:
+        deck_dir = ROOT / "assets" / "decks" / "_test_bundle_tmp"
+        deck_dir.mkdir(parents=True, exist_ok=True)
+        html_path = deck_dir / "deck.html"
+        try:
+            html = self._query_hash_deck()
+            html_path.write_text(html, encoding="utf-8")
+            bundled = self.bundler.bundle_html(html, html_path)
+        finally:
+            html_path.unlink(missing_ok=True)
+            try:
+                deck_dir.rmdir()
+            except OSError:
+                pass
+
+        self.assertEqual(bundled.count("/* --- premium-themes.css --- */"), 1)
+        self.assertNotIn("premium-themes.css?v=1#canonical", bundled)
+
+    def test_query_hash_shared_stylesheet_with_explicit_root_and_custom_registry_inlines_once(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            shared = root / "framework" / "shared"
+            shutil.copytree(SHARED, shared)
+            custom_css = root / "workspace" / "themes.css"
+            custom_css.parent.mkdir(parents=True)
+            custom_css.write_text("custom-theme-registry", encoding="utf-8")
+            deck = root / "workspace" / "deck.html"
+            html = self._query_hash_deck()
+            deck.write_text(html, encoding="utf-8")
+
+            bundled = self.bundler.bundle_html(
+                html,
+                deck,
+                shared_root=shared,
+                themes_css=custom_css,
+            )
+
+            self.assertEqual(bundled.count("/* --- premium-themes.css --- */"), 1)
+            self.assertIn("custom-theme-registry", bundled)
+            self.assertNotIn("premium-themes.css?v=1#canonical", bundled)
+
+
 if __name__ == "__main__":
     unittest.main()

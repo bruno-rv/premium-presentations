@@ -28,3 +28,6 @@ assets/decks/
 
 # Internal dev-planning artifacts — not part of the distributed plugin
 PLAN-*.md
+
+# Local process reports — keep task/fix evidence out of the distributed plugin
+.superpowers/sdd/*-report.md
