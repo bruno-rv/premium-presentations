@@ -420,11 +420,23 @@ class WorkspaceThemesCssTests(unittest.TestCase):
             shutil.copy(THEMES_CSS, workspace_css)
             before = THEMES_CSS.read_bytes()
 
+            source_visuals = ROOT / "assets" / "shared" / "assets" / "theme-visuals"
+            visuals = Path(tmp) / "theme-visuals"
+            shutil.copytree(source_visuals, visuals)
+            hero = Path(tmp) / "input-hero.webp"
+            map_image = Path(tmp) / "input-map.webp"
+            shutil.copy2(source_visuals / "editorial-hero.webp", hero)
+            shutil.copy2(source_visuals / "editorial-map.webp", map_image)
+
             rc = generate_theme.main(
                 [
                     "workspace-brand", "--bg", "#0b1220", "--text", "#f4f6fb",
                     "--accent", "#22c55e", "--surface", "#141d33",
                     "--themes-css", str(workspace_css),
+                    "--hero-image", str(hero),
+                    "--map-image", str(map_image),
+                    "--visuals-dir", str(visuals),
+                    "--manifest", str(visuals / "manifest.json"),
                 ]
             )
 

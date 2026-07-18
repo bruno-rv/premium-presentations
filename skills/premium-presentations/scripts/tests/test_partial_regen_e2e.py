@@ -19,6 +19,13 @@ SKILL_ROOT = SCRIPTS.parent
 # hosted Ubuntu runner can take more than two minutes for that validation.
 SUBPROCESS_TIMEOUT = 240
 
+try:
+    import playwright  # noqa: F401
+
+    HAS_PLAYWRIGHT = True
+except ImportError:
+    HAS_PLAYWRIGHT = False
+
 
 class PartialRegenE2ETests(unittest.TestCase):
     def setUp(self) -> None:
@@ -91,6 +98,7 @@ class PartialRegenE2ETests(unittest.TestCase):
         path.write_text(fragment, encoding="utf-8")
         return path
 
+    @unittest.skipUnless(HAS_PLAYWRIGHT, "playwright not installed — skipping theme-homage integration check")
     def test_public_cli_round_trip_preserves_theme_homage_payload(self) -> None:
         deck, spec = self.copy_reviewable_fixture()
         original = deck.read_text(encoding="utf-8")

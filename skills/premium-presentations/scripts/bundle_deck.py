@@ -638,7 +638,6 @@ def bundle_html(
     html: str,
     html_path: Path,
     *,
-    embed_visuals: bool = True,
     shared_root: Path | None = None,
     themes_css: Path | None = None,
 ) -> str:
@@ -840,11 +839,6 @@ def main() -> int:
         help="Re-bundle even if the HTML looks already standalone",
     )
     parser.add_argument(
-        "--no-embed-visuals",
-        action="store_true",
-        help="Skip embedding theme visuals as base64 data URIs (visuals will 404 outside the repo)",
-    )
-    parser.add_argument(
         "--shared-root",
         type=Path,
         help="Read-only framework shared-assets directory (for decks outside the skill tree)",
@@ -865,7 +859,6 @@ def main() -> int:
     if not args.in_place and out_path is None:
         out_path = html_path.with_name(html_path.stem + ".standalone.html")
 
-    embed_visuals = not args.no_embed_visuals
     shared_root = args.shared_root.resolve() if args.shared_root else None
     themes_css = args.themes_css.resolve() if args.themes_css else None
 
@@ -877,7 +870,6 @@ def main() -> int:
         bundled = bundle_html(
             linked,
             html_path,
-            embed_visuals=embed_visuals,
             shared_root=shared_root,
             themes_css=themes_css,
         )
@@ -885,7 +877,6 @@ def main() -> int:
         bundled = bundle_html(
             original,
             html_path,
-            embed_visuals=embed_visuals,
             shared_root=shared_root,
             themes_css=themes_css,
         )
