@@ -36,8 +36,8 @@ Codex-specific packaging lives under `.codex-plugin/` and
   the same recipe when asked to turn the current branch's diff into a
   `deck_doctor`-validated deck grounded in the real `git diff`.
 
-A full worked example — a 20-slide deck with a generated cover, PDF, and
-speaker-notes handout already checked in — lives at
+A full worked example — a 20-slide deck whose PDF, cover, and speaker-notes
+handout are reproducible but intentionally untracked — lives at
 `skills/premium-presentations/assets/examples/rag-vector-graph/`.
 
 ## Preview
@@ -55,6 +55,30 @@ speaker-notes handout already checked in — lives at
 ![Presenter view](docs/screenshot-presenter.png)
 
 ## Install
+
+### Requirements and bootstrap
+
+Use Python **3.10+**, Node.js **18+**, and Bash. The supported host platforms
+are macOS and Linux; Windows users should run the shell workflows from WSL.
+After installing or upgrading the plugin, restart Claude Code or Codex so it
+reloads the marketplace package and skill instructions.
+If `python3` resolves to an older system interpreter, substitute a supported
+executable such as `python3.11` in the bootstrap commands below.
+
+The plugin itself is dependency-light. Install the local Node test dependencies
+and check the browser-backed prerequisites from the checked-out skill root:
+
+```bash
+npm --prefix skills/premium-presentations/scripts ci
+python3 skills/premium-presentations/scripts/bootstrap.py --check
+```
+
+If the check reports missing Playwright or Chromium, install both with the
+active Python interpreter (the command is explicit and mutating):
+
+```bash
+python3 skills/premium-presentations/scripts/bootstrap.py --install-browser-deps
+```
 
 ### Codex plugin
 
@@ -115,13 +139,17 @@ For local validation scripts that use Node dependencies:
 npm --prefix skills/premium-presentations/scripts ci
 ```
 
-For browser-rendering checks, install the Python validation dependency and its
-managed Chromium once (this Chromium also powers `og_cover.py`, `export_pdf.py`,
-and layout validation):
+For browser-rendering checks, use the bootstrap command above to install the
+Python validation dependency and its managed Chromium (the same Chromium powers
+`og_cover.py`, `export_pdf.py`, and layout validation). Keep the plugin cache
+read-only and write generated decks and exports under the workspace instead:
 
 ```bash
-python3 -m pip install -r skills/premium-presentations/scripts/requirements.txt
-python3 -m playwright install chromium
+workspace_root="$(pwd -P)"
+skill_root="$(cd skills/premium-presentations && pwd -P)"
+"$skill_root/scripts/new-deck.sh" \
+  --output-dir "$workspace_root/assets/decks/my-talk" \
+  editorial my-talk "My Title" 12
 ```
 
 ## Use
@@ -143,6 +171,11 @@ The generated deck is written to:
 ```text
 skills/premium-presentations/assets/decks/my-talk/my-talk-slides.html
 ```
+
+That path is the legacy source-clone destination. When using an installed
+plugin, pass `--output-dir` as in the workspace-safe example above; the bundled
+skill root remains read-only while the workspace owns the deck, spec, themes,
+and exported artifacts.
 
 Validate it — `deck_doctor.py` chains every validator (structure, layout,
 diagrams, runtime contract, WCAG contrast) into one health report:

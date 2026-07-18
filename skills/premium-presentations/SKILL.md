@@ -18,6 +18,31 @@ This directory is the shared Premium Presentations skill. Use the bundled
 scripts, references, and assets from this folder instead of recreating a slide
 framework from memory.
 
+## Prerequisites and bootstrap
+
+Use Python 3.10+, Node.js 18+, and Bash. macOS and Linux are supported;
+Windows users should run the shell workflows from WSL. After installing or
+upgrading the plugin, restart Claude Code or Codex so the host reloads the
+marketplace package and skill instructions.
+If `python3` resolves to an older system interpreter, substitute a supported
+executable such as `python3.11` in the bootstrap commands below.
+
+The plugin cache is read-only. After resolving `skill_root` as shown in Start,
+install local Node dependencies and inspect browser-backed prerequisites with
+the stdlib bootstrap helper:
+
+```bash
+npm --prefix "$skill_root/scripts" ci
+python3 "$skill_root/scripts/bootstrap.py" --check
+```
+
+If the check reports missing Playwright or managed Chromium, run the explicit
+mutating install once with the active Python interpreter:
+
+```bash
+python3 "$skill_root/scripts/bootstrap.py" --install-browser-deps
+```
+
 ## Start
 
 1. Capture the workspace root before locating or changing to the skill root.
@@ -100,6 +125,11 @@ Use lowercase hyphenated slugs. For unspecified themes, use the first theme
 returned by `list-themes.py` unless the topic clearly calls for another
 discovered theme. `$workspace_root/assets/decks/` is generated output and
 ignored by git; commit a finished deck only when the user explicitly asks.
+
+When running from a source clone, omitting `--output-dir` retains the legacy
+destination under the skill's `assets/decks/<slug>`. Installed-plugin workflows
+must pass the workspace-owned `--output-dir` shown above so generated decks,
+specs, themes, and exports never land in the plugin cache.
 
 ## Runtime Contract
 
@@ -226,9 +256,9 @@ accurate.
 
 Three CLI scripts turn a bundled, gate-passing deck into shareable artifacts.
 All are Python, use the same Playwright Chromium as `validate_layout.py` (no
-second browser stack), and require `pip install playwright && playwright
-install chromium` (see `scripts/requirements.txt`) — they degrade with a
-clear message, not a crash, when Playwright is absent.
+second browser stack), and require the dependencies installed by
+`bootstrap.py --install-browser-deps` (see `scripts/requirements.txt`) — they
+degrade with a clear message, not a crash, when Playwright is absent.
 
 ```bash
 python3 "$skill_root/scripts/export_pdf.py" \
