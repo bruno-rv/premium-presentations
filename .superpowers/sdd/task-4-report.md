@@ -93,3 +93,45 @@ git diff --check
 
 Task commit: `feat: add prerequisite bootstrap and release docs` (hash reported
 by the agent handoff; the report intentionally avoids a self-referential hash).
+
+## Review follow-up: cache-safe documentation
+
+### RED
+
+Added static contracts to `test_skill_layout.py` requiring npm CI to stay out
+of installed-plugin bootstrap guidance and rejecting repo-relative skill-root
+derivation in marketplace-facing examples. Against the first Task 4 docs, the
+focused run failed as intended:
+
+```text
+python3.11 skills/premium-presentations/scripts/tests/test_skill_layout.py
+.FF.........
+FAILED (failures=2)
+```
+
+### GREEN
+
+Updated README and SKILL guidance so marketplace users start a new session and
+ask the agent to resolve the absolute installed skill root. npm CI is now
+explicitly scoped to source-checkout/CI validation, where it installs only
+test dependencies. The manual shell example is labeled source-clone-only and
+derives `skill_root` from an explicit workspace path rather than a repo-relative
+`cd` hidden in installed-user guidance.
+
+Fresh review verification:
+
+```text
+python3.11 skills/premium-presentations/scripts/tests/test_skill_layout.py
+............
+Ran 12 tests ...
+OK
+
+python3.11 skills/premium-presentations/scripts/tests/test_bootstrap.py
+.....
+Ran 5 tests ...
+OK
+
+git diff --check
+```
+
+The follow-up is included in the task commit reported by the agent handoff.

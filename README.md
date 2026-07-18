@@ -65,19 +65,29 @@ reloads the marketplace package and skill instructions.
 If `python3` resolves to an older system interpreter, substitute a supported
 executable such as `python3.11` in the bootstrap commands below.
 
-The plugin itself is dependency-light. Install the local Node test dependencies
-and check the browser-backed prerequisites from the checked-out skill root:
+Marketplace users do not modify the installed plugin cache. Start a new Claude
+Code or Codex session after installation or upgrade and ask the agent to use
+Premium Presentations; the skill resolves its absolute installed root and
+writes generated output under the workspace.
+
+### Source checkout validation
+
+The following commands are for a source checkout or CI only. They install
+test-only Node dependencies in that checkout and inspect browser-backed
+prerequisites:
 
 ```bash
-npm --prefix skills/premium-presentations/scripts ci
-python3 skills/premium-presentations/scripts/bootstrap.py --check
+workspace_root="$(pwd -P)"
+skill_root="$workspace_root/skills/premium-presentations"
+npm --prefix "$skill_root/scripts" ci
+python3 "$skill_root/scripts/bootstrap.py" --check
 ```
 
 If the check reports missing Playwright or Chromium, install both with the
 active Python interpreter (the command is explicit and mutating):
 
 ```bash
-python3 skills/premium-presentations/scripts/bootstrap.py --install-browser-deps
+python3 "$skill_root/scripts/bootstrap.py" --install-browser-deps
 ```
 
 ### Codex plugin
@@ -123,7 +133,10 @@ Add to `~/.claude/settings.json`:
 }
 ```
 
-### Manual Claude skill link
+### Manual Claude skill link (source clone)
+
+This manual shell workflow is for a source clone. Marketplace users should
+start a new session and ask the installed skill to locate its absolute root.
 
 Clone the repo and link the skill subdirectory:
 
@@ -146,7 +159,7 @@ read-only and write generated decks and exports under the workspace instead:
 
 ```bash
 workspace_root="$(pwd -P)"
-skill_root="$(cd skills/premium-presentations && pwd -P)"
+skill_root="$workspace_root/skills/premium-presentations"
 "$skill_root/scripts/new-deck.sh" \
   --output-dir "$workspace_root/assets/decks/my-talk" \
   editorial my-talk "My Title" 12

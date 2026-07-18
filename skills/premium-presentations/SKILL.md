@@ -27,12 +27,15 @@ marketplace package and skill instructions.
 If `python3` resolves to an older system interpreter, substitute a supported
 executable such as `python3.11` in the bootstrap commands below.
 
-The plugin cache is read-only. After resolving `skill_root` as shown in Start,
-install local Node dependencies and inspect browser-backed prerequisites with
-the stdlib bootstrap helper:
+Marketplace users should start a new Claude Code or Codex session after
+installing or upgrading, then ask the agent to use Premium Presentations. The
+agent resolves the absolute installed `skill_root`, keeps that plugin cache
+read-only, and writes generated output under the workspace.
+
+After resolving `skill_root` as shown in Start, inspect browser-backed
+prerequisites with the stdlib bootstrap helper:
 
 ```bash
-npm --prefix "$skill_root/scripts" ci
 python3 "$skill_root/scripts/bootstrap.py" --check
 ```
 
@@ -41,6 +44,15 @@ mutating install once with the active Python interpreter:
 
 ```bash
 python3 "$skill_root/scripts/bootstrap.py" --install-browser-deps
+```
+
+## Source checkout validation
+
+When validating a source checkout or running CI (not an installed marketplace
+plugin), install the test-only Node dependencies before running the Node suite:
+
+```bash
+npm --prefix "$skill_root/scripts" ci
 ```
 
 ## Start

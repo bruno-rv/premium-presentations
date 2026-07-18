@@ -207,6 +207,30 @@ class SkillLayoutTests(unittest.TestCase):
             r'(?m)^"\$skill_root/scripts/new-deck\.sh"\s+--output-dir',
         )
 
+    def test_installed_plugin_bootstrap_does_not_run_npm_ci_in_readonly_cache(self) -> None:
+        skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        skill_bootstrap = skill.split("## Source checkout validation", 1)[0]
+        readme_bootstrap = readme.split("### Requirements and bootstrap", 1)[1].split(
+            "### Source checkout validation", 1
+        )[0]
+
+        self.assertNotIn("npm --prefix", skill_bootstrap)
+        self.assertNotIn("npm --prefix", readme_bootstrap)
+        self.assertIn("source checkout", skill.lower())
+        self.assertIn("npm --prefix \"$skill_root/scripts\" ci", skill)
+        self.assertIn("source checkout", readme.lower())
+
+    def test_marketplace_guidance_never_derives_skill_root_from_repo_relative_cd(self) -> None:
+        skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+
+        self.assertIn("marketplace users", skill.lower())
+        self.assertIn("absolute skill root", skill.lower())
+        self.assertIn("new session", readme.lower())
+        self.assertNotIn('skill_root="$(cd skills/premium-presentations', readme)
+        self.assertIn('skill_root="$workspace_root/skills/premium-presentations"', readme)
+
 
 if __name__ == "__main__":
     unittest.main()
