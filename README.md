@@ -293,3 +293,9 @@ python3 skills/premium-presentations/scripts/deck_doctor.py \
   skills/premium-presentations/assets/decks/smoke-deck/smoke-deck-slides.html
 rm -rf skills/premium-presentations/assets/decks/smoke-deck
 ```
+
+## Acknowledgments
+
+Some animation and visual design ideas were inspired by [Luan Moreno's
+work](https://github.com/luanmorenommaciel). All other features and
+implementation are original to Premium Presentations.
