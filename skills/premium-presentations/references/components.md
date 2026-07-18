@@ -118,6 +118,22 @@ Use semantic modifiers on `.compare-panel` instead of inline colors:
 | `compare-panel--vector` | Vector-search side of a comparison | blue |
 | `compare-panel--graph` | Graph side of a comparison | violet |
 
+**Density (hard rule):** `.compare-split` is `flex:1; align-items:stretch` —
+it stretches to fill all remaining slide height regardless of content. Fill
+each `.compare-panel` with a 3–5 item `<ul>` of concrete facts (see
+`compare-paradigm.snippet.html`), or set `style="flex:none"` on
+`.compare-split` if the content genuinely doesn't fill the space. Never ship
+a panel with only badge+title+one line and a `.compare-callout` pinned to
+the bottom — `deck_doctor.py` (`validate_compare_split_density`) warns on
+this.
+
+**Visual density (hard rule):** any decorative element (SVG shapes, icon
+rows) inside a component slot must either carry real visible text/labels or
+form a recognizable connected diagram (nodes joined by lines/arrows).
+Bordered rects/bars with no text and no connective structure read as
+broken/empty UI. If a slide has no diagram-worthy visual, use real content
+(a stat, a type specimen, a short label) or drop the visual column entirely.
+
 ## Live flow (FLOW+)
 
 `.live-flow` container holding `.flow-node` (`__icon`, `__title`, `__sub`) and

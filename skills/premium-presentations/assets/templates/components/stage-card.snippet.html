@@ -12,7 +12,15 @@
         </div>
       </div>
       <div class="stage-card__visual">
-        <!-- Replace with lesson-specific SVG or mini-diagram -->
+        <!-- Replace with lesson-specific SVG or mini-diagram. Keep it either
+             (a) recognizable connected shapes like the circles+lines below
+             (reads as "3 linked stages" even with no text), or
+             (b) real visible content (a type specimen, a stat, a short
+             label) if the idea is not itself a shape/flow.
+             Do NOT use bordered rects/bars with no text and no connecting
+             lines — unlabeled boxes read as broken/empty UI, not as a
+             deliberate diagram. If neither (a) nor (b) fits, drop the
+             visual column and use a single-column content slide instead. -->
         <svg viewBox="0 0 200 120" width="100%" aria-hidden="true">
           <circle cx="40" cy="60" r="22" fill="var(--accent-dim)" stroke="var(--accent)" stroke-width="2"/>
           <circle cx="100" cy="60" r="22" fill="var(--gold-dim)" stroke="var(--gold)" stroke-width="2"/>
