@@ -770,6 +770,49 @@ class EscapeForHtmlStyleTests(unittest.TestCase):
 
 
 class BundleExternalWorkspaceTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.bundler = load_bundler()
+
+    def test_explicit_shared_root_wins_over_project_local_shared_asset(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            deck = root / "project" / "assets" / "decks" / "talk" / "deck.html"
+            deck.parent.mkdir(parents=True)
+            local_shared = root / "project" / "assets" / "shared"
+            local_shared.mkdir(parents=True)
+            framework_shared = root / "framework" / "shared"
+            framework_shared.mkdir(parents=True)
+            (local_shared / "premium-themes.css").write_text("local", encoding="utf-8")
+            (framework_shared / "premium-themes.css").write_text(
+                "framework", encoding="utf-8"
+            )
+
+            resolved = self.bundler.resolve_asset(
+                deck,
+                "../../shared/premium-themes.css",
+                shared_root=framework_shared,
+            )
+
+            self.assertEqual(resolved, (framework_shared / "premium-themes.css").resolve())
+
+    def test_shared_asset_traversal_outside_explicit_root_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            deck = root / "project" / "assets" / "decks" / "talk" / "deck.html"
+            deck.parent.mkdir(parents=True)
+            framework_shared = root / "framework" / "shared"
+            framework_shared.mkdir(parents=True)
+            secret = root / "framework" / "secret.css"
+            secret.write_text("must not be read", encoding="utf-8")
+
+            with self.assertRaises(ValueError):
+                self.bundler.resolve_asset(
+                    deck,
+                    "../../shared/../../secret.css",
+                    shared_root=framework_shared,
+                )
+
     def test_external_deck_uses_explicit_shared_root_and_themes_css(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
