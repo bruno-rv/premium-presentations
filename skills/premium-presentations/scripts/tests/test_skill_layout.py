@@ -231,6 +231,46 @@ class SkillLayoutTests(unittest.TestCase):
         self.assertNotIn('skill_root="$(cd skills/premium-presentations', readme)
         self.assertIn('skill_root="$workspace_root/skills/premium-presentations"', readme)
 
+    def test_ci_workflow_covers_the_release_gate_without_provider_installs(self) -> None:
+        workflow_path = REPO_ROOT / ".github" / "workflows" / "ci.yml"
+        self.assertTrue(workflow_path.is_file(), "missing CI release-gate workflow")
+        workflow = workflow_path.read_text(encoding="utf-8")
+
+        required_markers = (
+            "node-version: 20",
+            "python-version: '3.12'",
+            "npm ci --prefix skills/premium-presentations/scripts",
+            "npm audit",
+            "python3 -m pip install -r skills/premium-presentations/scripts/requirements.txt",
+            "python3 -m playwright install --with-deps chromium",
+            "python3 skills/premium-presentations/scripts/bootstrap.py --check",
+            "python3 skills/premium-presentations/scripts/validate_runtime_contract.py",
+            "python3 skills/premium-presentations/scripts/validate_contrast.py",
+            "python3 -m unittest discover",
+            "working-directory: skills/premium-presentations/scripts",
+            "npm test --prefix skills/premium-presentations/scripts",
+            "git diff --check",
+        )
+        for marker in required_markers:
+            with self.subTest(marker=marker):
+                self.assertIn(marker, workflow)
+
+        self.assertNotIn("npm install --global @anthropic-ai", workflow)
+        self.assertNotRegex(workflow, r"(?m)^\s*claude\s+plugin\s+(?:add|install)")
+        self.assertNotRegex(workflow, r"(?m)^\s*codex\s+plugin\s+(?:add|install)")
+
+    def test_readme_documents_the_ci_release_gate(self) -> None:
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("## CI release gate", readme)
+        section = readme.split("## CI release gate", 1)[1]
+        self.assertIn("Node.js 20", section)
+        self.assertIn("Python 3.12", section)
+        self.assertIn("npm ci", section)
+        self.assertIn("npm audit", section)
+        self.assertIn("bootstrap.py --check", section)
+        self.assertIn("Claude-compatible", section)
+        self.assertIn("CLI installs", section)
+
 
 if __name__ == "__main__":
     unittest.main()

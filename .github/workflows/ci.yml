@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  release-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: skills/premium-presentations/scripts/package-lock.json
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: skills/premium-presentations/scripts/requirements.txt
+
+      - name: Install test dependencies and Chromium
+        run: |
+          npm ci --prefix skills/premium-presentations/scripts
+          python3 -m pip install -r skills/premium-presentations/scripts/requirements.txt
+          python3 -m playwright install --with-deps chromium
+
+      - name: Run focused static and bootstrap contracts
+        run: |
+          python3 skills/premium-presentations/scripts/tests/test_skill_layout.py
+          python3 skills/premium-presentations/scripts/tests/test_bootstrap.py
+          python3 skills/premium-presentations/scripts/bootstrap.py --check
+
+      - name: Run focused Node.js tests
+        run: |
+          npm run test:presenter --prefix skills/premium-presentations/scripts
+          npm run test:popup --prefix skills/premium-presentations/scripts
+          npm run test:theme-visuals --prefix skills/premium-presentations/scripts
+
+      - name: Run aggregate Node.js tests
+        run: npm test --prefix skills/premium-presentations/scripts
+
+      - name: Run aggregate Python tests
+        working-directory: skills/premium-presentations/scripts
+        run: python3 -m unittest discover -s tests -p 'test_*.py'
+
+      - name: Validate runtime and themes
+        run: |
+          python3 skills/premium-presentations/scripts/validate_runtime_contract.py
+          python3 skills/premium-presentations/scripts/validate_contrast.py
+
+      - name: Audit Node.js dependencies
+        run: npm audit --prefix skills/premium-presentations/scripts --audit-level=high
+
+      - name: Check whitespace
+        run: git diff --check

@@ -340,6 +340,44 @@ python3 skills/premium-presentations/scripts/deck_doctor.py \
 rm -rf skills/premium-presentations/assets/decks/smoke-deck
 ```
 
+## CI release gate
+
+The GitHub Actions release gate runs on Node.js 20 and Python 3.12. It
+installs the locked Node dependencies with `npm ci`, installs the Python
+requirements and managed Chromium, then runs the focused static/bootstrap
+contracts and the aggregate Node.js and Python test suites. It also runs
+`npm audit`, the runtime and contrast validators, and `git diff --check`.
+
+The static contracts cover the Claude-compatible and Codex plugin manifests;
+the bootstrap check confirms that the CI interpreter can see Playwright and
+its managed Chromium. The workflow intentionally does not perform provider
+CLI installs: Claude marketplace installs and Codex marketplace add/install
+checks need isolated local configuration roots and are documented as a
+separate release exercise.
+
+To run the same source-checkout gate locally (after selecting Python 3.10+):
+
+```bash
+npm ci --prefix skills/premium-presentations/scripts
+python3 -m pip install -r skills/premium-presentations/scripts/requirements.txt
+python3 -m playwright install chromium
+python3 skills/premium-presentations/scripts/tests/test_skill_layout.py
+python3 skills/premium-presentations/scripts/tests/test_bootstrap.py
+python3 skills/premium-presentations/scripts/bootstrap.py --check
+npm run test:presenter --prefix skills/premium-presentations/scripts
+npm run test:popup --prefix skills/premium-presentations/scripts
+npm run test:theme-visuals --prefix skills/premium-presentations/scripts
+npm test --prefix skills/premium-presentations/scripts
+(
+  cd skills/premium-presentations/scripts
+  python3 -m unittest discover -s tests -p 'test_*.py'
+)
+python3 skills/premium-presentations/scripts/validate_runtime_contract.py
+python3 skills/premium-presentations/scripts/validate_contrast.py
+npm audit --prefix skills/premium-presentations/scripts --audit-level=high
+git diff --check
+```
+
 ## Acknowledgments
 
 Some animation and visual design ideas were inspired by [Luan Moreno's
