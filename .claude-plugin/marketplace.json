@@ -1,6 +1,5 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "id": "premium-presentations",
   "name": "premium-presentations",
   "metadata": {
     "description": "Generate magazine-quality themed HTML slide decks with runtime theme switching, cursor-tracked 3D modes, presenter view with rehearsal, and offline diagrams.",

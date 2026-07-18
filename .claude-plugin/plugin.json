@@ -9,5 +9,5 @@
   "license": "MIT",
   "keywords": ["presentations", "slides", "html", "themes", "decks"],
   "skills": ["./skills/premium-presentations"],
-  "commands": "commands/"
+  "commands": ["./commands/"]
 }

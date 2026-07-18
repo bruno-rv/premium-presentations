@@ -136,6 +136,16 @@ class SkillLayoutTests(unittest.TestCase):
         self.assertTrue(codex_marketplace.exists(), "missing Codex marketplace manifest")
         self.assertTrue(command_recipe.exists(), "missing present-pr command recipe")
 
+        claude = json.loads(claude_manifest.read_text(encoding="utf-8"))
+        self.assertEqual(["./commands/"], claude["commands"])
+
+        claude_marketplace = json.loads(
+            (REPO_ROOT / ".claude-plugin" / "marketplace.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertNotIn("id", claude_marketplace)
+
         codex = json.loads(codex_manifest.read_text(encoding="utf-8"))
         self.assertEqual("premium-presentations", codex["name"])
         self.assertEqual("./skills/", codex["skills"])
