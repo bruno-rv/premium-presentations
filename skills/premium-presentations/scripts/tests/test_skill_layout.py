@@ -42,8 +42,11 @@ class SkillLayoutTests(unittest.TestCase):
             "assets/templates",
             "references",
             "references/design.md",
+            "references/present-architecture-brief.md",
+            "references/present-postmortem-brief.md",
             "scripts",
             "scripts/package.json",
+            "scripts/recipe_source_guard.py",
         ]
         for rel in required:
             self.assertTrue((ROOT / rel).exists(), f"missing {rel}")
@@ -190,7 +193,7 @@ class SkillLayoutTests(unittest.TestCase):
             "package-lock": lock["version"],
             "package-lock root": lock["packages"][""]["version"],
         }
-        self.assertEqual({"2.0.1"}, set(versions.values()), versions)
+        self.assertEqual({"2.1.0"}, set(versions.values()), versions)
 
     def test_aggregate_script_covers_every_shipped_node_suite_and_python_discovery(self) -> None:
         package = json.loads((ROOT / "scripts" / "package.json").read_text(encoding="utf-8"))
@@ -241,6 +244,36 @@ class SkillLayoutTests(unittest.TestCase):
         self.assertIn('themes_css="$project_root/assets/shared/premium-themes.css"', command)
         self.assertIn('themes_css="$skill_root/assets/shared/premium-themes.css"', command)
         self.assertIn('--themes-css "$themes_css"', command)
+
+    def test_new_recipe_commands_are_registered_and_use_the_source_guard(self) -> None:
+        for rel in (
+            "commands/present-architecture.md",
+            "commands/present-postmortem.md",
+        ):
+            path = REPO_ROOT / rel
+            self.assertTrue(path.exists(), f"missing {rel}")
+            command = path.read_text(encoding="utf-8")
+            self.assertIn("${CLAUDE_PLUGIN_ROOT}", command)
+            self.assertIn("${CLAUDE_PROJECT_DIR}", command)
+            self.assertIn("recipe_source_guard.py", command)
+            self.assertIn("$skill_root/scripts/new-deck.sh", command)
+            self.assertIn("$skill_root/scripts/deck_doctor.py", command)
+
+        postmortem = (REPO_ROOT / "commands" / "present-postmortem.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("--git-range", postmortem)
+        self.assertIn("--ci-log", postmortem)
+        self.assertIn("--keep-identifiers", postmortem)
+
+        codex_manifest = json.loads(
+            (REPO_ROOT / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8")
+        )
+        self.assertNotIn(
+            "commands",
+            codex_manifest,
+            "Codex manifest must not gain a commands key for the new recipes",
+        )
 
     def test_shared_recipe_captures_workspace_before_skill_root(self) -> None:
         documents = {
