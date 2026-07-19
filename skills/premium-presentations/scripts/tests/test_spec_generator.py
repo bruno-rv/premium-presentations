@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib.util
 import re
+import sys
 import unittest
 from pathlib import Path
 
@@ -10,6 +11,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent.parent
 GENERATOR_PATH = ROOT / "scripts" / "spec_generator.py"
 TEMPLATE_PATH = ROOT / "references" / "slide-spec-template.md"
+
+sys.path.insert(0, str(ROOT / "scripts"))
+from slide_spec import BudgetColumns, parse_budget_columns, parse_slide_map  # noqa: E402
 
 
 def load_generator():
@@ -127,6 +131,20 @@ class SpecGeneratorTests(unittest.TestCase):
         for i, row in rows.items():
             cells = [c.strip() for c in row.strip("|").split("|")]
             self.assertEqual(cells[1], f"slide-{i}")
+
+    def test_scaffolded_budget_columns_present_and_empty(self) -> None:
+        self.assertIn("Budget (mm:ss)", self.spec_14)
+        self.assertIn("Budget (ms)", self.spec_14)
+        rows = self.map_rows(self.spec_14)
+        for i, row in rows.items():
+            cells = [c.strip() for c in row.strip("|").split("|")]
+            self.assertEqual(len(cells), 12, f"Row {i} should have 12 cells incl. budget columns")
+            self.assertEqual(cells[10], "", f"Row {i} Budget (mm:ss) should be scaffolded empty")
+            self.assertEqual(cells[11], "", f"Row {i} Budget (ms) should be scaffolded empty")
+
+    def test_scaffolded_budget_columns_parse_as_budgetless(self) -> None:
+        spec = parse_slide_map(self.spec_14, require_ids=True)
+        self.assertEqual(parse_budget_columns(spec), BudgetColumns(state="budgetless", budgets=()))
 
     def test_regeneration_accepts_legacy_header_without_id(self) -> None:
         legacy = """## Slide Map

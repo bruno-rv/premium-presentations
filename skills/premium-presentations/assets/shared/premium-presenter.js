@@ -513,7 +513,7 @@
     document.body.appendChild(root);
 
     bindPopupEvents();
-    loadTeleprompterRate();
+    loadTeleprompterSettings();
     renderSuggestedBudgets();
     window.addEventListener('resize', recomputePreviewScales);
     sendReady();
@@ -983,27 +983,194 @@
     return (ms < 0 ? '-' : '+') + formatDuration(Math.abs(ms || 0));
   }
 
-  function buildBudgetMarkdown(medians) {
-    const titles = presenterState.titles;
-    const rows = medians.map((ms, i) =>
-      '| ' + (i + 1) + ' | ' + (titles[i] || ('Slide ' + (i + 1))) +
-      ' | ' + formatDuration(ms) + ' | ' + ms + ' |');
-    return '| # | Title | Budget (mm:ss) | Budget (ms) |\n' +
-           '|---|-------|----------------|-------------|\n' + rows.join('\n');
+  // ─── Slide Budget grammar (Tier 2, PLAN.md Workstream A) ───────────────────
+  // The single JS counterpart to slide_spec.py's Python serializer — both
+  // agree on every vector in scripts/tests/budget-vectors.json. Budget (ms)
+  // is authoritative: decimal integer, no sign/whitespace, min 1000, max
+  // 7200000, JS safe-integer. Budget (mm:ss) is the derived display and must
+  // equal floor(ms/1000) zero-padded.
+  const BUDGET_MS_MIN = 1000;
+  const BUDGET_MS_MAX = 7200000;
+  const BUDGET_MS_RE = /^[0-9]+$/;
+  const BUDGET_MMSS_RE = /^[0-9]{2,}:[0-5][0-9]$/;
+
+  function formatBudgetMmss(ms) {
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return String(minutes).padStart(2, '0') + ':' + String(seconds).padStart(2, '0');
   }
 
-  function renderSuggestedBudgets() {                // R1.4, ADR-5
+  function validateBudgetMs(value) {                 // throws on any grammar violation
+    if (typeof value !== 'string' || !BUDGET_MS_RE.test(value)) {
+      throw new Error('invalid_budget_ms: not a decimal integer with no sign/whitespace: ' + JSON.stringify(value));
+    }
+    const ms = Number(value);
+    if (!Number.isSafeInteger(ms)) {
+      throw new Error('invalid_budget_ms: exceeds JS safe-integer range: ' + value);
+    }
+    if (ms < BUDGET_MS_MIN || ms > BUDGET_MS_MAX) {
+      throw new Error('invalid_budget_ms: out of range [' + BUDGET_MS_MIN + ', ' + BUDGET_MS_MAX + ']: ' + ms);
+    }
+    return ms;
+  }
+
+  function validateBudgetMmss(value, ms) {           // throws on grammar or mm:ss/ms disagreement
+    if (typeof value !== 'string' || !BUDGET_MMSS_RE.test(value)) {
+      throw new Error('invalid_budget_mmss: does not match ^\\d{2,}:[0-5]\\d$: ' + JSON.stringify(value));
+    }
+    const expected = formatBudgetMmss(ms);
+    if (value !== expected) {
+      throw new Error('budget_mismatch: ' + value + ' != floor(ms/1000) ' + expected + ' for ' + ms + ' ms');
+    }
+  }
+
+  // readSlideBudgets() — the single runtime reader, on the normalized DOM
+  // (duplicate source attributes are invisible post-parse by construction;
+  // catching those is the Python validator's raw-markup-scan job). Accepts
+  // only a complete, valid, uniquely-identified data-budget vector; anything
+  // else — including the common all-absent budgetless case — atomically
+  // returns null so every consumer falls back to vs-average/manual-scroll.
+  // Exactly one console diagnostic fires, only for a genuine partial/invalid
+  // authoring error (never for a plain budgetless deck).
+  function readSlideBudgets() {
+    const nodes = Array.prototype.slice.call(document.querySelectorAll('#deck > .slide'));
+    if (!nodes.length) return null;
+    let present = 0;
+    let valid = true;
+    const vector = [];
+    const ids = [];
+    const seenIds = new Set();
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      const raw = node.getAttribute('data-budget');
+      const id = node.getAttribute('id') || '';
+      if (raw != null) present++;
+      if (!id || seenIds.has(id)) valid = false; else seenIds.add(id);
+      if (raw == null) { valid = false; continue; }
+      try {
+        vector.push(validateBudgetMs(raw));
+        ids.push(id);
+      } catch (_) {
+        valid = false;
+      }
+    }
+    if (present === 0) return null;                  // budgetless — expected, no diagnostic
+    if (!valid || present !== nodes.length) {
+      console.warn('PremiumPresenter: readSlideBudgets() found an incomplete or invalid data-budget vector; falling back to vs-average/manual-scroll.');
+      return null;
+    }
+    return { vector, ids };
+  }
+
+  // readSlideIdentities() — stable Slide Map IDs read off the same normalized
+  // DOM, independent of budget validity (a deck can have stable IDs without
+  // budgets). null means legacy: no ID, or a duplicate ID, somewhere.
+  function readSlideIdentities() {
+    const nodes = Array.prototype.slice.call(document.querySelectorAll('#deck > .slide'));
+    if (!nodes.length) return null;
+    const ids = nodes.map((node) => node.getAttribute('id') || '');
+    if (ids.some((id) => !id) || new Set(ids).size !== ids.length) return null;
+    return ids;
+  }
+
+  // ─── Centralized planned-time vector + comparison-label helper ────────────
+  // One computation, memoized (readSlideBudgets' DOM scan is cheap but this
+  // keeps the "one console diagnostic" contract exact). ALL consumers —
+  // timeline deltas, the status line, getLastRunDeltas(), and export labels —
+  // route through budgetPlan()/plannedTimeFor()/comparisonLabel() so "vs
+  // plan" (budgeted) vs "vs average" (fallback) can never disagree.
+  let budgetPlanCache;                                // undefined until first computed
+  function budgetPlan() {
+    if (budgetPlanCache === undefined) budgetPlanCache = readSlideBudgets();
+    return budgetPlanCache;
+  }
+
+  function plannedTimeFor(index) {
+    const plan = budgetPlan();
+    if (plan && Number.isInteger(index) && index >= 0 && index < plan.vector.length) {
+      return plan.vector[index];
+    }
+    return getPlannedSlideMs();                       // uniform-average fallback
+  }
+
+  function comparisonLabel() {
+    return budgetPlan() ? 'vs plan' : 'vs average';
+  }
+
+  // ─── Rehearsal suggested-budget export (ID-keyed, sample-gated) ───────────
+  function escapeMarkdownCell(value) {
+    return String(value == null ? '' : value)
+      .replace(/\\/g, '\\\\')
+      .replace(/\|/g, '\\|')
+      .replace(/\r\n|\r|\n/g, '<br>');
+  }
+
+  function slideEligibility(store) {                  // per-slide: >=1 in-range observation?
+    const runs = eligibleRuns(store);
+    const total = presenterState.total || 0;
+    const out = new Array(total);
+    for (let i = 0; i < total; i++) {
+      out[i] = runs.some((r) => {
+        const ms = r.slideMs[i] || 0;
+        return ms >= BUDGET_MS_MIN && ms <= BUDGET_MS_MAX;
+      });
+    }
+    return out;
+  }
+
+  function buildSuggestedBudgetExport() {
+    const store = readRehearsalStore();
+    const medians = perSlideMedians(store);
+    if (!medians) {
+      return { ok: false, reason: 'no_runs', message: 'No comparable runs for this deck length yet.' };
+    }
+    const identities = readSlideIdentities();
+    const titles = presenterState.titles;
+    const labelFor = (i) => identities ? identities[i] : ((i + 1) + ' — ' + (titles[i] || 'Slide ' + (i + 1)));
+    const eligible = slideEligibility(store);
+    const offending = [];
+    eligible.forEach((ok, i) => { if (!ok) offending.push(labelFor(i)); });
+    if (offending.length) {
+      return {
+        ok: false,
+        reason: 'insufficient_samples',
+        message: 'Refusing export — no in-range observation (1,000–7,200,000 ms) for: ' + offending.join(', '),
+      };
+    }
+    const identityMode = identities ? 'id' : 'ordinal';
+    const rows = medians.map((ms, i) => ({
+      id: identities ? identities[i] : null,
+      ordinal: i + 1,
+      title: titles[i] || ('Slide ' + (i + 1)),
+      mmss: formatBudgetMmss(ms),
+      ms,
+    }));
+    return { ok: true, identityMode, rows };
+  }
+
+  function buildBudgetMarkdown(result) {
+    if (!result.ok) return result.message;
+    if (result.identityMode === 'id') {
+      const rows = result.rows.map((r) =>
+        '| ' + escapeMarkdownCell(r.id) + ' | ' + r.mmss + ' | ' + r.ms + ' |');
+      return '| ID | Budget (mm:ss) | Budget (ms) |\n' +
+             '|----|----------------|-------------|\n' + rows.join('\n');
+    }
+    const rows = result.rows.map((r) =>
+      '| ' + r.ordinal + ' | ' + escapeMarkdownCell(r.title) + ' | ' + r.mmss + ' | ' + r.ms + ' |');
+    return '| # | Title | Budget (mm:ss) | Budget (ms) |\n' +
+           '|---|-------|----------------|-------------|\n' + rows.join('\n') +
+           '\n\n_Legacy deck without stable Slide Map IDs — initialize stable IDs before merging._';
+  }
+
+  function renderSuggestedBudgets() {                // R1.4, ADR-5 (superseded by PLAN.md Workstream A)
     const host = document.getElementById('pp-budget-block');
     if (!host) return;
     const pre = host.querySelector('pre');
-    const medians = perSlideMedians(readRehearsalStore());
-    if (!medians) {
-      host.dataset.empty = 'true';
-      if (pre) pre.textContent = 'No comparable runs for this deck length yet.';
-      return;
-    }
-    host.dataset.empty = 'false';
-    const md = buildBudgetMarkdown(medians);
+    const result = buildSuggestedBudgetExport();
+    host.dataset.empty = result.ok ? 'false' : 'true';
+    const md = buildBudgetMarkdown(result);
     if (pre) pre.textContent = md;
     const copyBtn = host.querySelector('.pp-budget__copy');
     if (copyBtn) {
@@ -1014,38 +1181,116 @@
   }
 
   function exportRehearsalJson() {                   // "Export JSON" (R1.5)
-    const store = readRehearsalStore();
-    const medians = perSlideMedians(store);
-    const payload = JSON.stringify(Object.assign({}, store, { budgets: medians || [] }), null, 2);
+    const result = buildSuggestedBudgetExport();
+    const payload = JSON.stringify(
+      result.ok
+        ? {
+            v: 2,
+            identity: result.identityMode,
+            rows: result.rows.map((r) => (
+              result.identityMode === 'id'
+                ? { id: r.id, mmss: r.mmss, ms: r.ms }
+                : { ordinal: r.ordinal, title: r.title, mmss: r.mmss, ms: r.ms }
+            )),
+          }
+        : { v: 2, error: result.reason, message: result.message },
+      null,
+      2
+    );
     try { navigator.clipboard.writeText(payload); } catch (_) {}
     return payload;
   }
 
-  // ─── Teleprompter mode (R2) ──────────────────────────────────────────────────
-  // Distance-reading mode toggle (`m`, CSS class only, no motion) + manual
-  // constant-speed scroll (`p` start/pause, `[`/`]` speed). Reduced-motion
-  // invariant (AT2): nothing calls startTeleprompterScroll except the `p`
-  // keypress — mode-on never starts motion, and prefersReducedMotion() exists
-  // to gate any future auto-advance idea; the default state is always paused.
+  // ─── Teleprompter mode (R2 + PLAN.md Workstream B) ────────────────────────
+  // Distance-reading mode toggle (`m`, CSS class only, no motion). `p` is the
+  // one and only play-intent gesture (start/pause/resume) — reduced-motion
+  // invariant (AT2): nothing else may ever start motion (mode toggle, slide
+  // change, load, or state restoration).
+  //
+  // Engage rule (step 7): a deck with a complete valid budgetPlan() gets
+  // TIMED scroll; otherwise the manual constant-px/s path is untouched.
+  //
+  // Timed progress model (step 8): progress = accumulatedProgress +
+  // (performance.now() - epoch) * multiplier / budgetMs, clamped [0,1];
+  // scrollTop = progress * (scrollHeight - clientHeight). setInterval below
+  // only drives repaint — position is always derived from performance.now(),
+  // never accumulated tick-by-tick. Target distance (scrollHeight -
+  // clientHeight) is read live on every tick, so it is automatically
+  // "remeasured" after notes render, mode toggle, glossary/font settle, and
+  // resize — no separate cache/invalidation is needed. No overflow -> no
+  // motion, no division.
+  //
+  // State machine (step 9): pause commits elapsed progress into
+  // accumulatedProgress and clears only the epoch (position holds); resume
+  // keeps accumulatedProgress and sets a fresh epoch (continues, no restart,
+  // no jump). A genuine slide change zeroes accumulatedProgress and — while
+  // play intent is on — sets a fresh epoch, so motion continues without a new
+  // keypress. A multiplier change ([`/`]`) commits progress under the OLD
+  // multiplier, then rebases the epoch, so the new rate never applies
+  // retroactively. Popup close/reopen clears everything (fresh module state).
 
   const TELEPROMPTER_KEY = 'premium-teleprompter';
   const RATE_MIN = 10, RATE_MAX = 240, RATE_STEP = 10, TP_TICK_MS = 50;
-  const teleprompterState = { mode: false, scrolling: false, rate: 40 /* px/s */, timer: 0 };
+  const MULT_MIN = 5, MULT_MAX = 20, MULT_STEP = 1;    // integer tenths; 10 = x1.0 (step 10)
+  const teleprompterState = {
+    mode: false,
+    scrolling: false,          // play intent
+    rate: 40,                  // manual px/s
+    multiplierTenths: 10,      // timed speed multiplier, clamped [5,20] = x0.5-x2.0
+    timer: 0,
+    accumulatedProgress: 0,    // timed mode only, clamped [0,1]
+    epoch: null,                // performance.now() at last (re)start; null while paused
+  };
+  let lastTeleprompterSlideIndex = null;
 
   function prefersReducedMotion() {
     try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; }
     catch (_) { return false; }
   }
 
-  function loadTeleprompterRate() {
+  function clampRate(r) { return Math.min(RATE_MAX, Math.max(RATE_MIN, r)); }
+  function clampMultiplierTenths(m) { return Math.min(MULT_MAX, Math.max(MULT_MIN, m)); }
+  function clampProgress(p) { return Math.min(1, Math.max(0, p)); }
+
+  function isTimedEngaged() {                          // step 7 engage rule
+    return !!budgetPlan();
+  }
+
+  function currentBudgetMs() {
+    const plan = budgetPlan();
+    const idx = presenterState.index;
+    if (!plan || !Number.isInteger(idx) || idx < 0 || idx >= plan.vector.length) return 0;
+    return plan.vector[idx];
+  }
+
+  function loadTeleprompterSettings() {
     try {
-      const r = parseFloat(localStorage.getItem(TELEPROMPTER_KEY));
-      if (Number.isFinite(r) && r > 0) teleprompterState.rate = Math.min(RATE_MAX, Math.max(RATE_MIN, r));
+      const raw = localStorage.getItem(TELEPROMPTER_KEY);
+      if (raw == null) return;
+      let parsed;
+      try { parsed = JSON.parse(raw); } catch (_) { parsed = null; }
+      if (parsed && typeof parsed === 'object' && parsed.v === 2) {
+        if (Number.isFinite(parsed.manualRate) && parsed.manualRate > 0) {
+          teleprompterState.rate = clampRate(parsed.manualRate);
+        }
+        if (Number.isInteger(parsed.multiplierTenths)) {
+          teleprompterState.multiplierTenths = clampMultiplierTenths(parsed.multiplierTenths);
+        }
+        return;
+      }
+      const legacy = parseFloat(raw);                  // legacy plain-numeric-string schema
+      if (Number.isFinite(legacy) && legacy > 0) teleprompterState.rate = clampRate(legacy);
     } catch (_) {}
   }
 
-  function saveTeleprompterRate() {
-    try { localStorage.setItem(TELEPROMPTER_KEY, String(teleprompterState.rate)); } catch (_) {}
+  function saveTeleprompterSettings() {                 // always writes the v2 schema — migrates
+    try {                                                //  the legacy string on first write
+      localStorage.setItem(TELEPROMPTER_KEY, JSON.stringify({
+        v: 2,
+        manualRate: teleprompterState.rate,
+        multiplierTenths: teleprompterState.multiplierTenths,
+      }));
+    } catch (_) {}
   }
 
   function toggleTeleprompterMode() {                // key 'm' — NO motion here (AT2)
@@ -1055,18 +1300,49 @@
     if (!teleprompterState.mode) stopTeleprompterScroll();
   }
 
-  function startTeleprompterScroll() {                // key 'p' — the EXPLICIT start
+  function commitTimedProgress() {                    // freeze elapsed-since-epoch into accumulatedProgress
+    if (teleprompterState.epoch == null) return;
+    const budgetMs = currentBudgetMs();
+    if (budgetMs > 0) {
+      const elapsed = performance.now() - teleprompterState.epoch;
+      const multiplier = teleprompterState.multiplierTenths / 10;
+      teleprompterState.accumulatedProgress = clampProgress(
+        teleprompterState.accumulatedProgress + elapsed * multiplier / budgetMs
+      );
+    }
+  }
+
+  function teleprompterTick(notes) {
+    if (isTimedEngaged()) {
+      const distance = notes.scrollHeight - notes.clientHeight;
+      if (distance <= 0 || teleprompterState.epoch == null) return; // no overflow -> no motion, no division
+      const budgetMs = currentBudgetMs();
+      if (!(budgetMs > 0)) return;
+      const elapsed = performance.now() - teleprompterState.epoch;
+      const multiplier = teleprompterState.multiplierTenths / 10;
+      const progress = clampProgress(
+        teleprompterState.accumulatedProgress + elapsed * multiplier / budgetMs
+      );
+      notes.scrollTop = progress * distance;
+    } else {
+      notes.scrollTop += teleprompterState.rate * (TP_TICK_MS / 1000);
+    }
+  }
+
+  function startTeleprompterScroll() {                // key 'p' — the EXPLICIT start (or resume)
     if (teleprompterState.scrolling) return;
     const notes = document.getElementById('pp-notes');
     if (!notes) return;
     teleprompterState.scrolling = true;                // explicit user gesture; allowed even
                                                          //  under reduced-motion (never AUTO)
-    const step = () => { notes.scrollTop += teleprompterState.rate * (TP_TICK_MS / 1000); };
-    teleprompterState.timer = setInterval(step, TP_TICK_MS);
+    if (isTimedEngaged()) teleprompterState.epoch = performance.now(); // resume keeps accumulatedProgress
+    teleprompterState.timer = setInterval(() => teleprompterTick(notes), TP_TICK_MS);
   }
 
   function stopTeleprompterScroll() {
+    if (teleprompterState.scrolling && isTimedEngaged()) commitTimedProgress();
     teleprompterState.scrolling = false;
+    teleprompterState.epoch = null;                    // clear only the epoch; accumulatedProgress holds
     if (teleprompterState.timer) { clearInterval(teleprompterState.timer); teleprompterState.timer = 0; }
   }
 
@@ -1075,14 +1351,30 @@
   }
 
   function nudgeTeleprompterRate(dir) {                // keys '[' / ']'
-    teleprompterState.rate = Math.min(RATE_MAX, Math.max(RATE_MIN,
-      teleprompterState.rate + dir * RATE_STEP));
-    saveTeleprompterRate();
+    if (isTimedEngaged()) {
+      commitTimedProgress();                           // freeze progress under the OLD multiplier
+      teleprompterState.multiplierTenths = clampMultiplierTenths(
+        teleprompterState.multiplierTenths + dir * MULT_STEP
+      );
+      if (teleprompterState.scrolling) teleprompterState.epoch = performance.now(); // rebase — no jump
+    } else {
+      teleprompterState.rate = clampRate(teleprompterState.rate + dir * RATE_STEP);
+    }
+    saveTeleprompterSettings();
+  }
+
+  function resetTeleprompterForSlideChange(index) {    // step 9 — zero on every genuine slide change
+    if (index === lastTeleprompterSlideIndex) return;
+    lastTeleprompterSlideIndex = index;
+    if (!isTimedEngaged()) return;
+    teleprompterState.accumulatedProgress = 0;
+    teleprompterState.epoch = teleprompterState.scrolling ? performance.now() : null;
   }
 
   function onPresenterSlideIndex(index, total) {
     presenterState.index = Number.isInteger(index) ? index : 0;
     presenterState.total = Number.isInteger(total) && total > 0 ? total : presenterState.total;
+    resetTeleprompterForSlideChange(presenterState.index);
     ensureRehearsalSize();
     if (rehearsalState.active && presenterState.index !== rehearsalState.currentIndex) {
       commitCurrentRehearsalSegment(Date.now());
@@ -1119,7 +1411,6 @@
 
     const total = presenterState.total || presenterState.titles.length || 0;
     ensureRehearsalSize(total);
-    const plannedMs = getPlannedSlideMs();
     const titles = presenterState.titles.length ? presenterState.titles : Array.from({ length: total }, (_, i) => 'Slide ' + (i + 1));
 
     const timelineItemState = (i) => {
@@ -1128,14 +1419,18 @@
       let rehearsal = 'idle';
       if (rehearsalState.active && i === rehearsalState.currentIndex) rehearsal = 'active';
       else if (rehearsalState.visited[i] || actualMs > 0) rehearsal = 'visited';
+      // Per-slide planned time — the Slide Budget when the deck is budgeted,
+      // else the uniform average — routed through the one centralized helper
+      // (PLAN.md Workstream A step 4) so every consumer agrees.
+      const plannedMs = plannedTimeFor(i);
       const meta = actualMs > 0
         ? 'actual ' + formatDuration(actualMs)
         : (plannedMs > 0 ? 'plan ' + formatDuration(plannedMs) : 'not timed');
-      // Delta vs uniform average (R1.3/R1.6). Rendered only inside this <li>'s
+      // Delta vs plan/average (R1.3/R1.6). Rendered only inside this <li>'s
       // own delta span — #pp-timer-pace (the timer's live pace pill) is never
       // read or written here (ADR-6).
       const deltaMs = (plannedMs > 0 && actualMs > 0) ? Math.round(actualMs - plannedMs) : 0;
-      const delta = deltaMs !== 0 ? formatSignedDuration(deltaMs) + ' vs avg' : '';
+      const delta = deltaMs !== 0 ? formatSignedDuration(deltaMs) + ' ' + comparisonLabel() : '';
       return { state, rehearsal, meta, delta };
     };
 
@@ -1179,7 +1474,14 @@
       } else if (hasRehearsalData()) {
         status.textContent = 'Paused · total ' + formatDuration(totalRehearsalElapsedMs());
       } else {
-        status.textContent = plannedMs > 0 ? 'Rehearsal off · plan ' + formatDuration(plannedMs) + '/slide' : 'Rehearsal off';
+        // Route through the centralized helper: a real per-slide "plan" when
+        // budgeted, an honestly-labeled uniform "average" otherwise — never
+        // claim a uniform figure is a "plan" (PLAN.md Workstream A step 4).
+        const currentPlanMs = plannedTimeFor(presenterState.index);
+        const label = budgetPlan() ? 'plan' : 'average';
+        status.textContent = currentPlanMs > 0
+          ? 'Rehearsal off · ' + label + ' ' + formatDuration(currentPlanMs) + '/slide'
+          : 'Rehearsal off';
       }
     }
     if (toggle) {
@@ -1597,15 +1899,33 @@
     }),
     getRehearsalStore: () => readRehearsalStore(),
     getSuggestedBudgets: () => perSlideMedians(readRehearsalStore()),
-    getLastRunDeltas: () => {
+    readSlideBudgets: () => readSlideBudgets(),
+    readSlideIdentities: () => readSlideIdentities(),
+    validateBudgetMs: (value) => validateBudgetMs(value),
+    formatBudgetMmss: (ms) => formatBudgetMmss(ms),
+    validateBudgetMmss: (value, ms) => validateBudgetMmss(value, ms),
+    getComparisonLabel: () => comparisonLabel(),
+    getPlannedTimeFor: (index) => plannedTimeFor(index),
+    getSuggestedBudgetExport: () => buildSuggestedBudgetExport(),
+    exportRehearsalJson: () => exportRehearsalJson(),
+    getLastRunDeltas: () => {                        // routed through the centralized planned-time helper
       const total = presenterState.total || 0;
-      const plannedMs = getPlannedSlideMs();
       const runs = eligibleRuns(readRehearsalStore());
       const last = runs[runs.length - 1];
-      if (!last || !total || plannedMs <= 0) return null;
+      if (!last || !total) return null;
+      const plan = budgetPlan();
+      if (plan) {
+        if (plan.vector.length !== total) return null;   // atomic: vector must match this deck
+        return Array.from({ length: total }, (_, i) => (last.slideMs[i] || 0) - plan.vector[i]);
+      }
+      const plannedMs = getPlannedSlideMs();
+      if (plannedMs <= 0) return null;
       return Array.from({ length: total }, (_, i) => (last.slideMs[i] || 0) - plannedMs);
     },
-    getTeleprompterState: () => Object.assign({}, teleprompterState, { reducedMotion: prefersReducedMotion() }),
+    getTeleprompterState: () => Object.assign({}, teleprompterState, {
+      reducedMotion: prefersReducedMotion(),
+      timedEngaged: isTimedEngaged(),
+    }),
   };
   window.PremiumPresenter = Object.assign(window.PremiumPresenter || {}, {
     postToPeer,

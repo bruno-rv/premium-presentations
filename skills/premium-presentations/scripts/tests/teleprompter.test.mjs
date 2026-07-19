@@ -1,6 +1,10 @@
 // v1.3 R2 — teleprompter mode: distance-reading toggle (`m`), explicit
 // start/pause scroll (`p`), speed keys (`[`/`]`), reduced-motion safety
 // (DESIGN_V1_3_PRESENTER_MOAT.md ADR-1). AT2 (DEFINE_V1_3_PRESENTER_MOAT.md).
+//
+// PLAN.md Workstream B (v2.1.0) extends this file's manual-mode coverage
+// with timed-scroll tests in teleprompter-timed.test.mjs — kept as a
+// separate file for topical cohesion (manual vs budgeted-deck behavior).
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -131,8 +135,9 @@ test('speed keys ([ / ]) adjust and persist the scroll rate via e.code', async (
   rate = popup.window.PremiumPresenterView.getTeleprompterState().rate;
   assert.ok(rate < initialRate, 'BracketLeft slows down below the initial rate');
 
-  const persisted = popup.window.localStorage.getItem('premium-teleprompter');
-  assert.equal(Number(persisted), rate, 'rate is persisted to localStorage on every nudge');
+  const persisted = JSON.parse(popup.window.localStorage.getItem('premium-teleprompter'));
+  assert.deepEqual(persisted, { v: 2, manualRate: rate, multiplierTenths: 10 },
+    'rate is persisted to localStorage (v2 schema) on every nudge');
 });
 
 test('keymap-collision — m / p / [ / ] are new bindings, absent from the pre-v1.3 handler', (t) => {

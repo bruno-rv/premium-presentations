@@ -16,8 +16,8 @@ import sys
 from pathlib import Path
 
 TABLE_HEADER = (
-    "| # | ID | Act | Type | Title | Key Content | Visual Pattern | Why Panel | Voiceover Beat | Speaker Notes |\n"
-    "|---|----|-----|------|-------|-------------|----------------|-----------|----------------|---------------|"
+    "| # | ID | Act | Type | Title | Key Content | Visual Pattern | Why Panel | Voiceover Beat | Speaker Notes | Budget (mm:ss) | Budget (ms) |\n"
+    "|---|----|-----|------|-------|-------------|----------------|-----------|----------------|---------------|----------------|-------------|"
 )
 
 # Concrete component IDs rotated through content slides so every slot ships
@@ -136,7 +136,10 @@ def slide_row(i: int, count: int, content_ordinal: int = 0) -> str:
         pattern = f"{suggestion} {PATTERN_NOTE}"
         notes = PATTERN_SPEAKER_NOTES[idx]
     act = slide_act(i, count)
-    return f"| {i} | slide-{i} | {act} | {typ} | {title} | TBD | {pattern} | TBD | {beat} | {notes} |"
+    # Trailing Budget (mm:ss)/Budget (ms) cells are scaffolded empty —
+    # budgetless by default (three-state rule, see slide-spec-template.md).
+    # No Python script emits data-budget; filling these in is an authoring step.
+    return f"| {i} | slide-{i} | {act} | {typ} | {title} | TBD | {pattern} | TBD | {beat} | {notes} |  |  |"
 
 
 def slide_rows(count: int) -> list[str]:

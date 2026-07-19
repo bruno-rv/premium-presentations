@@ -204,6 +204,21 @@ Load only the reference needed for the current task.
   runtime on `.slide aside.notes`). The presenter popup reads them via
   `aside.notes` selectors in `slide-engine.js`. See `references/examples.md`
   for the exact markup pattern.
+- **Slide Budget (`data-budget`, conditional):** check the Slide Map's
+  `Budget (mm:ss)` / `Budget (ms)` columns (see
+  `references/slide-spec-template.md`). If **budgeted** (every row
+  populated), set `data-budget="<ms>"` on every `<section class="slide …">`
+  — the `Budget (ms)` value **verbatim**, no reformatting. If **budgetless**
+  (both columns absent or every cell empty), emit **no** `data-budget`
+  attribute anywhere. Never emit it on only some slides — `deck_doctor.py`
+  hard-gates attribute completeness, grammar/bounds, and (whenever any
+  `data-budget` is present) nonempty unique section IDs. No Python script
+  emits `data-budget`; `spec_generator.py` only scaffolds the two empty
+  columns. `partial_regen.py apply` fragments for a budgeted deck must carry
+  the row's current `data-budget` verbatim (parity-enforced by
+  `slide_html.py:validate_fragment()`); pure budget-value edits sync via the
+  CLI's own `budgetOnly` transaction and need no fragment at all — see
+  Partial Regeneration below.
 
 ## Validate
 
@@ -250,13 +265,22 @@ python3 "$skill_root/scripts/partial_regen.py" rollback --deck DECK --backup BAC
 ```
 
 Initialization is explicit: run the preview first, review its assigned stable
-IDs, then use `--apply`; it never runs automatically. Claude Code and Codex
-read the same JSON plan and produce the same contract: one complete matching
-`<section>` fragment for every changed ID, with the expected title and final
-speaker notes. The CLI does not call either provider.
+IDs, then use `--apply`; it never runs automatically. `plan --json` reports
+`schemaVersion` (currently `2`), the backward-compatible `changed` union, and
+two partitions: `contentChanged` (rows needing a replacement fragment) and
+`budgetOnly` (rows where every changed field is a Slide Budget column).
+Claude Code and Codex read the same JSON plan and produce one complete
+matching `<section>` fragment for every `contentChanged` ID, with the
+expected title, final speaker notes, and — on a budgeted deck — the row's
+current `data-budget` verbatim. The CLI does not call either provider.
 
-Supply every changed ID in a single `apply`. A successful apply preserves every
-untargeted slide byte-for-byte and preserves all embedded theme-homage images.
+Supply a fragment for every `contentChanged` ID in a single `apply`; `apply`
+accepts **zero `--fragment` arguments** when every planned change is
+`budgetOnly` — those IDs sync their `data-budget` attribute directly (body
+untouched) in the same transaction. A successful apply preserves every
+untargeted slide byte-for-byte and preserves all embedded theme-homage
+images, and updates every affected row's embedded state (semantic row, row
+hash, section hash) so a follow-up `plan` reports zero drift.
 Run `deck_doctor.py` on the resulting deck/spec pair before publication.
 
 Use full regeneration instead for insertions, deletions, reordering, global
@@ -330,6 +354,33 @@ python3 "$skill_root/scripts/export_handout.py" \
   replacement, or final registry failure restores the prior state and nothing
   is appended. `--dry-run` previews CSS without images. See
   `references/runtime.md` for the derivation and gated pairs.
+- **Architecture and postmortem recipes:** `commands/present-architecture.md`
+  and `commands/present-postmortem.md` define the Claude Code
+  `/present-architecture` and `/present-postmortem` commands, both modeled on
+  `/present-pr` — same `new-deck.sh` → spec → generate → `deck_doctor.py`
+  pipeline, no diff-to-slide-style bypass. `/present-architecture` scans the
+  **live codebase** through `scripts/recipe_source_guard.py` (the same
+  deterministic, offline-testable helper both recipes share for source
+  collection, caps, exclude lists, and credential/PII redaction) and fills
+  `references/present-architecture-brief.md` with a fixed arc — context →
+  module map → one core data flow → key decisions → risks/evolution —
+  labeling inferences and rendering unevidenced sections "Not documented"
+  rather than inventing content. `/present-postmortem` instead requires a
+  **user-supplied incident document** as its first argument (a missing
+  argument is a loud failure) and takes an argument contract of
+  `--git-range <ref>..<ref>`, `--ci-log <file>`, and `--keep-identifiers`; git
+  range endpoints are resolved to verified commit SHAs via
+  `recipe_source_guard.py` before any git command touches them, and both
+  corroboration sources stay opt-in — document-only by default. Its fixed arc
+  is timeline → impact → root cause → remediation → lessons, blameless tone,
+  and it **minimizes PII by default** (names, emails, phone numbers, IPs, and
+  account/tenant identifiers pseudonymized into roles/labels unless
+  `--keep-identifiers` is explicitly passed), marking the deck
+  internal-audience regardless. Codex-side users follow both recipes through
+  this skill guidance rather than a Codex command, exactly like `/present-pr`
+  today — `.codex-plugin/plugin.json` intentionally carries no `commands` key
+  (`test_skill_layout.py` asserts its absence), so Codex routing for all three
+  recipes is documentation-only, never a Codex-native slash command.
 - **Contrast gate:** `deck_doctor.py` composes `scripts/validate_contrast.py`
   as a section after offline portability — a repo-wide WCAG check over every
   theme block in `premium-themes.css`. Run standalone with

@@ -74,13 +74,13 @@ Divider slides mark act boundaries. Acts must reflect the topic's content phases
 
 ## Slide Map
 
-| # | ID | Act | Type | Title | Key Content | Visual Pattern | Why Panel | Voiceover Beat | Speaker Notes |
-|---|----|-----|------|-------|-------------|----------------|-----------|----------------|---------------|
-| 1 | slide-1 | 0 | Title | … | … | slide--title | N/A | "{First words the presenter says}" | … |
-| 2 | slide-2 | 0 | Hook Quote | … | … | slide--quote | N/A | "{Delivery cue for the quote}" | … |
-| 3 | slide-3 | 1 | Content | … | … | FLOW+ live-flow \| PIPE pipeline-vertical \| P9 compare-paradigm \| P14 journey \| TL timeline \| STG stage-card \| GL glass-code \| TERM terminal \| BAR bar-chart \| FLOW setup-flow \| STAT stats-row \| CHK checklist \| kpi-row \| content-grid+aside-card \| data-table | "{Why this matters}" | "{What the presenter says — not a repeat of slide text}" | … |
-| … | … | … | … | … | … | … | … | … | … |
-| N | slide-N | N | Closing Quote | … | … | slide--quote | N/A | "{Anchor phrase delivery}" | … |
+| # | ID | Act | Type | Title | Key Content | Visual Pattern | Why Panel | Voiceover Beat | Speaker Notes | Budget (mm:ss) | Budget (ms) |
+|---|----|-----|------|-------|-------------|----------------|-----------|----------------|---------------|----------------|-------------|
+| 1 | slide-1 | 0 | Title | … | … | slide--title | N/A | "{First words the presenter says}" | … | | |
+| 2 | slide-2 | 0 | Hook Quote | … | … | slide--quote | N/A | "{Delivery cue for the quote}" | … | | |
+| 3 | slide-3 | 1 | Content | … | … | FLOW+ live-flow \| PIPE pipeline-vertical \| P9 compare-paradigm \| P14 journey \| TL timeline \| STG stage-card \| GL glass-code \| TERM terminal \| BAR bar-chart \| FLOW setup-flow \| STAT stats-row \| CHK checklist \| kpi-row \| content-grid+aside-card \| data-table | "{Why this matters}" | "{What the presenter says — not a repeat of slide text}" | … | | |
+| … | … | … | … | … | … | … | … | … | … | | |
+| N | slide-N | N | Closing Quote | … | … | slide--quote | N/A | "{Anchor phrase delivery}" | … | | |
 
 **Visual Pattern rule:** every Content row names one concrete pattern from the
 routing table in [components.md](components.md) — never leave it generic and
@@ -93,6 +93,34 @@ sentences of what the presenter says aloud (delivery cues, transitions, the
 pacing, emphasis, or context the audience never reads. The generation skill
 renders each entry as `<aside class="notes">…</aside>` as the last child
 inside the `.slide` section.
+
+**Slide Budget columns (optional, Tier 2):** `Budget (mm:ss)` / `Budget (ms)`
+declare the planned dwell time for each slide (the *Slide Budget*, per
+CONTEXT.md — not to be confused with the *Color semantics budget* under
+Design Directives below, which is a visual-design constraint with nothing to
+do with time; never shorten either term to plain "budget"). The atomic
+header pair has exactly three valid column states, enforced by
+`validate_deck.py`/`deck_doctor.py`:
+
+1. **Budgetless** — both columns absent, or both present with every cell
+   empty. No gate, no runtime budgets; the presenter popup falls back to its
+   "vs average" comparison.
+2. **Budgeted** — both columns present and every row populated with a valid
+   value. `Budget (ms)` is authoritative: a decimal integer with no sign or
+   whitespace, minimum `1000` (sub-second budgets rejected), maximum
+   `7200000` (2h/slide), within JS safe-integer range. `Budget (mm:ss)` is
+   the derived display and must equal `floor(ms/1000)` rendered zero-padded
+   (`^\d{2,}:[0-5]\d$`) — e.g. `50000` ms ↔ `00:50`.
+3. **Anything else** (one column present without the other, only some rows
+   populated, or any invalid/mismatched value) is a **validation failure** —
+   the doctor exits non-zero.
+
+`spec_generator.py` scaffolds both headers with empty cells (budgetless by
+default); filling them in is an authoring step. When a spec is budgeted, the
+generation skill emits `data-budget="<ms>"` — the verbatim `Budget (ms)`
+value — on the matching `<section class="slide" id="…">` for every slide
+(see SKILL.md's HTML-emit contract). No Python script emits `data-budget`;
+`spec_generator.py` only scaffolds the two empty columns.
 
 ---
 

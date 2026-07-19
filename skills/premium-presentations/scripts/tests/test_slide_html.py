@@ -8,6 +8,7 @@ from slide_html import (
     assign_slide_ids,
     parse_json_script_span,
     parse_slide_spans,
+    set_slide_budgets,
     splice_sections,
     validate_fragment,
 )
@@ -184,6 +185,51 @@ class SlideHtmlTests(unittest.TestCase):
         for label, fragment in invalid.items():
             with self.subTest(label=label):
                 self.assertTrue(validate_fragment(fragment, expected("proof", "Proof &amp; Safety")))
+
+    def test_fragment_contract_enforces_data_budget_parity(self) -> None:
+        valid = '<section class="wide slide" id="proof" data-nav-title="Proof &amp; Safety"><h2>Verified</h2><aside class="speaker notes">Explain proof.</aside></section>'
+        # Insert data-budget on the root section tag (before closing '>').
+        budgeted = valid.replace(
+            'data-nav-title="Proof &amp; Safety">',
+            'data-nav-title="Proof &amp; Safety" data-budget="70000">',
+        )
+        expected_row = expected("proof", "Proof &amp; Safety")
+
+        self.assertEqual(validate_fragment(budgeted, expected_row, 70000), [])
+        self.assertEqual(
+            validate_fragment(budgeted, expected_row, None),
+            ["fragment must not carry data-budget on a budgetless deck"],
+        )
+        self.assertEqual(
+            validate_fragment(valid, expected_row, 70000),
+            ["fragment must carry data-budget=70000"],
+        )
+        self.assertEqual(
+            validate_fragment(budgeted, expected_row, 50000),
+            ["fragment data-budget must equal 50000, got '70000'"],
+        )
+
+    def test_set_slide_budgets_only_touches_start_tags(self) -> None:
+        updated = set_slide_budgets(DECK, {"intro": 50000, "proof": 70000})
+        spans = parse_slide_spans(updated)
+        self.assertIn('data-budget="50000"', spans[0].raw)
+        self.assertIn('data-budget="70000"', spans[1].raw)
+        # Bodies are byte-identical apart from the injected attribute.
+        self.assertIn("<h1>Opening</h1>", spans[0].raw)
+        self.assertIn("Explain proof.", spans[1].raw)
+
+        # Replacing an existing data-budget updates it in place (no duplicate attr).
+        again = set_slide_budgets(updated, {"intro": 65000})
+        again_spans = parse_slide_spans(again)
+        self.assertIn('data-budget="65000"', again_spans[0].raw)
+        self.assertNotIn('data-budget="50000"', again_spans[0].raw)
+        self.assertEqual(again_spans[1].raw, spans[1].raw)  # untouched slide unchanged
+
+    def test_set_slide_budgets_rejects_unknown_ids_and_bad_types(self) -> None:
+        with self.assertRaisesRegex(SlideHtmlError, "not present in deck"):
+            set_slide_budgets(DECK, {"missing": 50000})
+        with self.assertRaisesRegex(SlideHtmlError, "must be an int"):
+            set_slide_budgets(DECK, {"intro": "50000"})
 
     def test_fragment_errors_have_stable_contract_order(self) -> None:
         fragment = '<div class="slide" id="wrong" data-nav-title="Wrong"><script></script></div>'

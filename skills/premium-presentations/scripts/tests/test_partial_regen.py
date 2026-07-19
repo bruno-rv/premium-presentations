@@ -46,6 +46,38 @@ class PairFixture(unittest.TestCase):
         spec.write_text(spec_text, encoding="utf-8")
         return deck, spec
 
+    def write_uninitialized_budgeted_pair(self) -> tuple[Path, Path]:
+        """A stable-ID pair whose Slide Map is budgeted and whose HTML
+        already carries the matching data-budget attributes — mirrors the
+        agent HTML-emit contract (no Python script emits data-budget)."""
+        deck = self.root / "lesson-slides.html"
+        spec = self.root / "lesson-slide-spec.md"
+        deck.write_text(
+            '<!doctype html><html><body><div id="deck">\n'
+            '<section class="slide" id="slide-1" data-nav-title="Opening" data-budget="50000">'
+            '<h1>Original body</h1><aside class="notes">Open the lesson.</aside></section>\n'
+            '<section class="slide" id="slide-2" data-nav-title="Proof" data-budget="70000">'
+            '<h2>Evidence</h2><aside class="notes">Explain the proof.</aside></section>\n'
+            "</div></body></html>",
+            encoding="utf-8",
+        )
+        spec.write_text(
+            "## Slide Map\n\n"
+            "| # | ID | Act | Type | Title | Key Content | Budget (mm:ss) | Budget (ms) |\n"
+            "|---|----|-----|------|-------|-------------|----------------|-------------|\n"
+            "| 1 | slide-1 | 0 | Title | Opening | Establish context | 00:50 | 50000 |\n"
+            "| 2 | slide-2 | 1 | Content | Proof | Compare results | 01:10 | 70000 |\n",
+            encoding="utf-8",
+        )
+        return deck, spec
+
+    def write_initialized_budgeted_pair(self) -> tuple[Path, Path]:
+        deck, spec = self.write_uninitialized_budgeted_pair()
+        deck_text, spec_text, _ = partial_regen._build_init_candidates(deck, spec)
+        deck.write_text(deck_text, encoding="utf-8")
+        spec.write_text(spec_text, encoding="utf-8")
+        return deck, spec
+
     def run_main(self, arguments: list[str]) -> tuple[int, str]:
         output = io.StringIO()
         with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
@@ -174,6 +206,32 @@ class PlanningTests(PairFixture):
         two = partial_regen.plan_pair(deck, spec)
         self.assertEqual(tuple(two.changed), ("slide-1", "slide-2"))
 
+    def test_plan_partitions_content_and_budget_only_changes(self) -> None:
+        deck, spec = self.write_initialized_budgeted_pair()
+
+        # budget-only: slide-1's Budget columns change, nothing else.
+        spec.write_text(
+            spec.read_text(encoding="utf-8")
+            .replace("| 00:50 | 50000 |", "| 00:45 | 45000 |"),
+            encoding="utf-8",
+        )
+        result = partial_regen.plan_pair(deck, spec)
+        self.assertEqual(result.status, "changes_planned")
+        self.assertEqual(dict(result.changed), {"slide-1": ("Budget (mm:ss)", "Budget (ms)")})
+        self.assertEqual(dict(result.content_changed), {})
+        self.assertEqual(dict(result.budget_only), {"slide-1": ("Budget (mm:ss)", "Budget (ms)")})
+
+        # mixed: slide-1 content changes too -> content_changed, not budget_only.
+        spec.write_text(
+            spec.read_text(encoding="utf-8").replace("Establish context", "Establish new context"),
+            encoding="utf-8",
+        )
+        mixed = partial_regen.plan_pair(deck, spec)
+        self.assertEqual(dict(mixed.budget_only), {})
+        self.assertIn("slide-1", mixed.content_changed)
+        self.assertIn("Key Content", mixed.content_changed["slide-1"])
+        self.assertIn("Budget (ms)", mixed.content_changed["slide-1"])
+
     def test_plan_refuses_structural_change_and_slide_drift(self) -> None:
         deck, spec = self.write_initialized_pair()
         reordered = (
@@ -297,9 +355,13 @@ class PlanningTests(PairFixture):
         payload = json.loads(output)
         self.assertEqual(rc, 0)
         self.assertEqual(
-            tuple(payload), ("status", "reasonCode", "changed", "messages")
+            tuple(payload),
+            ("status", "reasonCode", "schemaVersion", "changed", "contentChanged", "budgetOnly", "messages"),
         )
+        self.assertEqual(payload["schemaVersion"], 2)
         self.assertEqual(payload["changed"], {"slide-1": ["Title"]})
+        self.assertEqual(payload["contentChanged"], {"slide-1": ["Title"]})
+        self.assertEqual(payload["budgetOnly"], {})
 
         spec.write_text(
             spec.read_text(encoding="utf-8")
@@ -332,10 +394,13 @@ class PlanningTests(PairFixture):
         self.assertEqual(output.count("\n"), 1)
         payload = json.loads(output)
         self.assertEqual(
-            tuple(payload), ("status", "reasonCode", "changed", "messages")
+            tuple(payload),
+            ("status", "reasonCode", "schemaVersion", "changed", "contentChanged", "budgetOnly", "messages"),
         )
         self.assertEqual(payload["status"], "error")
         self.assertEqual(payload["changed"], {})
+        self.assertEqual(payload["contentChanged"], {})
+        self.assertEqual(payload["budgetOnly"], {})
 
     def test_non_object_transaction_json_is_controlled_invalid_input(self) -> None:
         deck, spec = self.write_uninitialized_pair()
@@ -415,6 +480,68 @@ class MutationTests(PairFixture):
         self.assertEqual(after["slide-1"], before["slide-1"])
         self.assertIn("Verified body", after["slide-2"])
         self.assertEqual(spec.read_bytes(), spec_before)
+
+    def test_apply_budget_only_accepts_zero_fragments_and_syncs_attribute(self) -> None:
+        deck, spec = self.write_initialized_budgeted_pair()
+        spec.write_text(
+            spec.read_text(encoding="utf-8").replace("| 00:50 | 50000 |", "| 00:45 | 45000 |"),
+            encoding="utf-8",
+        )
+        rc, out = self.run_main(["apply", "--deck", str(deck), "--spec", str(spec)])
+        self.assertEqual(rc, 0, out)
+
+        spans = {span.slide_id: span.raw for span in parse_slide_spans(deck.read_text())}
+        self.assertIn('data-budget="45000"', spans["slide-1"])
+        self.assertIn("<h1>Original body</h1>", spans["slide-1"], "body must be untouched")
+        self.assertIn('data-budget="70000"', spans["slide-2"], "untargeted slide unchanged")
+
+        # Follow-up plan on the new baseline reports zero drift.
+        followup = partial_regen.plan_pair(deck, spec)
+        self.assertEqual(followup.status, "no_changes")
+
+    def test_apply_mixed_transaction_applies_fragment_and_syncs_budget(self) -> None:
+        # slide-1: budget-only change; slide-2: content-only change (its
+        # fragment must still carry the unchanged data-budget verbatim, per
+        # the parity contract). One apply commits both in one transaction.
+        deck, spec = self.write_initialized_budgeted_pair()
+        spec.write_text(
+            spec.read_text(encoding="utf-8")
+            .replace("| 00:50 | 50000 |", "| 00:45 | 45000 |")
+            .replace("Compare results", "Compare verified results"),
+            encoding="utf-8",
+        )
+        fragment = self.root / "slide-2.html"
+        fragment.write_text(
+            '<section class="slide" id="slide-2" data-nav-title="Proof" data-budget="70000">'
+            '<h2>Verified evidence</h2><aside class="notes">Explain the proof.</aside></section>',
+            encoding="utf-8",
+        )
+        rc, out = self.run_main(
+            ["apply", "--deck", str(deck), "--spec", str(spec), "--fragment", f"slide-2={fragment}"]
+        )
+        self.assertEqual(rc, 0, out)
+
+        spans = {span.slide_id: span.raw for span in parse_slide_spans(deck.read_text())}
+        self.assertIn('data-budget="45000"', spans["slide-1"], "budget-only sync applied")
+        self.assertIn("<h1>Original body</h1>", spans["slide-1"], "budget-only slide body untouched")
+        self.assertIn("Verified evidence", spans["slide-2"], "content fragment applied")
+        self.assertIn('data-budget="70000"', spans["slide-2"], "unchanged budget carried verbatim")
+
+        followup = partial_regen.plan_pair(deck, spec)
+        self.assertEqual(followup.status, "no_changes")
+
+    def test_apply_rejects_fragment_supplied_for_a_budget_only_id(self) -> None:
+        deck, spec = self.write_initialized_budgeted_pair()
+        spec.write_text(
+            spec.read_text(encoding="utf-8").replace("| 00:50 | 50000 |", "| 00:45 | 45000 |"),
+            encoding="utf-8",
+        )
+        fragment = self.write_fragment("slide-1", "Opening", "Unexpected")
+        rc, out = self.run_main(
+            ["apply", "--deck", str(deck), "--spec", str(spec), "--fragment", f"slide-1={fragment}"]
+        )
+        self.assertEqual(rc, 1)
+        self.assertIn("contentChanged", out)
 
     def test_public_rollback_of_apply_restores_deck_and_keeps_edited_spec(self) -> None:
         deck, spec, fragment = self.write_ready_apply_pair()

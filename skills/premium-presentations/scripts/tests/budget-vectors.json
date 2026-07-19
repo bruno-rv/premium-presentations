@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "description": "Shared Slide Budget grammar vectors consumed identically by slide_spec.py (pytest) and premium-presenter.js (node --test). ms bounds: min 1000, max 7200000, safe-integer, decimal integer with no sign/whitespace. mm:ss: ^\\d{2,}:[0-5]\\d$ and must equal floor(ms/1000) zero-padded.",
+  "msValid": [
+    { "value": "1000", "ms": 1000 },
+    { "value": "7200000", "ms": 7200000 },
+    { "value": "50000", "ms": 50000 },
+    { "value": "1500", "ms": 1500 },
+    { "value": "0001000", "ms": 1000 },
+    { "value": "65000", "ms": 65000 }
+  ],
+  "msInvalid": [
+    { "value": "999", "reason": "below_min" },
+    { "value": "0", "reason": "below_min" },
+    { "value": "7200001", "reason": "above_max" },
+    { "value": "99999999999", "reason": "above_max" },
+    { "value": "+1000", "reason": "sign" },
+    { "value": "-1000", "reason": "sign" },
+    { "value": " 1000", "reason": "whitespace" },
+    { "value": "1000 ", "reason": "whitespace" },
+    { "value": "1 000", "reason": "whitespace" },
+    { "value": "1000.5", "reason": "not_integer" },
+    { "value": "1000.0", "reason": "not_integer" },
+    { "value": "abc", "reason": "not_integer" },
+    { "value": "", "reason": "empty" },
+    { "value": "1e3", "reason": "not_integer" },
+    { "value": "0x3e8", "reason": "not_integer" },
+    { "value": "9007199254740993", "reason": "unsafe_integer" }
+  ],
+  "mmssFromMs": [
+    { "ms": 1000, "mmss": "00:01" },
+    { "ms": 50000, "mmss": "00:50" },
+    { "ms": 65000, "mmss": "01:05" },
+    { "ms": 7200000, "mmss": "120:00" },
+    { "ms": 1500, "mmss": "00:01" },
+    { "ms": 59999, "mmss": "00:59" }
+  ],
+  "mmssValid": [
+    { "mmss": "00:01", "ms": 1000 },
+    { "mmss": "00:50", "ms": 50000 },
+    { "mmss": "01:05", "ms": 65000 },
+    { "mmss": "120:00", "ms": 7200000 },
+    { "mmss": "999:59", "ms": 59999000 }
+  ],
+  "mmssInvalid": [
+    { "mmss": "0:50", "reason": "minutes_too_short" },
+    { "mmss": "00:60", "reason": "seconds_out_of_range" },
+    { "mmss": "00:5", "reason": "seconds_too_short" },
+    { "mmss": "00-50", "reason": "bad_separator" },
+    { "mmss": "abc", "reason": "not_pattern" },
+    { "mmss": "", "reason": "empty" },
+    { "mmss": " 00:50", "reason": "whitespace" },
+    { "mmss": "00:50 ", "reason": "whitespace" },
+    { "mmss": "-1:50", "reason": "sign" }
+  ],
+  "mmssMsMismatch": [
+    { "mmss": "00:50", "ms": 51000 },
+    { "mmss": "01:00", "ms": 59000 },
+    { "mmss": "00:01", "ms": 2001 }
+  ]
+}

@@ -15,8 +15,15 @@ from validate_diagrams import (
     validate_inline_scripts,
 )
 from validate_layout import validate_deck_layout
-from slide_html import SlideHtmlError, parse_slide_spans
-from slide_spec import SlideSpecError, parse_slide_map
+from slide_html import SlideHtmlError, SlideSpan, parse_slide_spans, parse_slide_start_tags
+from slide_spec import (
+    BudgetColumns,
+    SlideSpec,
+    SlideSpecError,
+    parse_budget_columns,
+    parse_slide_map,
+    validate_budget_ms,
+)
 
 # Class tokens that count as a visual anchor on a content slide. Mirrors the
 # component vocabulary in references/components.md.
@@ -160,6 +167,126 @@ def validate_compare_split_density(text: str) -> list[str]:
     return messages
 
 
+DATA_BUDGET_RAW_RE = re.compile(r'(?i)\bdata-budget\s*=\s*"([^"]*)"')
+
+
+def _norm_header(value: str) -> str:
+    return " ".join(value.casefold().split())
+
+
+def validate_deck_budgets(text: str, spans: list[SlideSpan]) -> list[str]:
+    """HTML-side data-budget checks (PLAN.md Workstream A step 3). Runs
+    unconditionally — no spec argument required — so the doctor never passes
+    an artifact the popup's readSlideBudgets() would reject. Zero false
+    positives on budgetless decks (no data-budget anywhere)."""
+    errors: list[str] = []
+    if not spans:
+        return errors
+    try:
+        start_tags = parse_slide_start_tags(text)
+    except SlideHtmlError:
+        return errors  # already reported by the caller's parse_slide_spans() call
+
+    # Orphan scan: every data-budget="..." occurrence in the raw source must
+    # fall inside a slide section's opening tag — a real browser DOM would
+    # never surface an attribute placed elsewhere as a runtime budget.
+    tag_ranges = [(start, end) for _, start, end in start_tags]
+    orphans = sum(
+        1
+        for match in DATA_BUDGET_RAW_RE.finditer(text)
+        if not any(start <= match.start() < end for start, end in tag_ranges)
+    )
+    if orphans:
+        errors.append(
+            f"{orphans} data-budget attribute(s) found outside any slide section's "
+            "opening tag"
+        )
+
+    records: list[tuple[int, str, str | None]] = []
+    for ordinal, (slide_id, start, end) in enumerate(start_tags, start=1):
+        match = DATA_BUDGET_RAW_RE.search(text[start:end])
+        records.append((ordinal, slide_id, match.group(1) if match else None))
+
+    present = [record for record in records if record[2] is not None]
+    if not present:
+        return errors  # budgetless deck — zero false positives
+
+    if len(present) != len(records):
+        missing = [
+            f"#{ordinal} ({slide_id or 'no id'})"
+            for ordinal, slide_id, value in records
+            if value is None
+        ]
+        errors.append(
+            f"data-budget present on {len(present)}/{len(records)} slide(s) — "
+            f"attribute completeness requires every slide or none (missing: "
+            + ", ".join(missing) + ")"
+        )
+
+    for ordinal, slide_id, value in present:
+        try:
+            validate_budget_ms(value)  # type: ignore[arg-type]
+        except SlideSpecError as exc:
+            errors.append(f"slide #{ordinal} ({slide_id or 'no id'}): invalid data-budget {value!r}: {exc}")
+
+    # Whenever any data-budget is present, section IDs must be nonempty and
+    # unique — otherwise readSlideBudgets() atomically rejects at runtime.
+    ids = [slide_id for _, slide_id, _ in records]
+    if any(not slide_id for slide_id in ids):
+        errors.append("data-budget present but one or more slide sections have no id attribute")
+    seen: set[str] = set()
+    dup_ids = sorted({slide_id for slide_id in ids if slide_id and (slide_id in seen or seen.add(slide_id))})
+    if dup_ids:
+        errors.append("data-budget present but slide ids are not unique: " + ", ".join(dup_ids))
+
+    return errors
+
+
+def validate_budget_spec_html_parity(
+    parsed_spec: SlideSpec, budget_columns: BudgetColumns, spans: list[SlideSpan]
+) -> list[str]:
+    """Spec <-> HTML data-budget parity — only meaningful (and only run) when
+    a spec is supplied AND it carries a full stable-ID set; legacy specs
+    without stable IDs skip this check rather than false-positive."""
+    normalized_headers = {_norm_header(header) for header in parsed_spec.headers}
+    if "id" not in normalized_headers:
+        return []
+    spec_ids = [row.slide_id for row in parsed_spec.rows]
+    if any(not slide_id for slide_id in spec_ids):
+        return []
+    html_ids = [span.slide_id for span in spans]
+    if set(spec_ids) != set(html_ids) or len(set(html_ids)) != len(html_ids):
+        return ["spec and HTML slide IDs do not match one-for-one — run partial_regen or full regeneration"]
+
+    html_budget_by_id: dict[str, str | None] = {}
+    for span in spans:
+        tag = span.raw[: span.raw.index(">") + 1] if ">" in span.raw else span.raw
+        match = DATA_BUDGET_RAW_RE.search(tag)
+        html_budget_by_id[span.slide_id] = match.group(1) if match else None
+
+    errors: list[str] = []
+    if budget_columns.state == "budgetless":
+        offenders = sorted(
+            slide_id for slide_id, value in html_budget_by_id.items() if value is not None
+        )
+        if offenders:
+            errors.append(
+                "spec is budgetless but HTML carries data-budget on: " + ", ".join(offenders)
+            )
+        return errors
+
+    spec_ms_by_id = {budget.slide_id: budget.ms for budget in budget_columns.budgets}
+    for slide_id, expected_ms in spec_ms_by_id.items():
+        actual = html_budget_by_id.get(slide_id)
+        if actual is None:
+            errors.append(f"spec budgets slide {slide_id!r} at {expected_ms} ms but HTML has no data-budget")
+        elif actual != str(expected_ms):
+            errors.append(
+                f"spec/HTML data-budget mismatch for slide {slide_id!r}: spec {expected_ms} ms, HTML {actual!r}"
+            )
+    return errors
+
+
 def load_bundle(html_path: Path, text: str) -> str:
     parts = [text]
     for href in re.findall(
@@ -200,14 +327,20 @@ def validate(html_path: Path, spec_path: str = "", strict_variety: bool = False)
         err('Missing <div id="deck">')
 
     try:
-        slides = len(parse_slide_spans(text))
+        spans = parse_slide_spans(text)
+        slides = len(spans)
     except SlideHtmlError as exc:
         err(f"Invalid slide structure: {exc}")
         slides = 0
+        spans = []
     if slides == 0:
         err('No <section class="... slide ..."> found')
     elif slides < 2:
         warn(f"Only {slides} slide(s) — decks usually have 2+")
+
+    # Slide Budget HTML-side checks (PLAN.md Workstream A step 3) — run
+    # unconditionally, independent of whether a spec is supplied.
+    errors.extend(validate_deck_budgets(text, spans))
 
     if "prefers-reduced-motion" not in bundle:
         err("Missing prefers-reduced-motion (in HTML or linked shared CSS)")
@@ -352,6 +485,15 @@ def validate(html_path: Path, spec_path: str = "", strict_variety: bool = False)
             expected = len(parsed_spec.rows)
             if expected != slides:
                 err(f"Slide count mismatch: HTML has {slides}, spec slide map has {expected}")
+            try:
+                budget_columns = parse_budget_columns(parsed_spec)
+            except SlideSpecError as exc:
+                err(f"Invalid Slide Budget columns: {exc}")
+            else:
+                if expected == slides:
+                    errors.extend(
+                        validate_budget_spec_html_parity(parsed_spec, budget_columns, spans)
+                    )
 
     print(f"Validating: {html_path}")
     print(f"  Slides found: {slides}")

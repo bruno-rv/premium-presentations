@@ -348,15 +348,23 @@ python3 skills/premium-presentations/scripts/partial_regen.py rollback --deck DE
 ```
 
 First inspect the explicit initialization preview and assigned IDs, then choose
-`--apply`; initialization never happens automatically. Claude Code and Codex
-consume the same JSON plan and generate the same one-section fragment per
-changed ID. The CLI itself never invokes a provider.
+`--apply`; initialization never happens automatically. `plan --json` carries
+`schemaVersion` (currently `2`), the backward-compatible `changed` union, and
+two partitions: `contentChanged` (rows needing a replacement fragment) and
+`budgetOnly` (rows where only Slide Budget columns changed). Claude Code and
+Codex consume the same JSON plan and generate one section fragment per
+`contentChanged` ID — on a budgeted deck the fragment must carry the row's
+current `data-budget` verbatim. The CLI itself never invokes a provider.
 
-Give `apply` every changed ID at once. It preserves untargeted slide bytes and
-the embedded WebP theme-homage payloads, then requires Deck Doctor as the
-publication gate. Insertions, deletions, reordering, new global CSS/runtime or
-controls, new glossary keys, and new conditional capabilities require full
-regeneration. Do not hand-edit an initialized baseline: section drift exits
+Give `apply` a fragment for every `contentChanged` ID at once; `apply` takes
+**zero `--fragment` arguments** when every change is `budgetOnly` — those IDs
+sync `data-budget` directly (body untouched) in the same transaction. It
+preserves untargeted slide bytes and the embedded WebP theme-homage payloads,
+updates every affected row's embedded state so a follow-up plan reports zero
+drift, then requires Deck Doctor as the publication gate. Insertions,
+deletions, reordering, new global CSS/runtime or controls, new glossary keys,
+and new conditional capabilities require full regeneration. Do not hand-edit
+an initialized baseline: section drift exits
 `3`; restore a backup or regenerate the deck fully.
 
 ## Validate The Skill

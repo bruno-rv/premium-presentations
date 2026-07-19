@@ -14,7 +14,7 @@ import re
 import stat as stat_module
 import sys
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
 from typing import Mapping, NoReturn, Sequence
@@ -26,10 +26,13 @@ from slide_html import (
     fragment_class_tokens,
     parse_json_script_span,
     parse_slide_spans,
+    set_slide_budgets,
     splice_sections,
     validate_fragment,
 )
 from slide_spec import (
+    BUDGET_MMSS_HEADER,
+    BUDGET_MS_HEADER,
     ID_RE,
     SlideSpec,
     SlideSpecError,
@@ -38,12 +41,16 @@ from slide_spec import (
     canonical_row,
     decoded_title,
     diff_rows,
+    parse_budget_columns,
     parse_slide_map,
     rewrite_slide_map_ids,
 )
 import deck_doctor
 import validate_runtime_contract
 
+
+PLAN_SCHEMA_VERSION = 2
+BUDGET_HEADER_NAMES = frozenset({BUDGET_MMSS_HEADER, BUDGET_MS_HEADER})
 
 STATE_ID = "premium-regen-state"
 STATE_KEYS = frozenset(
@@ -97,6 +104,18 @@ class PlanResult:
     reason_code: str
     changed: Mapping[str, tuple[str, ...]]
     messages: tuple[str, ...]
+    # `changed` stays the backward-compatible union of every changed ID's
+    # fields. content_changed/budget_only partition it: a row is budget_only
+    # only when every changed field is a Slide Budget column (PLAN.md
+    # Workstream A step 6/8) — everything else, including a row that changed
+    # both budget and content fields, is content_changed and requires a
+    # replacement fragment.
+    content_changed: Mapping[str, tuple[str, ...]] = field(
+        default_factory=lambda: MappingProxyType({})
+    )
+    budget_only: Mapping[str, tuple[str, ...]] = field(
+        default_factory=lambda: MappingProxyType({})
+    )
 
 
 def _sha256(data: bytes) -> str:
@@ -114,6 +133,8 @@ def _result(
     *,
     changed: Mapping[str, tuple[str, ...]] | None = None,
     messages: Sequence[str] = (),
+    content_changed: Mapping[str, tuple[str, ...]] | None = None,
+    budget_only: Mapping[str, tuple[str, ...]] | None = None,
 ) -> PlanResult:
     status, reason_code = PLAN_REASONS[reason]
     return PlanResult(
@@ -121,7 +142,14 @@ def _result(
         reason_code=reason_code,
         changed=_immutable_changed(changed),
         messages=tuple(messages),
+        content_changed=_immutable_changed(content_changed),
+        budget_only=_immutable_changed(budget_only),
     )
+
+
+def _is_budget_only(fields: Sequence[str]) -> bool:
+    normalized = {_normalized_field_name(field) for field in fields}
+    return bool(normalized) and normalized <= BUDGET_HEADER_NAMES
 
 
 def render_state(state: Mapping[str, object]) -> str:
@@ -740,12 +768,21 @@ def plan_pair(
     changed = {
         change.slide_id: change.fields for change in difference.changes
     }
+    content_changed = {
+        slide_id: fields for slide_id, fields in changed.items() if not _is_budget_only(fields)
+    }
+    budget_only = {
+        slide_id: fields for slide_id, fields in changed.items() if _is_budget_only(fields)
+    }
     return _result(
         "changes",
         changed=changed,
+        content_changed=content_changed,
+        budget_only=budget_only,
         messages=(
-            "Claude Code or Codex should generate one fragment per changed ID.",
-            "Use the apply argument shape --fragment ID=FILE for every changed ID.",
+            "Claude Code or Codex should generate one fragment per contentChanged ID.",
+            "Use the apply argument shape --fragment ID=FILE for every contentChanged ID; "
+            "budgetOnly IDs sync data-budget automatically and need no fragment.",
         ),
     )
 
@@ -829,16 +866,33 @@ def _apply(deck: Path, spec: Path, fragment_values: Sequence[str]) -> PlanResult
     if plan.status != "changes_planned":
         raise RegenInputError("apply requires a plan with changed rows")
     fragments = _parse_fragments(fragment_values)
-    if set(fragments) != set(plan.changed):
-        raise RegenInputError("fragment IDs must exactly match planned changed IDs")
+    if set(fragments) != set(plan.content_changed):
+        raise RegenInputError(
+            "fragment IDs must exactly match planned contentChanged IDs "
+            "(budgetOnly IDs take zero fragments)"
+        )
     deck_text = deck.read_text(encoding="utf-8")
     spec_text = spec.read_text(encoding="utf-8")
     state = load_state(deck_text)
     edited = parse_slide_map(spec_text, require_ids=True)
     rows = {row.slide_id: row for row in edited.rows}
     glossary = _glossary_keys(deck_text)
+
+    try:
+        budget_columns = parse_budget_columns(edited)
+    except SlideSpecError as exc:
+        raise RegenInputError(str(exc)) from exc
+    budget_ms_by_id = (
+        {budget.slide_id: budget.ms for budget in budget_columns.budgets}
+        if budget_columns.state == "budgeted"
+        else {}
+    )
+
+    def _expected_budget_ms(slide_id: str) -> int | None:
+        return budget_ms_by_id.get(slide_id) if budget_columns.state == "budgeted" else None
+
     for slide_id, fragment in fragments.items():
-        errors = validate_fragment(fragment, rows[slide_id])
+        errors = validate_fragment(fragment, rows[slide_id], _expected_budget_ms(slide_id))
         if errors:
             raise RegenInputError("invalid fragment for " + slide_id + ": " + "; ".join(errors))
         capabilities = _fragment_capabilities(fragment) - _deck_capabilities(deck_text)
@@ -847,11 +901,25 @@ def _apply(deck: Path, spec: Path, fragment_values: Sequence[str]) -> PlanResult
         fragment_keys = set(re.findall(r'\bdata-term\s*=\s*["\']([^"\']+)["\']', fragment, re.I))
         if fragment_keys - glossary:
             raise FullRegenerationRequired("new_glossary_key: " + ", ".join(sorted(fragment_keys - glossary)))
-    candidate = splice_sections(deck_text, fragments)
+
+    budget_only_ids = set(plan.budget_only)
+    if budget_only_ids and budget_columns.state != "budgeted":
+        raise RegenInputError(
+            "budget-only sync requires the spec to remain budgeted; clearing every "
+            "budget requires full regeneration"
+        )
+
+    candidate = splice_sections(deck_text, fragments) if fragments else deck_text
+    if budget_only_ids:
+        candidate = set_slide_budgets(
+            candidate, {slide_id: budget_ms_by_id[slide_id] for slide_id in budget_only_ids}
+        )
+
+    changed_ids = set(fragments) | budget_only_ids
     candidate_state = dict(state)
     candidate_slides = {slide_id: dict(value) for slide_id, value in state["slides"].items()}
     for span in parse_slide_spans(candidate):
-        if span.slide_id in fragments:
+        if span.slide_id in changed_ids:
             candidate_slides[span.slide_id]["row"] = _semantic_row(rows[span.slide_id])
             candidate_slides[span.slide_id]["rowHash"] = _sha256(canonical_row(rows[span.slide_id]))
             candidate_slides[span.slide_id]["sectionHash"] = _sha256(span.raw.encode("utf-8"))
@@ -1042,7 +1110,9 @@ def _parser() -> RegenArgumentParser:
     apply_parser = commands.add_parser("apply", help="apply planned slide fragments")
     apply_parser.add_argument("--deck", type=Path, required=True)
     apply_parser.add_argument("--spec", type=Path, required=True)
-    apply_parser.add_argument("--fragment", action="append", required=True)
+    # No `required=True`: apply accepts zero --fragment when every planned
+    # change is budgetOnly (PLAN.md Workstream A step 8).
+    apply_parser.add_argument("--fragment", action="append", default=[])
 
     rollback_parser = commands.add_parser("rollback", help="restore a transaction backup")
     rollback_parser.add_argument("--deck", type=Path, required=True)
@@ -1062,7 +1132,10 @@ def _print_json(result: PlanResult) -> None:
     payload = {
         "status": result.status,
         "reasonCode": result.reason_code,
+        "schemaVersion": PLAN_SCHEMA_VERSION,
         "changed": {key: list(value) for key, value in result.changed.items()},
+        "contentChanged": {key: list(value) for key, value in result.content_changed.items()},
+        "budgetOnly": {key: list(value) for key, value in result.budget_only.items()},
         "messages": list(result.messages),
     }
     print(json.dumps(payload, sort_keys=False, separators=(",", ":")))

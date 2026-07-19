@@ -193,11 +193,20 @@ python3 "$skill_root/scripts/partial_regen.py" rollback --deck DECK --backup BAC
 ```
 
 Initialization is always explicit: inspect the preview and assigned IDs before
-`--apply`. Both providers read the JSON plan and create one matching section
-fragment for each changed ID; the CLI makes no provider call. Supply the exact
-complete fragment set in one apply. The operation preserves untouched slide
-bytes and the embedded WebP hero/map theme homages, so live theme changes keep
-their imagery after regeneration; run Deck Doctor before publishing.
+`--apply`. `plan --json` carries `schemaVersion` (currently `2`), the
+backward-compatible `changed` union, and two partitions: `contentChanged`
+(rows needing a replacement fragment) and `budgetOnly` (rows where every
+changed field is a Slide Budget column). Both providers read the JSON plan
+and create one matching section fragment for each `contentChanged` ID — on a
+budgeted deck the fragment must carry the row's current `data-budget`
+verbatim; the CLI makes no provider call. Supply the exact complete
+`contentChanged` fragment set in one apply; `apply` takes **zero
+`--fragment` arguments** when every change is `budgetOnly` — those IDs sync
+`data-budget` directly (body untouched) in the same transaction. The
+operation preserves untouched slide bytes and the embedded WebP hero/map
+theme homages, so live theme changes keep their imagery after regeneration,
+and updates every affected row's embedded state so a follow-up plan reports
+zero drift; run Deck Doctor before publishing.
 
 Require full regeneration for insertion, deletion, reordering, global
 CSS/runtime/control changes, new glossary keys, or a new conditional runtime
@@ -238,24 +247,68 @@ in-memory current run only — persisted history is untouched).
 to `localStorage['premium-rehearsal:'+location.pathname]` on pause (primary
 boundary) and on popup unload (crash-safety net), capped at the last 10 runs
 per deck path. On (re)open, the timeline restores per-slide actual + delta
-**vs uniform average** from the most-recent run whose slide count matches the
-loaded deck (mismatched-length runs are kept in history but excluded from the
-math). A "Suggested budgets" block below the timeline shows the per-slide
-**median across eligible runs** as a copy-pasteable markdown table (`# | Title
-| Budget (mm:ss) | Budget (ms)`, matching a future Slide Map "Budget" column
-with zero reformat); `Export JSON` copies the full payload plus the derived
-median vector, and `Clear history` wipes persisted runs. Deltas render only
-inside `#pp-timeline` `<li>` nodes — the timer's live pace pill
-(`#pp-timer-pace`) is never touched by this feature.
+from the most-recent run whose slide count matches the loaded deck
+(mismatched-length runs are kept in history but excluded from the math). The
+comparison label is exactly **"vs plan"** when the loaded deck carries valid
+Slide Budgets (`readSlideBudgets()` accepts a complete, valid, uniquely
+identified `data-budget` vector on the normalized DOM) or **"vs average"**
+(uniform total-time-over-slide-count fallback) otherwise — one centralized
+planned-time-vector + label helper routes every consumer (timeline deltas,
+the status line, `getLastRunDeltas()`). A "Suggested budgets" block below the
+timeline shows the per-slide **median across eligible runs** as a
+copy-pasteable markdown table, **ID-keyed** (`| ID | Budget (mm:ss) | Budget
+(ms) |`) when the deck has stable section IDs — pastes into the Slide Map's
+`Budget` columns with zero reformat. **Sample eligibility:** a slide's median
+counts only if at least one saved observation for it falls in-range (1,000 ms
+– 7,200,000 ms cap) across eligible runs; if any slide lacks one, the export
+refuses and names the offending slides — no silent clamping. Legacy decks
+without stable IDs fall back to an ordinal+title table with an "initialize
+stable IDs before merging" notice. `Export JSON` copies a versioned payload
+`{v: 2, identity: "id" | "ordinal", rows: [...]}`, and `Clear history` wipes
+persisted runs. Deltas render only inside `#pp-timeline` `<li>` nodes — the
+timer's live pace pill (`#pp-timer-pace`) is never touched by this feature.
 
 **Teleprompter / distance-reading mode:** `m` toggles a CSS-only
 distance-reading class on the notes pane (bigger font/line-height/contrast,
 reclaims the previews pane); toggling mode never starts motion. `p` is the
-explicit start/pause of a manual constant-speed auto-scroll of `#pp-notes`;
-`]`/`[` (via `e.code`, layout-robust) speed up/down, and the rate persists in
-`localStorage['premium-teleprompter']` across sessions. Defaults to paused on
-every load and respects `prefers-reduced-motion: reduce` by construction —
-motion begins only on the explicit `p` gesture, never automatically.
+one and only play-intent gesture — explicit start, pause, and resume of
+auto-scroll of `#pp-notes`. Defaults to paused on every load and respects
+`prefers-reduced-motion: reduce` by construction: users with the OS
+preference set MAY start scrolling with an explicit `p`, but no load, mode
+toggle, slide change, or state restoration may ever create play intent by
+itself.
+
+**Engage rule (timed vs manual):** when the loaded deck carries a complete,
+valid, uniquely-identified `data-budget` vector (`readSlideBudgets()`
+accepts it on the normalized DOM), `p` drives **timed scroll** paced to each
+slide's budget; otherwise it falls back to today's manual constant-px/s
+auto-scroll, unchanged. `]`/`[` (via `e.code`, layout-robust) mean different
+things per mode: in manual mode they nudge the px/s rate (clamped
+10–240 px/s); in timed mode they nudge an integer-tenths **speed multiplier**
+(10 = ×1.0, clamped [5, 20] = ×0.5–×2.0).
+
+**Timed progress model:** `progress = accumulatedProgress + (performance.now()
+− epoch) × multiplier / budgetMs`, clamped [0, 1]; `scrollTop = progress ×
+(scrollHeight − clientHeight)`, read live on every tick so the target
+distance is always current after notes render, mode toggle, glossary/font
+settle, or resize. Notes that don't overflow never move (no division, no
+motion). **Pause** (`p` again) commits the elapsed progress into
+`accumulatedProgress` and clears only the epoch — position holds. **Resume**
+(`p`) keeps `accumulatedProgress` and starts a fresh epoch — scroll continues
+from where it stopped, no restart, no backward jump. A genuine **slide
+change** zeroes `accumulatedProgress` and, while play intent is on, starts a
+fresh epoch so motion continues without a new keypress — the new slide's own
+budget governs pacing from that point. A **multiplier change** commits
+progress under the OLD multiplier first, then rebases the epoch, so the new
+rate never applies retroactively (no jump at the moment of change). Popup
+close/reopen clears intent and progress (fresh module state per popup).
+
+**Persistence:** the rate/multiplier persist in
+`localStorage['premium-teleprompter']` across sessions. The schema is
+versioned — `{v: 2, manualRate: number, multiplierTenths: number}` — with
+transparent migration from the legacy plain-numeric-string schema (read as
+`manualRate`; the next write upgrades storage to `v: 2` with no saved-rate
+loss).
 
 **Design power:** `window.PremiumDesignPower` exposes seven authoring helpers:
 `themeComposer`, `components`, `layouts`, `density`, `motionProfiles`,

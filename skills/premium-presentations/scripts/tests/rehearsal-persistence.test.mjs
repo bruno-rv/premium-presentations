@@ -118,12 +118,12 @@ test('AT1 — injected 3-run fixture renders expected medians + ts3 deltas', asy
 
   const deltaSpans = [...popup.window.document.querySelectorAll('#pp-timeline .pp-timeline__delta')];
   assert.equal(deltaSpans.length, 4, 'one delta span per timeline slide');
-  assert.match(deltaSpans[0].textContent, /-12:00|-0:12|vs avg/, 'delta span renders signed vs-average text');
+  assert.match(deltaSpans[0].textContent, /vs average/, 'delta span renders the "vs average" label (this fixture is budgetless)');
 
   // ADR-6 invariant: the timer pace pill is never touched by R1 code.
   const pacePill = popup.window.document.getElementById('pp-timer-pace');
   assert.ok(pacePill, 'pace pill exists');
-  assert.doesNotMatch(pacePill.textContent, /vs avg|median/, 'pace pill must never render coach/delta text');
+  assert.doesNotMatch(pacePill.textContent, /vs average|vs plan|median/, 'pace pill must never render coach/delta text');
 });
 
 test('cap-10 eviction — the 11th persisted run evicts the oldest', async (t) => {

@@ -16,6 +16,20 @@ SLIDE_MAP_HEADING_RE = re.compile(r"^##(?!#)\s*Slide Map\b", re.IGNORECASE)
 H2_RE = re.compile(r"^##(?!#)")
 SEPARATOR_RE = re.compile(r":?-{3,}:?\Z")
 
+# Slide Budget grammar (Tier 2). Budget (ms) is authoritative: a decimal
+# integer, no sign/whitespace, min 1,000 (sub-second budgets rejected), max
+# 7,200,000 (2h/slide), and within JS safe-integer range. Budget (mm:ss) is a
+# derived display that must equal floor(ms/1000) zero-padded. Both bounds are
+# enforced identically by the JS counterpart in premium-presenter.js against
+# the same shared JSON vectors (scripts/tests/budget-vectors.json).
+BUDGET_MS_MIN = 1_000
+BUDGET_MS_MAX = 7_200_000
+BUDGET_MS_SAFE_MAX = 2**53 - 1  # Number.MAX_SAFE_INTEGER
+BUDGET_MS_RE = re.compile(r"[0-9]+\Z")
+BUDGET_MMSS_RE = re.compile(r"[0-9]{2,}:[0-5][0-9]\Z")
+BUDGET_MMSS_HEADER = "budget (mm:ss)"
+BUDGET_MS_HEADER = "budget (ms)"
+
 
 class SlideSpecError(ValueError):
     def __init__(self, code: str, message: str) -> None:
@@ -318,6 +332,119 @@ def _parse_with_location(
 def parse_slide_map(text: str, *, require_ids: bool = False) -> SlideSpec:
     spec, _, _ = _parse_with_location(text, require_ids=require_ids)
     return spec
+
+
+def format_budget_mmss(ms: int) -> str:
+    """Format ms as the derived mm:ss display: floor(ms/1000), zero-padded."""
+    total_seconds = ms // 1000
+    minutes, seconds = divmod(total_seconds, 60)
+    return f"{minutes:02d}:{seconds:02d}"
+
+
+def validate_budget_ms(value: str) -> int:
+    """Validate a Budget (ms) cell: decimal integer, no sign/whitespace, in range."""
+    if not isinstance(value, str) or not BUDGET_MS_RE.fullmatch(value):
+        raise SlideSpecError(
+            "invalid_budget_ms",
+            f"Budget (ms) must be a decimal integer with no sign or whitespace: {value!r}",
+        )
+    ms = int(value)
+    if not (-BUDGET_MS_SAFE_MAX <= ms <= BUDGET_MS_SAFE_MAX):
+        raise SlideSpecError(
+            "invalid_budget_ms",
+            f"Budget (ms) {value!r} exceeds JS safe-integer range",
+        )
+    if not (BUDGET_MS_MIN <= ms <= BUDGET_MS_MAX):
+        raise SlideSpecError(
+            "invalid_budget_ms",
+            f"Budget (ms) {ms} is out of range [{BUDGET_MS_MIN}, {BUDGET_MS_MAX}]",
+        )
+    return ms
+
+
+def validate_budget_mmss(value: str, ms: int) -> None:
+    """Validate a Budget (mm:ss) cell matches the grammar and equals floor(ms/1000)."""
+    if not isinstance(value, str) or not BUDGET_MMSS_RE.fullmatch(value):
+        raise SlideSpecError(
+            "invalid_budget_mmss",
+            r"Budget (mm:ss) must match ^\d{2,}:[0-5]\d$: " + repr(value),
+        )
+    expected = format_budget_mmss(ms)
+    if value != expected:
+        raise SlideSpecError(
+            "budget_mismatch",
+            f"Budget (mm:ss) {value!r} does not equal floor(ms/1000) for {ms} ms "
+            f"({expected!r})",
+        )
+
+
+@dataclass(frozen=True)
+class SlideBudget:
+    slide_id: str
+    ordinal: int
+    ms: int
+
+
+@dataclass(frozen=True)
+class BudgetColumns:
+    state: str  # "budgetless" | "budgeted"
+    budgets: tuple[SlideBudget, ...]
+
+
+def parse_budget_columns(spec: SlideSpec) -> BudgetColumns:
+    """Three-state Slide Budget column rule (atomic header pair):
+
+    (a) headers absent, or headers present with ALL budget cells empty ->
+        budgetless (no gate, no runtime budgets);
+    (b) headers present and EVERY row populated with valid values -> budgeted;
+    (c) anything else (one header without the other, any populated subset,
+        any invalid value) -> validation failure.
+    """
+    normalized_headers = [_normalized(header) for header in spec.headers]
+    has_mmss = BUDGET_MMSS_HEADER in normalized_headers
+    has_ms = BUDGET_MS_HEADER in normalized_headers
+    if not has_mmss and not has_ms:
+        return BudgetColumns(state="budgetless", budgets=())
+    if has_mmss != has_ms:
+        raise SlideSpecError(
+            "budget_header_mismatch",
+            "Budget (mm:ss) and Budget (ms) columns must both be present or both absent",
+        )
+
+    mmss_header = spec.headers[normalized_headers.index(BUDGET_MMSS_HEADER)]
+    ms_header = spec.headers[normalized_headers.index(BUDGET_MS_HEADER)]
+
+    populated: list[SlideSpecRow] = []
+    empty: list[SlideSpecRow] = []
+    for row in spec.rows:
+        mmss_cell = row.fields[mmss_header].strip()
+        ms_cell = row.fields[ms_header].strip()
+        if not mmss_cell and not ms_cell:
+            empty.append(row)
+        elif mmss_cell and ms_cell:
+            populated.append(row)
+        else:
+            raise SlideSpecError(
+                "budget_row_partial",
+                f"Slide Map row {row.ordinal} has only one of Budget (mm:ss)/"
+                "Budget (ms) populated",
+            )
+
+    if populated and empty:
+        raise SlideSpecError(
+            "budget_row_mixed",
+            "Slide Map budget columns must be all-populated or all-empty across "
+            "every row",
+        )
+    if not populated:
+        return BudgetColumns(state="budgetless", budgets=())
+
+    budgets: list[SlideBudget] = []
+    for row in spec.rows:
+        ms = validate_budget_ms(row.fields[ms_header].strip())
+        validate_budget_mmss(row.fields[mmss_header].strip(), ms)
+        budgets.append(SlideBudget(slide_id=row.slide_id, ordinal=row.ordinal, ms=ms))
+    return BudgetColumns(state="budgeted", budgets=tuple(budgets))
 
 
 def canonical_fields(fields: Mapping[str, str]) -> bytes:

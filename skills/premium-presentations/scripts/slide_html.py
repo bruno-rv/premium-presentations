@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import html as html_lib
+import re
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from typing import Mapping, Sequence
@@ -216,6 +217,17 @@ def parse_slide_spans(html: str) -> list[SlideSpan]:
     return [record.span for record in _parse_slide_records(html)]
 
 
+def parse_slide_start_tags(source: str) -> list[tuple[str, int, int]]:
+    """Return (slide_id, start, start_tag_end) per slide's opening tag only
+    (not the body). Used for raw-markup scans — e.g. orphan-attribute
+    detection — that a browser DOM cannot perform, since a DOM silently keeps
+    only the first occurrence of a duplicate attribute."""
+    return [
+        (record.span.slide_id, record.span.start, record.start_tag_end)
+        for record in _parse_slide_records(source)
+    ]
+
+
 @dataclass
 class _PendingJsonScript:
     start: int
@@ -328,6 +340,35 @@ def assign_slide_ids(html: str, ids: Sequence[str]) -> str:
     return output
 
 
+DATA_BUDGET_ATTR_RE = re.compile(r'(?i)\sdata-budget\s*=\s*"[^"]*"')
+
+
+def set_slide_budgets(source: str, budgets: Mapping[str, int]) -> str:
+    """Set/replace the data-budget attribute on each targeted slide's start
+    tag, leaving every other byte (including the slide body) untouched. Used
+    by partial_regen.py's budget-only sync transaction (PLAN.md Workstream A
+    step 6) — never rewrites body content."""
+    records = _parse_slide_records(source)
+    by_id = {record.span.slide_id: record for record in records}
+    missing = sorted(set(budgets) - set(by_id))
+    if missing:
+        raise SlideHtmlError(f"budget slide IDs not present in deck: {', '.join(missing)}")
+    output = source
+    for slide_id in sorted(budgets, key=lambda key: by_id[key].span.start, reverse=True):
+        record = by_id[slide_id]
+        ms = budgets[slide_id]
+        if isinstance(ms, bool) or not isinstance(ms, int):
+            raise SlideHtmlError(f"budget for {slide_id!r} must be an int")
+        start_tag = output[record.span.start : record.start_tag_end]
+        replacement = f' data-budget="{ms}"'
+        if DATA_BUDGET_ATTR_RE.search(start_tag):
+            new_start_tag = DATA_BUDGET_ATTR_RE.sub(replacement, start_tag, count=1)
+        else:
+            new_start_tag = start_tag[:-1] + replacement + start_tag[-1:]
+        output = output[: record.span.start] + new_start_tag + output[record.start_tag_end :]
+    return output
+
+
 def splice_sections(source: str, replacements: Mapping[str, str]) -> str:
     spans = parse_slide_spans(source)
     by_id = {span.slide_id: span for span in spans}
@@ -350,6 +391,8 @@ class _FragmentInspector(HTMLParser):
         self.root_classes: frozenset[str] = frozenset()
         self.root_id = ""
         self.root_title = ""
+        self.root_has_budget = False
+        self.root_budget_value = ""
         self.class_tokens: set[str] = set()
         self.direct_children: list[tuple[str, frozenset[str]]] = []
         self.direct_notes = 0
@@ -376,6 +419,10 @@ class _FragmentInspector(HTMLParser):
                 self.root_classes = classes
                 self.root_id = values.get("id", "")
                 self.root_title = values.get("data-nav-title", "")
+                self.root_has_budget = any(
+                    name.casefold() == "data-budget" for name, _ in attrs
+                )
+                self.root_budget_value = values.get("data-budget", "")
         elif depth == 1:
             self.direct_children.append((tag, classes))
             if tag == "aside" and "notes" in classes:
@@ -460,7 +507,16 @@ class _FragmentInspector(HTMLParser):
             )
 
 
-def validate_fragment(fragment: str, expected: SlideSpecRow) -> list[str]:
+def validate_fragment(
+    fragment: str,
+    expected: SlideSpecRow,
+    expected_budget_ms: int | None = None,
+) -> list[str]:
+    """Validate a replacement slide fragment. `expected_budget_ms` is the
+    parity contract for data-budget (PLAN.md Workstream A step 6/8): None
+    means the deck is budgetless (the fragment must not carry data-budget);
+    an int means the deck is budgeted and the fragment's data-budget must
+    equal it verbatim."""
     inspector = _FragmentInspector()
     inspector.feed(fragment)
     inspector.close()
@@ -481,6 +537,17 @@ def validate_fragment(fragment: str, expected: SlideSpecRow) -> list[str]:
     expected_title = decoded_title(expected)
     if inspector.root_title != expected_title:
         errors.append(f"data-nav-title must equal decoded Title {expected_title!r}")
+    if expected_budget_ms is None:
+        if inspector.root_has_budget:
+            errors.append("fragment must not carry data-budget on a budgetless deck")
+    else:
+        if not inspector.root_has_budget:
+            errors.append(f"fragment must carry data-budget={expected_budget_ms!r}")
+        elif inspector.root_budget_value != str(expected_budget_ms):
+            errors.append(
+                f"fragment data-budget must equal {expected_budget_ms!r}, got "
+                f"{inspector.root_budget_value!r}"
+            )
     errors.extend(inspector.forbidden_tag_errors)
     errors.extend(inspector.forbidden_control_errors)
     if inspector.direct_notes != 1:
