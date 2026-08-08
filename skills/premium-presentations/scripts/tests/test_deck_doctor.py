@@ -115,7 +115,7 @@ class DeckDoctorTests(unittest.TestCase):
     def test_layout_validation_runs_once_and_rejects_layout_errors(self) -> None:
         sweeps = 0
 
-        def playwright_sweep(*_args: object) -> tuple[list[str], list[str]]:
+        def playwright_sweep(*_args: object, **_kwargs: object) -> tuple[list[str], list[str]]:
             nonlocal sweeps
             sweeps += 1
             return ["layout sweep failed"], []

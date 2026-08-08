@@ -16,11 +16,21 @@ sys.path.insert(0, str(SCRIPTS))
 import validate_layout  # noqa: E402
 
 
+class _FakeLocator:
+    def __init__(self, count: int) -> None:
+        self._count = count
+
+    def count(self) -> int:
+        return self._count
+
+
 class _FakePage:
-    def __init__(self, slide_count: int) -> None:
+    def __init__(self, slide_count: int, mermaid_count: int = 0) -> None:
         self.slide_count = slide_count
+        self.mermaid_count = mermaid_count
         self.evaluate_calls: list[tuple[str, object | None]] = []
         self.viewport_calls: list[dict[str, int]] = []
+        self.wait_for_function_calls: list[str] = []
 
     def goto(self, *_args: object, **_kwargs: object) -> None:
         return None
@@ -30,6 +40,13 @@ class _FakePage:
 
     def wait_for_timeout(self, *_args: object) -> None:
         raise AssertionError("layout validation must not use fixed timeouts")
+
+    def locator(self, selector: str) -> _FakeLocator:
+        return _FakeLocator(self.mermaid_count)
+
+    def wait_for_function(self, script: str, timeout: int | None = None) -> None:
+        self.wait_for_function_calls.append(script)
+        return None
 
     def evaluate(self, script: str, argument: object | None = None) -> object:
         self.evaluate_calls.append((script, argument))
@@ -84,8 +101,14 @@ class _FakeSyncPlaywright:
         return None
 
 
-def _run_sweep(slide_count: int) -> tuple[_FakePage, list[str], list[str]]:
-    page = _FakePage(slide_count)
+def _run_sweep(
+    slide_count: int,
+    *,
+    html: str | None = None,
+    single_theme: bool = False,
+    mermaid_count: int = 0,
+) -> tuple[_FakePage, list[str], list[str]]:
+    page = _FakePage(slide_count, mermaid_count=mermaid_count)
     playwright = types.ModuleType("playwright")
     sync_api = types.ModuleType("playwright.sync_api")
     sync_api.sync_playwright = lambda: _FakeSyncPlaywright(page)  # type: ignore[attr-defined]
@@ -95,7 +118,9 @@ def _run_sweep(slide_count: int) -> tuple[_FakePage, list[str], list[str]]:
         sys.modules,
         {"playwright": playwright, "playwright.sync_api": sync_api},
     ), mock.patch.object(validate_layout, "discover_themes", return_value=["red", "warm"]):
-        errors, warnings = validate_layout._playwright_check(Path("deck.html"))
+        errors, warnings = validate_layout._playwright_check(
+            Path("deck.html"), single_theme=single_theme, html=html
+        )
     return page, errors, warnings
 
 
@@ -144,6 +169,71 @@ class BatchedLayoutSweepTests(unittest.TestCase):
         for script in (validate_layout.READINESS_JS, validate_layout.LAYOUT_SNAPSHOT_JS):
             self.assertIn("document.fonts.ready", script)
             self.assertGreaterEqual(script.count("requestAnimationFrame"), 2)
+
+    def test_default_sweeps_all_themes(self) -> None:
+        # Default contract: full sweep over every theme in the registry, even
+        # when the deck declares one — the deck embeds the full registry for
+        # live theme switching, so a break under any theme is a real bug.
+        page, _, _ = _run_sweep(
+            slide_count=2, html='<html lang="en" data-theme="warm">'
+        )
+        self.assertEqual(len(page.evaluate_calls), 2 * (1 + 3))
+        self.assertEqual(len(page.viewport_calls), 2 * 3)
+
+    def test_single_theme_limits_sweep_to_declared_theme(self) -> None:
+        page, _, _ = _run_sweep(
+            slide_count=2,
+            html='<html lang="en" data-theme="warm">',
+            single_theme=True,
+        )
+        # themes * (readiness + viewports) with themes narrowed to ["warm"].
+        self.assertEqual(len(page.evaluate_calls), 1 * (1 + 3))
+        self.assertEqual(len(page.viewport_calls), 1 * 3)
+
+    def test_single_theme_without_declared_theme_falls_back_to_full_sweep(self) -> None:
+        page, _, _ = _run_sweep(
+            slide_count=2, html="<html lang=\"en\">", single_theme=True
+        )
+        self.assertEqual(len(page.evaluate_calls), 2 * (1 + 3))
+
+    def test_single_theme_validates_theme_outside_registry(self) -> None:
+        # F8: a workspace-owned theme (generate_theme.py) is inlined into the
+        # deck but absent from the framework registry. --single-theme must
+        # still measure the deck under its authored theme, not fall back to
+        # the built-in registry and skip the theme it ships with.
+        page, _, _ = _run_sweep(
+            slide_count=2,
+            html='<html lang="en" data-theme="brand-x">',
+            single_theme=True,
+        )
+        self.assertEqual(len(page.evaluate_calls), 1 * (1 + 3))
+        self.assertEqual(len(page.viewport_calls), 1 * 3)
+
+    def test_mermaid_gate_waits_for_svg_when_diagrams_present(self) -> None:
+        page, _, _ = _run_sweep(slide_count=2, mermaid_count=1)
+        self.assertEqual(len(page.wait_for_function_calls), 1)
+        self.assertIn("querySelector('svg')", page.wait_for_function_calls[0])
+
+    def test_no_mermaid_gate_without_diagrams(self) -> None:
+        page, _, _ = _run_sweep(slide_count=2, mermaid_count=0)
+        self.assertEqual(len(page.wait_for_function_calls), 0)
+
+
+class LayoutGateFailClosedTests(unittest.TestCase):
+    def test_sweep_defect_fails_gate_as_error(self) -> None:
+        # F1: a defect inside the sweep (not an environment issue) must surface
+        # as an error, never a warning — a silently skipped layout check would
+        # report DECK HEALTHY on a broken deck.
+        with mock.patch.object(
+            validate_layout,
+            "_playwright_check",
+            side_effect=RuntimeError("boom"),
+        ):
+            errors, warnings = validate_layout.validate_deck_layout(
+                "<html></html>", "<html></html>", Path("deck.html")
+            )
+        self.assertTrue(any("Layout pixel checks failed" in e for e in errors))
+        self.assertFalse(any("Layout pixel checks failed" in w for w in warnings))
 
 
 class LayoutSnapshotBrowserTests(unittest.TestCase):
