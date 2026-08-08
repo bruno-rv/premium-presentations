@@ -25,6 +25,7 @@ import validate_deck
 import validate_portability
 import validate_runtime_contract
 from validate_diagrams import validate_deck_diagrams, validate_inline_scripts
+from validate_layout import declared_theme_from_html
 from _common import THEMES_CSS
 
 # validate_deck.validate() always ends with one of these summary lines.
@@ -45,10 +46,15 @@ def _section(title: str, ok: bool, lines: list[str]) -> None:
 
 def main(argv: list[str]) -> int:
     if argv and argv[0] in ("--help", "-h"):
-        print("Usage: deck_doctor.py <deck.html> [slide-spec.md]")
+        print("Usage: deck_doctor.py <deck.html> [slide-spec.md] [--single-theme]")
         return 0
+    single_theme = "--single-theme" in argv
+    argv = [a for a in argv if a != "--single-theme"]
     if not argv or len(argv) > 2:
-        print("Usage: deck_doctor.py <deck.html> [slide-spec.md]", file=sys.stderr)
+        print(
+            "Usage: deck_doctor.py <deck.html> [slide-spec.md] [--single-theme]",
+            file=sys.stderr,
+        )
         return 1
     html_path = Path(argv[0])
     spec_path = argv[1] if len(argv) > 1 else ""
@@ -68,7 +74,7 @@ def main(argv: list[str]) -> int:
     # 1. validate_deck — CLI semantics (prints + returns code): capture output.
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
-        deck_rc = validate_deck.validate(html_path, spec_path)
+        deck_rc = validate_deck.validate(html_path, spec_path, single_theme=single_theme)
     deck_out = buf.getvalue()
     fail_match = _SUMMARY_RE.search(deck_out)
     ok_match = _OK_RE.search(deck_out)
@@ -138,6 +144,17 @@ def main(argv: list[str]) -> int:
     if issues:
         print(f"{issues} issue(s), {warnings} warning(s)")
         return 1
+    # A --single-theme run is a partial validation: it must not claim the deck
+    # is fully healthy, or an agent would ship on a reduced gate. Name the
+    # theme that was swept and require the full sweep before shipping.
+    if single_theme:
+        declared = declared_theme_from_html(text)
+        if declared:
+            print(
+                f"DECK VALIDATED (single-theme: {declared}) — "
+                "run the full sweep before shipping"
+            )
+            return 0
     print("DECK HEALTHY" + (f" — {warnings} warning(s)" if warnings else ""))
     return 0
 

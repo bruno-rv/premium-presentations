@@ -63,7 +63,9 @@ SPEC_5_ROWS = """## Slide Map
 """
 
 
-def run_doctor(html: str, spec_text: str) -> tuple[int, str]:
+def run_doctor(
+    html: str, spec_text: str, extra_args: list[str] | None = None
+) -> tuple[int, str]:
     with tempfile.TemporaryDirectory() as tmp:
         html_path = Path(tmp) / "deck.html"
         spec_path = Path(tmp) / "spec.md"
@@ -71,7 +73,9 @@ def run_doctor(html: str, spec_text: str) -> tuple[int, str]:
         spec_path.write_text(spec_text, encoding="utf-8")
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
-            rc = deck_doctor.main([str(html_path), str(spec_path)])
+            rc = deck_doctor.main(
+                [str(html_path), str(spec_path)] + (extra_args or [])
+            )
         return rc, buf.getvalue()
 
 
@@ -129,6 +133,19 @@ class DeckDoctorTests(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertIn("[✗] validate_deck", out)
         self.assertIn("layout sweep failed", out)
+
+    def test_single_theme_verdict_names_theme_and_suppresses_healthy(self) -> None:
+        html = _make_deck_html(2).replace(
+            '<html lang="en">', '<html lang="en" data-theme="warm">'
+        )
+        with mock.patch.object(
+            validate_layout, "_playwright_check", return_value=([], [])
+        ):
+            rc, out = run_doctor(html, SPEC_2_ROWS, extra_args=["--single-theme"])
+
+        self.assertEqual(rc, 0)
+        self.assertIn("DECK VALIDATED (single-theme: warm)", out)
+        self.assertNotIn("DECK HEALTHY", out)
 
 
 if __name__ == "__main__":
