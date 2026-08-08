@@ -77,25 +77,18 @@ OVERLAP_SELECTORS = (
     ".red-brand-bar",
 )
 
-READINESS_JS = """
-async (theme) => {
-  // Setting data-theme directly (rather than dispatching the runtime's
-  // premium-theme-change event) keeps the sweep fast: that event re-renders
-  // Mermaid and rebuilds search, which would multiply the sweep cost per
-  // theme. Known limitation: theme-reactive modules that only react to the
-  // event (e.g. premium-red-chrome.js mounting .red-brand-bar) do not re-run
-  // per theme, so a red deck swept under a non-red theme can report a
-  // false-positive overlap — noise, not a missed bug.
-  document.documentElement.dataset.theme = theme;
-  if (document.fonts && document.fonts.ready) await document.fonts.ready;
-  await new Promise((resolve) =>
-    requestAnimationFrame(() => requestAnimationFrame(resolve))
-  );
-}
-"""
-
 LAYOUT_SNAPSHOT_JS = """
 async (config) => {
+  if (config.theme !== undefined) {
+    // Setting data-theme directly (rather than dispatching the runtime's
+    // premium-theme-change event) keeps the sweep fast: that event re-renders
+    // Mermaid and rebuilds search, which would multiply the sweep cost per
+    // theme. Known limitation: theme-reactive modules that only react to the
+    // event (e.g. premium-red-chrome.js mounting .red-brand-bar) do not re-run
+    // per theme, so a red deck swept under a non-red theme can report a
+    // false-positive overlap — noise, not a missed bug.
+    document.documentElement.dataset.theme = config.theme;
+  }
   if (document.fonts && document.fonts.ready) await document.fonts.ready;
   await new Promise((resolve) =>
     requestAnimationFrame(() => requestAnimationFrame(resolve))
@@ -361,17 +354,18 @@ def _playwright_check(
                 )
 
             for theme in themes:
-                page.evaluate(READINESS_JS, theme)
-
-                for vw, vh in viewports:
+                for viewport_index, (vw, vh) in enumerate(viewports):
                     page.set_viewport_size({"width": vw, "height": vh})
+                    config = {
+                        "selectors": list(OVERLAP_SELECTORS),
+                        "tolerance": CLIP_TOLERANCE_PX,
+                        "ratioMin": OVERLAP_RATIO_WARN,
+                    }
+                    if viewport_index == 0:
+                        config["theme"] = theme
                     snapshot = page.evaluate(
                         LAYOUT_SNAPSHOT_JS,
-                        {
-                            "selectors": list(OVERLAP_SELECTORS),
-                            "tolerance": CLIP_TOLERANCE_PX,
-                            "ratioMin": OVERLAP_RATIO_WARN,
-                        },
+                        config,
                     )
 
                     for c in snapshot["dividerIssues"]:

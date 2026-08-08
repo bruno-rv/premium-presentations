@@ -50,8 +50,6 @@ class _FakePage:
 
     def evaluate(self, script: str, argument: object | None = None) -> object:
         self.evaluate_calls.append((script, argument))
-        if script == validate_layout.READINESS_JS:
-            return None
         return {
             "dividerIssues": [
                 {
@@ -107,6 +105,7 @@ def _run_sweep(
     html: str | None = None,
     single_theme: bool = False,
     mermaid_count: int = 0,
+    themes: list[str] | None = None,
 ) -> tuple[_FakePage, list[str], list[str]]:
     page = _FakePage(slide_count, mermaid_count=mermaid_count)
     playwright = types.ModuleType("playwright")
@@ -117,7 +116,11 @@ def _run_sweep(
     with mock.patch.dict(
         sys.modules,
         {"playwright": playwright, "playwright.sync_api": sync_api},
-    ), mock.patch.object(validate_layout, "discover_themes", return_value=["red", "warm"]):
+    ), mock.patch.object(
+        validate_layout,
+        "discover_themes",
+        return_value=themes if themes is not None else ["red", "warm"],
+    ):
         errors, warnings = validate_layout._playwright_check(
             Path("deck.html"), single_theme=single_theme, html=html
         )
@@ -135,10 +138,34 @@ class BatchedLayoutSweepTests(unittest.TestCase):
         small_page, _, _ = _run_sweep(slide_count=1)
         large_page, _, _ = _run_sweep(slide_count=100)
 
-        expected_calls = 2 * (1 + 3)  # themes * (theme readiness + viewports)
+        expected_calls = 2 * 3  # themes * viewports
         self.assertEqual(len(small_page.evaluate_calls), expected_calls)
         self.assertEqual(len(large_page.evaluate_calls), expected_calls)
         self.assertEqual(len(large_page.viewport_calls), 2 * 3)
+
+    def test_first_snapshot_carries_theme_readiness_without_a_separate_rpc(self) -> None:
+        themes = ["red", "warm", "ink", "sage"]
+        page, _, _ = _run_sweep(slide_count=1, themes=themes)
+
+        snapshot_configs = [
+            argument
+            for script, argument in page.evaluate_calls
+            if script == validate_layout.LAYOUT_SNAPSHOT_JS
+        ]
+        self.assertEqual(len(page.evaluate_calls), 12)
+        self.assertEqual(
+            [script for script, _ in page.evaluate_calls],
+            [validate_layout.LAYOUT_SNAPSHOT_JS] * 12,
+        )
+        self.assertTrue(all(isinstance(config, dict) for config in snapshot_configs))
+        self.assertEqual(
+            [
+                config.get("theme")
+                for config in snapshot_configs
+                if isinstance(config, dict)
+            ],
+            ["red", None, None, "warm", None, None, "ink", None, None, "sage", None, None],
+        )
 
     def test_batched_findings_keep_existing_message_format(self) -> None:
         _, errors, warnings = _run_sweep(slide_count=2)
@@ -165,11 +192,6 @@ class BatchedLayoutSweepTests(unittest.TestCase):
             ],
         )
 
-    def test_readiness_waits_for_fonts_and_two_animation_frames(self) -> None:
-        for script in (validate_layout.READINESS_JS, validate_layout.LAYOUT_SNAPSHOT_JS):
-            self.assertIn("document.fonts.ready", script)
-            self.assertGreaterEqual(script.count("requestAnimationFrame"), 2)
-
     def test_default_sweeps_all_themes(self) -> None:
         # Default contract: full sweep over every theme in the registry, even
         # when the deck declares one — the deck embeds the full registry for
@@ -177,7 +199,7 @@ class BatchedLayoutSweepTests(unittest.TestCase):
         page, _, _ = _run_sweep(
             slide_count=2, html='<html lang="en" data-theme="warm">'
         )
-        self.assertEqual(len(page.evaluate_calls), 2 * (1 + 3))
+        self.assertEqual(len(page.evaluate_calls), 2 * 3)
         self.assertEqual(len(page.viewport_calls), 2 * 3)
 
     def test_single_theme_limits_sweep_to_declared_theme(self) -> None:
@@ -186,15 +208,15 @@ class BatchedLayoutSweepTests(unittest.TestCase):
             html='<html lang="en" data-theme="warm">',
             single_theme=True,
         )
-        # themes * (readiness + viewports) with themes narrowed to ["warm"].
-        self.assertEqual(len(page.evaluate_calls), 1 * (1 + 3))
+        # themes * viewports with themes narrowed to ["warm"].
+        self.assertEqual(len(page.evaluate_calls), 1 * 3)
         self.assertEqual(len(page.viewport_calls), 1 * 3)
 
     def test_single_theme_without_declared_theme_falls_back_to_full_sweep(self) -> None:
         page, _, _ = _run_sweep(
             slide_count=2, html="<html lang=\"en\">", single_theme=True
         )
-        self.assertEqual(len(page.evaluate_calls), 2 * (1 + 3))
+        self.assertEqual(len(page.evaluate_calls), 2 * 3)
 
     def test_single_theme_validates_theme_outside_registry(self) -> None:
         # F8: a workspace-owned theme (generate_theme.py) is inlined into the
@@ -206,7 +228,7 @@ class BatchedLayoutSweepTests(unittest.TestCase):
             html='<html lang="en" data-theme="brand-x">',
             single_theme=True,
         )
-        self.assertEqual(len(page.evaluate_calls), 1 * (1 + 3))
+        self.assertEqual(len(page.evaluate_calls), 1 * 3)
         self.assertEqual(len(page.viewport_calls), 1 * 3)
 
     def test_mermaid_gate_waits_for_svg_when_diagrams_present(self) -> None:
@@ -237,6 +259,95 @@ class LayoutGateFailClosedTests(unittest.TestCase):
 
 
 class LayoutSnapshotBrowserTests(unittest.TestCase):
+    def test_theme_snapshot_waits_for_fonts_and_two_frames_before_measuring(self) -> None:
+        try:
+            from playwright.sync_api import Error, sync_playwright
+        except ImportError:
+            self.skipTest("playwright is not installed")
+
+        with sync_playwright() as playwright:
+            try:
+                browser = playwright.chromium.launch(headless=True)
+            except Error as exc:
+                self.skipTest(f"chromium is unavailable: {exc}")
+
+            try:
+                page = browser.new_page(viewport={"width": 800, "height": 600})
+                page.set_content(
+                    """
+                    <style>
+                      .slide { height: 200px; position: relative; width: 300px; }
+                      .slide__body, .stats-row {
+                        height: 80px;
+                        left: 20px;
+                        position: absolute;
+                        width: 120px;
+                      }
+                      .slide__body { top: 60px; }
+                      .stats-row { top: 160px; }
+                    </style>
+                    <section class="slide">
+                      <div class="slide__body">Body</div>
+                      <div class="stats-row">Stats</div>
+                    </section>
+                    """
+                )
+                page.evaluate(
+                    """
+                    () => {
+                      const nativeRequestAnimationFrame = window.requestAnimationFrame.bind(window);
+                      window.__layoutReadiness = {
+                        fontTheme: null,
+                        frameCount: 0,
+                        frameThemes: [],
+                      };
+                      Object.defineProperty(document, 'fonts', {
+                        configurable: true,
+                        value: {
+                          ready: {
+                            then(resolve) {
+                              window.__layoutReadiness.fontTheme =
+                                document.documentElement.dataset.theme || null;
+                              resolve();
+                            },
+                          },
+                        },
+                      });
+                      window.requestAnimationFrame = (callback) =>
+                        nativeRequestAnimationFrame((timestamp) => {
+                          window.__layoutReadiness.frameCount += 1;
+                          window.__layoutReadiness.frameThemes.push(
+                            document.documentElement.dataset.theme || null
+                          );
+                          if (window.__layoutReadiness.frameCount === 2) {
+                            document.querySelector('.stats-row').style.top = '60px';
+                          }
+                          callback(timestamp);
+                        });
+                    }
+                    """
+                )
+                snapshot = page.evaluate(
+                    validate_layout.LAYOUT_SNAPSHOT_JS,
+                    {
+                        "theme": "warm",
+                        "selectors": list(validate_layout.OVERLAP_SELECTORS),
+                        "tolerance": validate_layout.CLIP_TOLERANCE_PX,
+                        "ratioMin": validate_layout.OVERLAP_RATIO_WARN,
+                    },
+                )
+                readiness = page.evaluate("() => window.__layoutReadiness")
+            finally:
+                browser.close()
+
+        self.assertEqual(readiness["fontTheme"], "warm")
+        self.assertEqual(readiness["frameThemes"], ["warm", "warm"])
+        self.assertEqual(readiness["frameCount"], 2)
+        self.assertIn(
+            {"a": ".slide__body", "b": ".stats-row", "ratio": 100},
+            snapshot["slideOverlaps"][0]["issues"],
+        )
+
     def test_snapshot_finds_layout_issues_and_restores_slide_state(self) -> None:
         try:
             from playwright.sync_api import Error, sync_playwright
