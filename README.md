@@ -13,13 +13,15 @@ Codex-specific packaging lives under `.codex-plugin/` and
 - **Portable HTML decks:** generated decks bundle runtime CSS/JS, theme assets,
   search, diagrams, presenter mode, export helpers, and interaction controls
   without CDN or remote-font dependencies.
-- **Guaranteed theme homages:** every registered theme must provide distinct
-  hero and map WebPs. Theme creation installs CSS, both visuals, and the
-  manifest as one validated transaction; every new visual deck embeds the
-  complete registry as data URIs so live theme switching stays standalone.
+- **Built-in theme homages:** every registered theme must provide distinct hero
+  and map WebPs. Theme creation installs CSS, both visuals, and the manifest as
+  one validated transaction; visual decks built with the matching registry embed
+  its complete set as data URIs so live theme switching stays standalone.
 - **Presenter workflow:** press `Shift+P` to open the presenter popup with
   current/next slide previews, speaker notes, a slide timeline, rehearsal mode,
-  a teleprompter/distance-reading mode, timer controls, and a slide rail.
+  a teleprompter/distance-reading mode, timer controls, and a slide rail. When
+  valid per-slide budgets are authored, teleprompter scrolling follows those
+  budgets; budgetless decks use manual scrolling.
 - **Rehearsal tools:** the presenter timeline shows planned per-slide time from
   the active timer, tracks actual dwell time while rehearsing, lets speakers
   jump directly to any slide, and persists rehearsal history (last 10 runs per
@@ -29,17 +31,19 @@ Codex-specific packaging lives under `.codex-plugin/` and
   profiles, data visualization blocks, visual-asset audits, and a theme
   generator that turns a hex brand palette into a new theme behind a WCAG
   contrast gate.
-- **Speaker controls:** decks include keyboard/touch navigation, Cmd+K search,
-  annotations, laser pointer, curtain mode, TTS read-aloud, WebHID clicker
-  support, 3D modes, Mermaid/diagram helpers, PNG/OG-cover export, PDF export,
-  Markdown speaker-notes handouts, and LAN follow-along for the audience.
+- **Speaker controls:** decks support keyboard/touch navigation, Cmd/Ctrl+K
+  search, annotations, laser pointer, curtain mode, TTS read-aloud, WebHID
+  clickers, 3D modes, Mermaid/diagram helpers, PNG/OG-cover export, PDF export,
+  Markdown speaker-notes handouts, and optional LAN follow-along.
 - **Validation tooling:** deterministic scripts scaffold, bundle, validate,
   and smoke-test decks and the shared runtime contract, gated by `deck_doctor.py`
   (structure, layout, diagrams, runtime contract, offline portability, and
   WCAG contrast in one report).
-- **PR-to-deck recipe:** Claude Code exposes `/present-pr`; Codex can follow
-  the same recipe when asked to turn the current branch's diff into a
-  `deck_doctor`-validated deck grounded in the real `git diff`.
+- **Deck recipes:** Claude Code exposes `/present-pr`,
+  `/present-architecture`, and `/present-postmortem`. Codex can follow the same
+  recipes through the skill guidance. The architecture recipe scans the live
+  codebase; the postmortem recipe requires an incident document and supports
+  optional Git/CI corroboration with PII minimization by default.
 
 A full worked example — a 20-slide deck whose PDF, cover, and speaker-notes
 handout are reproducible but intentionally untracked — lives at
@@ -214,6 +218,11 @@ python3 skills/premium-presentations/scripts/deck_doctor.py \
   skills/premium-presentations/assets/decks/my-talk/my-talk-slide-spec.md
 ```
 
+Layout validation batches all slide and divider geometry checks into one
+Chromium snapshot per theme and viewport. It waits for fonts and animation
+frames instead of using fixed per-slide delays, preserving the full layout gate
+without a browser wait and protocol round trip for every slide.
+
 Generate distribution artifacts next to the deck — a social/cover image, a
 PDF, and a Markdown speaker-notes handout:
 
@@ -226,8 +235,10 @@ python3 skills/premium-presentations/scripts/export_handout.py \
   skills/premium-presentations/assets/decks/my-talk/my-talk-slides.html
 ```
 
-Each writes a sidecar file (`og-cover.png`, `my-talk.pdf`, `my-talk-handout.md`)
-next to the deck. The standalone deck HTML does not reference them automatically.
+Each writes a sidecar file (`og-cover.png`, `my-talk.pdf`,
+`my-talk-handout.md`) next to the deck. Handout export requires a non-empty
+speaker-notes block on every slide. The standalone deck HTML does not reference
+these artifacts automatically.
 
 Open the studio (`open` on macOS, `xdg-open` on Linux):
 
@@ -260,7 +271,7 @@ The presenter popup is local to the speaker. Audience slides stay focused on
 the deck content while the popup handles notes, current/next previews, timeline
 jumps, rehearsal timing, and timer settings.
 
-Create a custom theme with its required homage images:
+Create a custom theme in a source checkout with its required homage images:
 
 ```bash
 python3 skills/premium-presentations/scripts/generate_theme.py acme \
@@ -271,7 +282,12 @@ python3 skills/premium-presentations/scripts/generate_theme.py acme \
 Persisted generation fails without both valid WebPs. The command validates the
 complete CSS/manifest/file registry before replacing any live file and restores
 the prior registry if a replacement or final validation fails. Use `--dry-run`
-to preview CSS without supplying images.
+to preview CSS without supplying images. Marketplace plugin caches are
+read-only; use a workspace-owned CSS/visual registry for installed-plugin work.
+The `--themes-css` override changes the inlined CSS registry, while theme-homage
+embedding reads the shared visual manifest. Keep those registries aligned and
+validate a custom-themed deck with `deck_doctor.py` before distributing it
+standalone.
 
 Share a bundled deck:
 
@@ -284,8 +300,10 @@ The LAN fallback serves an isolated temporary copy containing only
 `index.html`. Presenter and follower URLs carry a random room token required
 for every slide-state read and write; the token protects controls, while the
 deck itself remains intentionally readable to devices that can reach the LAN
-server. The `vercel` CLI is optional and auto-detected; without it, or if it
-fails, the script falls back to the LAN server.
+server. The `vercel` CLI is optional and auto-detected; if it is unavailable or
+`vercel deploy` returns a failure, the script falls back to the LAN server. If
+Vercel reports success but the script cannot extract a deployment URL, it exits
+with an error instead of falling back.
 
 ## Layout
 
@@ -383,8 +401,10 @@ git diff --check
 
 `test:all` includes every shipped Node suite, full Python test discovery, the
 canonical standalone bundle smoke, theme homages, presenter transports, and all
-five 3D modes. CI additionally runs a pinned Codex plugin validator, so Claude
-Code and Codex packaging fail the same gate as runtime regressions.
+five 3D modes. CI additionally runs the repository's static layout and
+bootstrap checks, runtime and contrast validators, `npm audit`, and
+`git diff --check`. It does not install or invoke the Claude or Codex provider
+CLIs.
 
 Create and validate a smoke deck:
 
@@ -403,12 +423,12 @@ requirements and managed Chromium, then runs the focused static/bootstrap
 contracts and the aggregate Node.js and Python test suites. It also runs
 `npm audit`, the runtime and contrast validators, and `git diff --check`.
 
-The static contracts cover the Claude-compatible and Codex plugin manifests;
-the bootstrap check confirms that the CI interpreter can see Playwright and
-its managed Chromium. The workflow intentionally does not perform provider
-CLI installs: Claude marketplace installs and Codex marketplace add/install
-checks need isolated local configuration roots and are documented as a
-separate release exercise.
+The static contracts inspect the Claude-compatible and Codex plugin manifests;
+they are repository tests, not provider CLI validators. The bootstrap check
+confirms that the CI interpreter can see Playwright and its managed Chromium.
+The workflow intentionally does not perform provider CLI installs: Claude
+marketplace installs and Codex marketplace add/install checks need isolated
+local configuration roots and are documented as a separate release exercise.
 
 To run the same source-checkout gate locally, use a temporary Python 3.10+
 virtual environment and put its `bin` directory first on `PATH`. This keeps
