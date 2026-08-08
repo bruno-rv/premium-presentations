@@ -133,6 +133,14 @@ not done until deck doctor exits 0 — never deliver a deck with failing
 validation. `validate_deck.py` and `validate_runtime_contract.py` under
 `$skill_root/scripts/` stay available for isolated debugging of one check.
 
+The layout pixel sweep validates every theme in the registry by default — decks
+embed the full registry for live theme switching, so a layout break under any
+theme is a real bug. Pass `--single-theme` to `deck_doctor.py` or
+`validate_deck.py` for a fast path that sweeps only the deck's authored
+`data-theme`. A `--single-theme` run names the theme it swept and never prints
+`DECK HEALTHY` — never ship a deck validated only with `--single-theme`; the
+full sweep is the release gate.
+
 Use lowercase hyphenated slugs. For unspecified themes, use the first theme
 returned by `list-themes.py` unless the topic clearly calls for another
 discovered theme. `$workspace_root/assets/decks/` is generated output and

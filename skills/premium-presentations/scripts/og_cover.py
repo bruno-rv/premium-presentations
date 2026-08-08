@@ -29,7 +29,29 @@ def og_cover(html_path: Path) -> int:
         browser = p.chromium.launch(headless=True)
         try:
             page = browser.new_page(viewport={"width": 1200, "height": 630})
-            page.goto(url, wait_until="networkidle", timeout=60_000)
+            # wait_until="load" is sufficient: the readiness gates below are the
+            # authoritative signals, so the extra 500ms quiet period networkidle
+            # adds buys nothing on a self-contained file:// deck.
+            page.goto(url, wait_until="load", timeout=60_000)
+            # Theme visuals and optional theme fonts inject asynchronously
+            # during runtime init (mountThemeVisuals / syncFonts). Wait for
+            # fonts + images + double-rAF so the cover never ships with a
+            # fallback font or a missing hero.
+            page.wait_for_function(
+                """async () => {
+                  if (document.fonts && document.fonts.ready) await document.fonts.ready;
+                  await Promise.all([...document.images].map((img) =>
+                    img.complete
+                      ? Promise.resolve()
+                      : new Promise((resolve) => { img.onload = resolve; img.onerror = resolve; })
+                  ));
+                  await new Promise((resolve) =>
+                    requestAnimationFrame(() => requestAnimationFrame(resolve))
+                  );
+                  return true;
+                }""",
+                timeout=30_000,
+            )
             if page.locator(".mermaid-wrap").count():
                 page.wait_for_function(
                     "[...document.querySelectorAll('.mermaid-wrap')]"

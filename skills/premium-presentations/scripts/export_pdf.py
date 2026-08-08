@@ -78,7 +78,11 @@ def export_pdf(html_path: Path, out_path: Path) -> int:
             # "settling complete" signal — the runtime calls print() only after
             # fonts+images+mermaid+double-rAF have all resolved.
             page.add_init_script("window.print = () => { window.__pdfReady = true; };")
-            page.goto(url, wait_until="networkidle", timeout=60_000)
+            # wait_until="load" is sufficient: the __pdfReady and mermaid-svg
+            # gates below are the authoritative readiness signals, so the extra
+            # 500ms quiet period networkidle adds buys nothing on a
+            # self-contained file:// deck.
+            page.goto(url, wait_until="load", timeout=60_000)
             page.wait_for_function("window.__pdfReady === true", timeout=30_000)
             # Supplementary deterministic gate (AT-002): every mermaid-wrap has
             # rendered an <svg>. NOTE: premium-mermaid.js REPLACES the source

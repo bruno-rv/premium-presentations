@@ -79,6 +79,13 @@ OVERLAP_SELECTORS = (
 
 READINESS_JS = """
 async (theme) => {
+  // Setting data-theme directly (rather than dispatching the runtime's
+  // premium-theme-change event) keeps the sweep fast: that event re-renders
+  // Mermaid and rebuilds search, which would multiply the sweep cost per
+  // theme. Known limitation: theme-reactive modules that only react to the
+  // event (e.g. premium-red-chrome.js mounting .red-brand-bar) do not re-run
+  // per theme, so a red deck swept under a non-red theme can report a
+  // false-positive overlap — noise, not a missed bug.
   document.documentElement.dataset.theme = theme;
   if (document.fonts && document.fonts.ready) await document.fonts.ready;
   await new Promise((resolve) =>
@@ -284,7 +291,21 @@ def validate_deck_divider_markup(html: str) -> tuple[list[str], list[str]]:
     return errors, warnings
 
 
-def _playwright_check(html_path: Path) -> tuple[list[str], list[str]]:
+def declared_theme_from_html(html: str) -> str | None:
+    """Return the deck's authored data-theme, or None when absent.
+
+    Shared by the layout sweep (theme narrowing) and the validators that
+    report which theme a --single-theme run swept.
+    """
+    match = re.search(
+        r"<html\b[^>]*\bdata-theme\s*=\s*[\"']([^\"']+)[\"']", html, re.I
+    )
+    return match.group(1) if match else None
+
+
+def _playwright_check(
+    html_path: Path, single_theme: bool = False, html: str | None = None
+) -> tuple[list[str], list[str]]:
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
@@ -296,14 +317,48 @@ def _playwright_check(html_path: Path) -> tuple[list[str], list[str]]:
     warnings: list[str] = []
     url = html_path.resolve().as_uri()
     themes = discover_themes()
+    if single_theme:
+        # Fast path: validate only the deck's authored theme. The deck ships
+        # under that theme, so it is measured even when the theme is not in
+        # the framework registry (workspace-owned themes from generate_theme.py
+        # are inlined into the deck). No declared theme -> full sweep.
+        if html is not None:
+            source = html
+        else:
+            try:
+                source = html_path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                source = ""
+        declared = declared_theme_from_html(source)
+        if declared:
+            themes = [declared]
 
     viewports = [(1280, 720), (1440, 900), (1920, 1080)]
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        try:
+            browser = p.chromium.launch(headless=True)
+        except Exception as exc:
+            # Launch can fail for reasons other than a missing Chromium
+            # (driver, resource limits); keep the message honest.
+            return [], [f"Layout pixel checks skipped — browser launch failed: {exc}"]
         try:
             page = browser.new_page()
-            page.goto(url, wait_until="networkidle", timeout=60_000)
+            # wait_until="load" is sufficient: the measurement scripts below
+            # gate on fonts.ready + double-rAF, and the Mermaid-SVG gate below
+            # covers async diagram rendering, so the extra 500ms quiet period
+            # networkidle adds buys nothing on a self-contained file:// deck.
+            page.goto(url, wait_until="load", timeout=60_000)
+            # Mermaid renders asynchronously after DOMContentLoaded (dynamic
+            # import + mermaid.run()); a snapshot taken mid-render measures
+            # placeholder geometry and misses real findings. Wait for every
+            # diagram to produce its <svg> before measuring.
+            if page.locator(".mermaid-wrap").count():
+                page.wait_for_function(
+                    "[...document.querySelectorAll('.mermaid-wrap')]"
+                    ".every(el => el.querySelector('svg'))",
+                    timeout=30_000,
+                )
 
             for theme in themes:
                 page.evaluate(READINESS_JS, theme)
@@ -337,7 +392,7 @@ def _playwright_check(html_path: Path) -> tuple[list[str], list[str]]:
 
 
 def validate_deck_layout(
-    html: str, bundle: str, html_path: Path
+    html: str, bundle: str, html_path: Path, single_theme: bool = False
 ) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -362,11 +417,15 @@ def validate_deck_layout(
                 )
                 break
 
+    # Environment issues (Playwright/Chromium absent) are handled inside
+    # _playwright_check as warnings. Anything else raising out of the sweep is
+    # a validator defect and must fail the gate — a silently skipped layout
+    # check would report DECK HEALTHY on a broken deck.
     try:
-        px_errs, px_warns = _playwright_check(html_path)
+        px_errs, px_warns = _playwright_check(html_path, single_theme=single_theme, html=html)
         errors.extend(px_errs)
         warnings.extend(px_warns)
     except Exception as exc:
-        warnings.append(f"Layout pixel checks failed: {exc}")
+        errors.append(f"Layout pixel checks failed: {exc}")
 
     return errors, warnings

@@ -14,7 +14,7 @@ from validate_diagrams import (
     validate_deck_diagrams,
     validate_inline_scripts,
 )
-from validate_layout import validate_deck_layout
+from validate_layout import declared_theme_from_html, validate_deck_layout
 from slide_html import SlideHtmlError, SlideSpan, parse_slide_spans, parse_slide_start_tags
 from slide_spec import (
     BudgetColumns,
@@ -305,7 +305,12 @@ def load_bundle(html_path: Path, text: str) -> str:
     return augment_bundle_for_diagrams(text, bundle, html_path)
 
 
-def validate(html_path: Path, spec_path: str = "", strict_variety: bool = False) -> int:
+def validate(
+    html_path: Path,
+    spec_path: str = "",
+    strict_variety: bool = False,
+    single_theme: bool = False,
+) -> int:
     text = html_path.read_text(encoding="utf-8", errors="replace")
     bundle = load_bundle(html_path, text)
     errors: list[str] = []
@@ -385,7 +390,7 @@ def validate(html_path: Path, spec_path: str = "", strict_variety: bool = False)
     errors.extend(d_errs)
     warnings.extend(d_warns)
 
-    l_errs, l_warns = validate_deck_layout(text, bundle, html_path)
+    l_errs, l_warns = validate_deck_layout(text, bundle, html_path, single_theme=single_theme)
     errors.extend(l_errs)
     warnings.extend(l_warns)
 
@@ -502,6 +507,10 @@ def validate(html_path: Path, spec_path: str = "", strict_variety: bool = False)
         print(f"  Mermaid diagrams: {mermaid_count}")
     if expected is not None:
         print(f"  Spec expects: {expected}")
+    if single_theme:
+        declared = declared_theme_from_html(text)
+        if declared:
+            print(f"  Layout sweep: {declared} (single-theme)")
 
     for w in warnings:
         print(f"  WARN: {w}")
@@ -516,17 +525,21 @@ def validate(html_path: Path, spec_path: str = "", strict_variety: bool = False)
 
 
 def main() -> int:
-    args = [a for a in sys.argv[1:] if a != "--strict-variety"]
+    args = [a for a in sys.argv[1:] if a not in ("--strict-variety", "--single-theme")]
     strict_variety = "--strict-variety" in sys.argv[1:]
+    single_theme = "--single-theme" in sys.argv[1:]
     html = args[0] if args else ""
     spec = args[1] if len(args) > 1 else ""
     if not html or not Path(html).is_file():
         print(
-            "Usage: validate_deck.py <deck.html> [slide-spec.md] [--strict-variety]",
+            "Usage: validate_deck.py <deck.html> [slide-spec.md] "
+            "[--strict-variety] [--single-theme]",
             file=sys.stderr,
         )
         return 1
-    return validate(Path(html), spec, strict_variety=strict_variety)
+    return validate(
+        Path(html), spec, strict_variety=strict_variety, single_theme=single_theme
+    )
 
 
 if __name__ == "__main__":
