@@ -56,6 +56,20 @@ Close the gaps the product audit surfaced. No new surface area.
 9. **LAN audience follow-along** — `share-deck.sh` LAN mode grows slide-sync so
    audience devices track the presenter. Local-first, no SaaS.
 
+## Known limitations
+
+- **Layout sweep bypasses the runtime theme-change event.** `validate_layout.py`
+  sets `data-theme` directly instead of dispatching `premium-theme-change`,
+  because that event re-renders Mermaid and rebuilds search per theme — a
+  multi-fold sweep cost. Consequence: event-reactive modules (e.g.
+  `premium-red-chrome.js` mounting `.red-brand-bar`) do not re-run per theme, so
+  a red deck swept under a non-red theme can report a false-positive overlap.
+  Revisit when: a deck bundles `premium-red-chrome.js`, a second
+  event-reactive module appears, or a real false positive is reported. Any fix
+  must ship a fixture with an event-reactive module, correct per-theme
+  lifecycle, Mermaid readiness, and a measured perf comparison — dispatching
+  the event is not automatically the right implementation.
+
 ## Process
 
 Each version goes through the AgentSpec cycle: brainstorm → define → design → build →
