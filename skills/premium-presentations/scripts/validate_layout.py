@@ -77,6 +77,152 @@ OVERLAP_SELECTORS = (
     ".red-brand-bar",
 )
 
+READINESS_JS = """
+async (theme) => {
+  document.documentElement.dataset.theme = theme;
+  if (document.fonts && document.fonts.ready) await document.fonts.ready;
+  await new Promise((resolve) =>
+    requestAnimationFrame(() => requestAnimationFrame(resolve))
+  );
+}
+"""
+
+LAYOUT_SNAPSHOT_JS = """
+async (config) => {
+  if (document.fonts && document.fonts.ready) await document.fonts.ready;
+  await new Promise((resolve) =>
+    requestAnimationFrame(() => requestAnimationFrame(resolve))
+  );
+
+  let measurementStyle = document.getElementById('premium-layout-validation-style');
+  if (!measurementStyle) {
+    measurementStyle = document.createElement('style');
+    measurementStyle.id = 'premium-layout-validation-style';
+    measurementStyle.textContent = `
+      section.slide[data-layout-validation] {
+        opacity: 1 !important;
+        transform: none !important;
+        transition: none !important;
+      }
+      section.slide[data-layout-validation] * {
+        animation: none !important;
+        transition: none !important;
+      }
+      section.slide[data-layout-validation] .reveal {
+        opacity: 1 !important;
+        transform: none !important;
+      }
+    `;
+    document.head.appendChild(measurementStyle);
+  }
+
+  const measureSlide = (slide, measure) => {
+    const hadMarker = slide.hasAttribute('data-layout-validation');
+    const markerValue = slide.getAttribute('data-layout-validation');
+    const wasVisible = slide.classList.contains('visible');
+    slide.setAttribute('data-layout-validation', '');
+    slide.classList.add('visible');
+    void slide.offsetHeight;
+    try {
+      return measure();
+    } finally {
+      if (!wasVisible) slide.classList.remove('visible');
+      if (hadMarker) slide.setAttribute('data-layout-validation', markerValue || '');
+      else slide.removeAttribute('data-layout-validation');
+    }
+  };
+
+  const dividerIssues = [];
+  document.querySelectorAll('section.slide--divider').forEach((slide, idx) => {
+    measureSlide(slide, () => {
+      const num = slide.querySelector('.slide__number');
+      if (!num) {
+        dividerIssues.push({ slide: idx + 1, problem: 'missing .slide__number' });
+        return;
+      }
+      const sr = slide.getBoundingClientRect();
+      const nr = num.getBoundingClientRect();
+      if (nr.width < 2 || nr.height < 2) {
+        dividerIssues.push({ slide: idx + 1, problem: 'ghost number not laid out' });
+        return;
+      }
+      const sides = [];
+      if (nr.left < sr.left - config.tolerance) sides.push('left');
+      if (nr.right > sr.right + config.tolerance) sides.push('right');
+      if (nr.top < sr.top - config.tolerance) sides.push('top');
+      if (nr.bottom > sr.bottom + config.tolerance) sides.push('bottom');
+      if (num.scrollHeight > num.clientHeight + config.tolerance) sides.push('overflow-y');
+      if (num.scrollWidth > num.clientWidth + config.tolerance) sides.push('overflow-x');
+      try {
+        const range = document.createRange();
+        range.selectNodeContents(num);
+        const tr = range.getBoundingClientRect();
+        if (tr.width > 2 && tr.height > 2) {
+          if (tr.left < sr.left - config.tolerance) sides.push('glyph-left');
+          if (tr.right > sr.right + config.tolerance) sides.push('glyph-right');
+          if (tr.top < sr.top - config.tolerance) sides.push('glyph-top');
+          if (tr.bottom > sr.bottom + config.tolerance) sides.push('glyph-bottom');
+        }
+      } catch (_e) {}
+      if (sides.length) {
+        dividerIssues.push({
+          slide: idx + 1,
+          problem: 'ghost number clipped: ' + [...new Set(sides)].join(', '),
+          navTitle: slide.getAttribute('data-nav-title') || '',
+        });
+      }
+    });
+  });
+
+  const slideOverlaps = [];
+  document.querySelectorAll('section.slide').forEach((slide, idx) => {
+    const issues = measureSlide(slide, () => {
+      const nodes = [];
+      for (const sel of config.selectors) {
+        slide.querySelectorAll(sel).forEach((el) => {
+          if (el.closest('.slide__number')) return;
+          const st = getComputedStyle(el);
+          if (st.display === 'none' || st.visibility === 'hidden' || st.opacity === '0') return;
+          const r = el.getBoundingClientRect();
+          if (r.width < 8 || r.height < 8) return;
+          nodes.push({ el, r, sel });
+        });
+      }
+
+      const found = [];
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const a = nodes[i].r;
+          const b = nodes[j].r;
+          const x0 = Math.max(a.left, b.left);
+          const y0 = Math.max(a.top, b.top);
+          const x1 = Math.min(a.right, b.right);
+          const y1 = Math.min(a.bottom, b.bottom);
+          if (x1 <= x0 || y1 <= y0) continue;
+          const inter = (x1 - x0) * (y1 - y0);
+          const minArea = Math.min(a.width * a.height, b.width * b.height);
+          if (minArea <= 0 || inter / minArea < config.ratioMin) continue;
+          if (nodes[i].el.contains(nodes[j].el) || nodes[j].el.contains(nodes[i].el)) continue;
+          found.push({
+            a: nodes[i].sel,
+            b: nodes[j].sel,
+            ratio: Math.round((inter / minArea) * 100),
+          });
+        }
+      }
+      return found;
+    });
+    slideOverlaps.push({
+      slide: idx + 1,
+      navTitle: slide.getAttribute('data-nav-title') || '',
+      issues,
+    });
+  });
+
+  return { dividerIssues, slideOverlaps };
+}
+"""
+
 
 def find_repo_shared(start: Path) -> Path | None:
     return _find_repo_shared(start, sentinel="premium-components.css")
@@ -151,101 +297,6 @@ def _playwright_check(html_path: Path) -> tuple[list[str], list[str]]:
     url = html_path.resolve().as_uri()
     themes = discover_themes()
 
-    overlap_js = """
-    (selectors) => {
-      const tol = %d;
-      const ratioMin = %s;
-      const issues = [];
-      const slide = document.querySelector('.slide.visible') || document.querySelector('.slide');
-      if (!slide) return issues;
-
-      const nodes = [];
-      for (const sel of selectors) {
-        slide.querySelectorAll(sel).forEach((el) => {
-          if (el.closest('.slide__number')) return;
-          const st = getComputedStyle(el);
-          if (st.display === 'none' || st.visibility === 'hidden' || st.opacity === '0') return;
-          const r = el.getBoundingClientRect();
-          if (r.width < 8 || r.height < 8) return;
-          nodes.push({ el, r, sel });
-        });
-      }
-
-      for (let i = 0; i < nodes.length; i++) {
-        for (let j = i + 1; j < nodes.length; j++) {
-          const a = nodes[i].r;
-          const b = nodes[j].r;
-          const x0 = Math.max(a.left, b.left);
-          const y0 = Math.max(a.top, b.top);
-          const x1 = Math.min(a.right, b.right);
-          const y1 = Math.min(a.bottom, b.bottom);
-          if (x1 <= x0 || y1 <= y0) continue;
-          const inter = (x1 - x0) * (y1 - y0);
-          const minArea = Math.min(a.width * a.height, b.width * b.height);
-          if (minArea <= 0) continue;
-          if (inter / minArea < ratioMin) continue;
-          if (nodes[i].el.contains(nodes[j].el) || nodes[j].el.contains(nodes[i].el)) continue;
-          issues.push({
-            a: nodes[i].sel,
-            b: nodes[j].sel,
-            ratio: Math.round((inter / minArea) * 100),
-          });
-        }
-      }
-      return issues;
-    }
-    """ % (CLIP_TOLERANCE_PX, OVERLAP_RATIO_WARN)
-
-    clip_js = """
-    () => {
-      const tol = %d;
-      const issues = [];
-      document.querySelectorAll('section.slide--divider').forEach((slide, idx) => {
-        const num = slide.querySelector('.slide__number');
-        if (!num) {
-          issues.push({ slide: idx + 1, problem: 'missing .slide__number' });
-          return;
-        }
-        const sr = slide.getBoundingClientRect();
-        const nr = num.getBoundingClientRect();
-        if (nr.width < 2 || nr.height < 2) {
-          issues.push({ slide: idx + 1, problem: 'ghost number not laid out' });
-          return;
-        }
-        const sides = [];
-        if (nr.left < sr.left - tol) sides.push('left');
-        if (nr.right > sr.right + tol) sides.push('right');
-        if (nr.top < sr.top - tol) sides.push('top');
-        if (nr.bottom > sr.bottom + tol) sides.push('bottom');
-        if (num.scrollHeight > num.clientHeight + tol) sides.push('overflow-y');
-        if (num.scrollWidth > num.clientWidth + tol) sides.push('overflow-x');
-        let textClip = '';
-        try {
-          const range = document.createRange();
-          range.selectNodeContents(num);
-          const tr = range.getBoundingClientRect();
-          if (tr.width > 2 && tr.height > 2) {
-            if (tr.left < sr.left - tol) sides.push('glyph-left');
-            if (tr.right > sr.right + tol) sides.push('glyph-right');
-            if (tr.top < sr.top - tol) sides.push('glyph-top');
-            if (tr.bottom > sr.bottom + tol) sides.push('glyph-bottom');
-          }
-        } catch (_e) {
-          textClip = '';
-        }
-        if (sides.length) {
-          const uniq = [...new Set(sides)];
-          issues.push({
-            slide: idx + 1,
-            problem: 'ghost number clipped: ' + uniq.join(', '),
-            navTitle: slide.getAttribute('data-nav-title') || '',
-          });
-        }
-      });
-      return issues;
-    }
-    """ % (CLIP_TOLERANCE_PX)
-
     viewports = [(1280, 720), (1440, 900), (1920, 1080)]
 
     with sync_playwright() as p:
@@ -255,35 +306,27 @@ def _playwright_check(html_path: Path) -> tuple[list[str], list[str]]:
             page.goto(url, wait_until="networkidle", timeout=60_000)
 
             for theme in themes:
-                page.evaluate(
-                    "(t) => { document.documentElement.dataset.theme = t; }",
-                    theme,
-                )
-                page.wait_for_timeout(150)
+                page.evaluate(READINESS_JS, theme)
 
                 for vw, vh in viewports:
                     page.set_viewport_size({"width": vw, "height": vh})
-                    page.wait_for_timeout(100)
+                    snapshot = page.evaluate(
+                        LAYOUT_SNAPSHOT_JS,
+                        {
+                            "selectors": list(OVERLAP_SELECTORS),
+                            "tolerance": CLIP_TOLERANCE_PX,
+                            "ratioMin": OVERLAP_RATIO_WARN,
+                        },
+                    )
 
-                    dividers = page.locator("section.slide--divider")
-                    count = dividers.count()
-                    for idx in range(count):
-                        dividers.nth(idx).scroll_into_view_if_needed()
-                        page.wait_for_timeout(200)
-                        clips = page.evaluate(clip_js)
-                        for c in clips:
-                            title = c.get("navTitle") or f"divider #{c.get('slide')}"
-                            msg = f"[{theme} {vw}x{vh}] {title}: {c.get('problem')}"
-                            errors.append(msg)
+                    for c in snapshot["dividerIssues"]:
+                        title = c.get("navTitle") or f"divider #{c.get('slide')}"
+                        msg = f"[{theme} {vw}x{vh}] {title}: {c.get('problem')}"
+                        errors.append(msg)
 
-                    slides = page.locator("section.slide")
-                    sc = slides.count()
-                    for idx in range(sc):
-                        slides.nth(idx).scroll_into_view_if_needed()
-                        page.wait_for_timeout(120)
-                        overlaps = page.evaluate(overlap_js, list(OVERLAP_SELECTORS))
-                        for o in overlaps[:5]:
-                            nav = slides.nth(idx).get_attribute("data-nav-title") or f"slide {idx + 1}"
+                    for slide in snapshot["slideOverlaps"]:
+                        nav = slide.get("navTitle") or f"slide {slide['slide']}"
+                        for o in slide["issues"][:5]:
                             warnings.append(
                                 f"[{theme} {vw}x{vh}] {nav}: overlap {o['a']} ∩ {o['b']} (~{o['ratio']}%)"
                             )
