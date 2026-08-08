@@ -55,6 +55,15 @@ jobs:
         working-directory: skills/premium-presentations/scripts
         run: python3 -m unittest discover -s tests -p 'test_*.py'
 
+      # The suites above exercise the layout gate only through unit tests, fake
+      # pages, and one real-Chromium test over synthetic markup. This runs the
+      # real CLI over the one tracked bundled deck, full multi-theme sweep.
+      - name: Run real bundled-deck smoke
+        run: |
+          python3 skills/premium-presentations/scripts/deck_doctor.py \
+            skills/premium-presentations/assets/examples/rag-vector-graph/rag-vector-graph-slides.html \
+            skills/premium-presentations/assets/examples/rag-vector-graph/rag-vector-graph-slide-spec.md
+
       - name: Validate runtime and themes
         run: |
           python3 skills/premium-presentations/scripts/validate_runtime_contract.py
