@@ -28,11 +28,6 @@ def python_version_supported(version_info: Sequence[int] | None = None) -> bool:
     return tuple(version[:2]) >= MIN_PYTHON
 
 
-def check_python_version(version_info: Sequence[int] | None = None) -> bool:
-    """Compatibility alias for callers that prefer a check-style name."""
-    return python_version_supported(version_info)
-
-
 def parse_node_version(output: str) -> tuple[int, int, int] | None:
     """Parse ``node --version`` output, accepting the usual leading ``v``."""
     match = re.search(r"\bv?(\d+)\.(\d+)(?:\.(\d+))?\b", output.strip())
@@ -46,11 +41,6 @@ def node_version_supported(version: str | Sequence[int] | None) -> bool:
     if isinstance(version, str):
         version = parse_node_version(version)
     return version is not None and int(version[0]) >= MIN_NODE
-
-
-def check_node_version(version: str | Sequence[int] | None) -> bool:
-    """Compatibility alias for callers that prefer a check-style name."""
-    return node_version_supported(version)
 
 
 def _node_version() -> tuple[int, int, int] | None:
