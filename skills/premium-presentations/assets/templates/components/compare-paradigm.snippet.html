@@ -1,23 +1,9 @@
 <!-- Compare split — paradigm / A vs B (frm P9 / AL-7, era slide AL-2)
 
-     IMPORTANT — compare-split is `flex:1; align-items:stretch` in
-     premium-components.css: it stretches to fill all remaining slide height
-     by design, regardless of content. A sparse panel (badge+title+one line)
-     then reads as dead space, and a `.compare-callout` (margin-top:auto)
-     gets pinned to the stretched bottom edge, where it can collide with a
-     fixed corner element (Side Notes panel, dot nav). Two ways to keep it
-     clean — pick one per slide, don't leave a panel sparse and stretched:
-
-       1. Fill each panel with a 3–5 item <ul> of concrete, specific facts
-          (this is the default below — the pattern used throughout the
-          shipped rag-vector-graph example deck).
-       2. If the content genuinely doesn't fill the space, add
-          style="flex:none" on .compare-split so the row sizes to its own
-          content and is centered by .content-center-wrap instead of
-          stretching.
-
-     validate_deck.py's compare-split density check will WARN if a slide
-     does neither. -->
+     IMPORTANT — compare-split sizes to its content by default. Use
+     class="compare-split--fill" only when the comparison is intentionally
+     full-height; that mode should contain a 3–5 item <ul> of concrete facts.
+     validate_deck.py warns when an explicit full-height comparison is sparse. -->
 <section class="slide slide--content">
   <p class="slide__label reveal">Context</p>
   <h2 class="slide__heading reveal">The year the <span class="gradient-gold">paradigm</span> shifted</h2>

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -280,6 +281,43 @@ class BundlePortableMetaTests(unittest.TestCase):
         self.assertNotIn("https://example.com/hero.webp", bundled)
         self.assertNotIn("//fonts.googleapis.com", bundled)
         self.assertIn(_EMBED_MARKER, bundled)
+
+
+class BundleCompareLayoutTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.bundler = load_bundler()
+
+    def _bundle(self, html: str) -> str:
+        deck_dir = ROOT / "assets" / "decks" / "_test_bundle_tmp"
+        deck_dir.mkdir(parents=True, exist_ok=True)
+        path = deck_dir / "deck.html"
+        try:
+            path.write_text(html, encoding="utf-8")
+            return bundle_string(self.bundler, html, path)
+        finally:
+            path.unlink(missing_ok=True)
+            try:
+                deck_dir.rmdir()
+            except OSError:
+                pass
+
+    def test_compare_splits_default_to_content_sized_layout(self) -> None:
+        bundled = self._bundle(_make_minimal_deck())
+        match = re.search(
+            r"/\* --- premium-components\.css --- \*/[\s\S]*?"
+            r"\.compare-split\s*\{(?P<body>[^}]*)\}",
+            bundled,
+        )
+        self.assertIsNotNone(match)
+        self.assertIn("flex: 0 1 auto;", match.group("body"))
+
+    def test_compare_splits_keep_explicit_full_height_opt_in(self) -> None:
+        bundled = self._bundle(_make_minimal_deck())
+        self.assertRegex(
+            bundled,
+            r"\.compare-split--fill\s*\{[^}]*flex:\s*1\s*;",
+        )
 
 
 class WantsMatcher_Tests(unittest.TestCase):

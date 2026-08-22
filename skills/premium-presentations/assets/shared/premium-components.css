@@ -231,9 +231,14 @@
   grid-template-columns: 1fr auto 1fr;
   gap: clamp(8px, 1.5vw, 20px);
   align-items: stretch;
-  flex: 1;
+  /* Content-sized by default; opt into full-height panels deliberately. */
+  flex: 0 1 auto;
   min-height: 0;
   margin-top: clamp(8px, 1.5vh, 16px);
+}
+
+.compare-split--fill {
+  flex: 1;
 }
 
 .compare-split__pillar {

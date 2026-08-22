@@ -118,14 +118,13 @@ Use semantic modifiers on `.compare-panel` instead of inline colors:
 | `compare-panel--vector` | Vector-search side of a comparison | blue |
 | `compare-panel--graph` | Graph side of a comparison | violet |
 
-**Density (hard rule):** `.compare-split` is `flex:1; align-items:stretch` —
-it stretches to fill all remaining slide height regardless of content. Fill
-each `.compare-panel` with a 3–5 item `<ul>` of concrete facts (see
-`compare-paradigm.snippet.html`), or set `style="flex:none"` on
-`.compare-split` if the content genuinely doesn't fill the space. Never ship
-a panel with only badge+title+one line and a `.compare-callout` pinned to
-the bottom — `deck_doctor.py` (`validate_compare_split_density`) warns on
-this.
+**Density (hard rule):** `.compare-split` sizes to its content by default, so
+panels do not become empty full-height boxes. Use `.compare-split--fill` only
+when a comparison is intentionally meant to occupy the remaining slide height;
+in that mode, fill each `.compare-panel` with a 3–5 item `<ul>` of concrete
+facts (see `compare-paradigm.snippet.html`). `deck_doctor.py`
+(`validate_compare_split_density`) warns when an explicit full-height compare
+has no concrete list content.
 
 **Visual density (hard rule):** any decorative element (SVG shapes, icon
 rows) inside a component slot must either carry real visible text/labels or

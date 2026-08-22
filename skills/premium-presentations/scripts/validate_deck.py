@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import re
 import sys
+from html.parser import HTMLParser
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -133,37 +134,104 @@ def validate_deck_variety(text: str) -> tuple[list[str], int]:
     return messages, len(deck_markers)
 
 
-COMPARE_SPLIT_OPEN_RE = re.compile(r'<div class="compare-split\b[^"]*"([^>]*)>', re.I)
+INLINE_FULL_HEIGHT_RE = re.compile(r"\bflex\s*:\s*1(?:\s|;|$)", re.I)
+
+
+class _MarkupNode:
+    def __init__(self, tag: str, attrs: dict[str, str]) -> None:
+        self.tag = tag
+        self.attrs = attrs
+        self.children: list[_MarkupNode] = []
+
+    @property
+    def classes(self) -> set[str]:
+        return set(self.attrs.get("class", "").split())
+
+
+class _MarkupTreeParser(HTMLParser):
+    """Build the small element tree needed for compare density checks."""
+
+    _VOID_TAGS = {
+        "area", "base", "br", "col", "embed", "hr", "img", "input",
+        "link", "meta", "param", "source", "track", "wbr",
+    }
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.root = _MarkupNode("__root__", {})
+        self._stack = [self.root]
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        tag = tag.lower()
+        node = _MarkupNode(tag, {key: value or "" for key, value in attrs})
+        self._stack[-1].children.append(node)
+        if tag not in self._VOID_TAGS:
+            self._stack.append(node)
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        node = _MarkupNode(tag.lower(), {key: value or "" for key, value in attrs})
+        self._stack[-1].children.append(node)
+
+    def handle_endtag(self, tag: str) -> None:
+        tag = tag.lower()
+        for index in range(len(self._stack) - 1, 0, -1):
+            if self._stack[index].tag == tag:
+                del self._stack[index:]
+                return
+
+
+def _descendants(node: _MarkupNode) -> list[_MarkupNode]:
+    result: list[_MarkupNode] = []
+    for child in node.children:
+        result.append(child)
+        result.extend(_descendants(child))
+    return result
 
 
 def validate_compare_split_density(text: str) -> list[str]:
-    """compare-split is `flex:1; align-items:stretch` by design (premium-components.css)
-    — it stretches to fill all remaining slide height regardless of content. A panel
-    with only a badge+title+one line reads as dead space with nothing anchoring the
-    bottom edge (or a `.compare-callout` pinned there, which can collide with a fixed
-    corner element like a Side Notes panel). Flag slides that neither fill the panel
-    (a `<ul>` list of concrete items) nor opt out of the stretch (`style="flex:none"`
-    on `.compare-split`)."""
+    """Warn when a sparse compare explicitly opts into full-height panels.
+
+    The shared component is content-sized by default. Authors can deliberately
+    opt into the older full-height behavior with ``compare-split--fill`` or an
+    inline ``flex:1`` rule; those sparse panels still need concrete list content
+    to avoid reading as dead space.
+    """
     messages: list[str] = []
     opens = list(SLIDE_OPEN_RE.finditer(text))
     for idx, match in enumerate(opens):
         end = opens[idx + 1].start() if idx + 1 < len(opens) else len(text)
         chunk = text[match.start():end]
-        if "compare-split" not in chunk:
-            continue
-        split_match = COMPARE_SPLIT_OPEN_RE.search(chunk)
-        if not split_match:
-            continue
-        attrs = split_match.group(1)
-        has_flex_override = bool(re.search(r"flex\s*:\s*none", attrs, re.I))
-        has_list = "<ul" in chunk or "<ol" in chunk
-        if not has_flex_override and not has_list:
-            messages.append(
-                f"slide {idx + 1}: compare-split panel(s) look sparse (no <ul>/<ol> "
-                'list) with no `style="flex:none"` override — compare-split stretches '
-                "flex:1 to fill the slide by design, so thin content reads as dead "
-                "space (see references/components.md, P9 compare-paradigm)"
+        parser = _MarkupTreeParser()
+        parser.feed(chunk)
+        splits = [
+            node
+            for node in _descendants(parser.root)
+            if node.tag == "div" and "compare-split" in node.classes
+        ]
+        for split in splits:
+            style = split.attrs.get("style", "")
+            has_full_height = (
+                "compare-split--fill" in split.classes
+                or bool(INLINE_FULL_HEIGHT_RE.search(style))
             )
+            if not has_full_height:
+                continue
+            panels = [
+                node
+                for node in _descendants(split)
+                if node.tag == "div" and "compare-panel" in node.classes
+            ]
+            every_panel_has_list = bool(panels) and all(
+                any(node.tag in {"ul", "ol"} for node in _descendants(panel))
+                for panel in panels
+            )
+            if not every_panel_has_list:
+                messages.append(
+                    f"slide {idx + 1}: compare-split panel(s) opt into explicit full-height "
+                    "behavior without a <ul>/<ol> list in every panel — add concrete "
+                    "facts or remove the `compare-split--fill`/`flex:1` override "
+                    "(see references/components.md, P9 compare-paradigm)"
+                )
     return messages
 
 
