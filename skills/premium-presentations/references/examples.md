@@ -195,11 +195,24 @@ Add an `<aside class="notes">` inside any slide. Notes are hidden from the
 audience and surface in the presenter popup (and its no-notes summary
 fallback uses the slide's lead + bullets).
 
+Notes explain — they never direct. Each note concisely explains every
+concept displayed on its slide in plain language (what it is, why it
+exists, how it behaves). Do not write staging cues ("pause here", "walk
+through the table"), slide narration or orientation ("this slide
+shows…", "as you can see", "next we'll…"), or jargon the slide does not
+decode — technical terms get everyday-words explanations. Full rule:
+Speaker Notes rule in `references/slide-spec-template.md`.
+
 ```html
 <section class="slide">
   <h2 class="slide__heading reveal">Slide title</h2>
   <p class="slide__body reveal">Visible content.</p>
-  <aside class="notes">What to actually say about this slide.</aside>
+  <aside class="notes">
+    A hook is a small script that fires by itself at fixed moments:
+    when a prompt is submitted, before and after each tool runs. By
+    returning a specific failure code, a hook can cancel whatever
+    triggered it — the action simply never happens.
+  </aside>
 </section>
 ```
 

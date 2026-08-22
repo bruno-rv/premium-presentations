@@ -1513,9 +1513,14 @@ html[data-parallax="on"] .premium-bg-3d { opacity: 1; }
   grid-template-columns: 1fr auto 1fr;
   gap: clamp(8px, 1.5vw, 20px);
   align-items: stretch;
-  flex: 1;
+  /* Content-sized by default; opt into full-height panels deliberately. */
+  flex: 0 1 auto;
   min-height: 0;
   margin-top: clamp(8px, 1.5vh, 16px);
+}
+
+.compare-split--fill {
+  flex: 1;
 }
 
 .compare-split__pillar {
@@ -4646,9 +4651,9 @@ html[data-motion-profile="cinematic"] .slide {
   <h2 class="slide__heading reveal">Turning documents into <span class="accent">searchable meaning</span></h2>
   <div class="live-flow reveal" data-flow-interval="1800"
        data-flow-phases='[
-         {"label":"CHUNK \u2014 split documents into passages","nodes":["lf-doc","lf-chunk"],"arrows":["lf-a1"]},
-         {"label":"EMBED \u2014 convert each chunk to a vector","color":"var(--gold)","nodes":["lf-chunk","lf-embed"],"arrows":["lf-a2"]},
-         {"label":"INDEX \u2014 store vectors for fast search","color":"var(--green)","nodes":["lf-embed","lf-index"],"arrows":["lf-a3"]}
+         {"label":"CHUNK — split documents into passages","nodes":["lf-doc","lf-chunk"],"arrows":["lf-a1"]},
+         {"label":"EMBED — convert each chunk to a vector","color":"var(--gold)","nodes":["lf-chunk","lf-embed"],"arrows":["lf-a2"]},
+         {"label":"INDEX — store vectors for fast search","color":"var(--green)","nodes":["lf-embed","lf-index"],"arrows":["lf-a3"]}
        ]'>
     <div class="live-flow__banner" data-flow-banner>CHUNK</div>
     <div class="live-flow__row">
@@ -4659,7 +4664,7 @@ html[data-motion-profile="cinematic"] .slide {
       </div>
       <div class="flow-arrow" id="lf-a1" aria-hidden="true">
         <span class="flow-arrow__line"><span class="flow-arrow__shimmer"></span></span>
-        <span class="flow-arrow__label">split \u2192</span>
+        <span class="flow-arrow__label">split →</span>
       </div>
       <div class="flow-node" id="lf-chunk">
         <div class="flow-node__icon" aria-hidden="true">✂</div>
@@ -4668,7 +4673,7 @@ html[data-motion-profile="cinematic"] .slide {
       </div>
       <div class="flow-arrow" id="lf-a2" aria-hidden="true">
         <span class="flow-arrow__line"><span class="flow-arrow__shimmer"></span></span>
-        <span class="flow-arrow__label">embed \u2192</span>
+        <span class="flow-arrow__label">embed →</span>
       </div>
       <div class="flow-node" id="lf-embed">
         <div class="flow-node__icon" aria-hidden="true">🧭</div>
@@ -4677,7 +4682,7 @@ html[data-motion-profile="cinematic"] .slide {
       </div>
       <div class="flow-arrow" id="lf-a3" aria-hidden="true">
         <span class="flow-arrow__line"><span class="flow-arrow__shimmer"></span></span>
-        <span class="flow-arrow__label">store \u2192</span>
+        <span class="flow-arrow__label">store →</span>
       </div>
       <div class="flow-node" id="lf-index">
         <div class="flow-node__icon" aria-hidden="true">🗂</div>
@@ -4687,11 +4692,11 @@ html[data-motion-profile="cinematic"] .slide {
     </div>
   </div>
   <aside class="notes">
-    This is the work that happens before a user ever types a question \u2014 the ingestion pipeline. "Chunk" \u2014 a long document is split into passage-sized pieces, typically a few hundred words each, small enough that a single chunk covers one coherent idea and large enough to preserve context. Chunk size is a real design decision: too small and a chunk loses surrounding context; too large and irrelevant material dilutes the embedding.
+    The ingestion pipeline is all the work that happens before anyone types a question — "Chunk" — a long document is split into passage-sized pieces, typically a few hundred words each, small enough that a single chunk covers one coherent idea and large enough to preserve context. Chunk size is a real design decision: too small and a chunk loses surrounding context; too large and irrelevant material dilutes the embedding.
 
-    "Embed" \u2014 each chunk is passed through an embedding model that outputs a vector: a list of numbers encoding what the chunk means. Two chunks about the same topic produce vectors that land close together in this number space, regardless of the exact wording.
+    "Embed" — each chunk is passed through an embedding model that outputs a vector: a list of numbers encoding what the chunk means. Two chunks about the same topic produce vectors that land close together in this number space, regardless of the exact wording.
 
-    "Index" \u2014 the vector, plus the original text and any metadata (source document, page, date), is stored in the vector database's index structure so it can be found quickly later. This whole pipeline runs once per document, ahead of time \u2014 it is completely separate from the 4-step query loop shown earlier, which runs once per question. Slow, thorough indexing up front buys fast, cheap search at query time.
+    "Index" — the vector, plus the original text and any metadata (source document, page, date), is stored in the vector database's index structure so it can be found quickly later. This whole pipeline runs once per document, ahead of time — it is completely separate from the 4-step query loop shown earlier, which runs once per question. Slow, thorough indexing up front buys fast, cheap search at query time.
   </aside>
 </section>
 
@@ -4724,7 +4729,7 @@ html[data-motion-profile="cinematic"] .slide {
 
     "Traceable" — every answer carries a provenance chain: which passages were retrieved, which documents they came from, and which sections of the source material the AI drew from. This makes it possible to audit any answer after the fact, verify it against the original source, and identify exactly where a wrong answer went wrong. In healthcare, legal, and financial contexts, this traceability is often a regulatory requirement, not a preference.
 
-    The why panel captures the broader shift: fluency and reasoning are baseline expectations for modern AI — most large models have those. The differentiator in production is trust. Retrieval is the mechanism that converts capable AI into trustworthy AI.
+    The broader shift beneath the three labels: fluency and reasoning are baseline expectations for modern AI — most large models have those. The differentiator in production is trust. Retrieval is the mechanism that converts capable AI into trustworthy AI.
   </aside>
 </section>
 
@@ -4796,7 +4801,7 @@ html[data-motion-profile="cinematic"] .slide {
   <aside class="notes">
     "Coordinates in space" — when a document is added to a vector database, a neural model reads it and outputs a list of numbers, typically hundreds to thousands of values, collectively representing the meaning of that text. This is called an embedding vector. Two documents about the same topic produce similar vectors; two documents about unrelated topics produce distant ones. Storing this vector alongside the document means the database can later find documents whose vectors are closest to a query vector — in other words, documents whose meaning is most similar to the query's meaning. "Finds the right answer even with different phrasing" follows from this directly. "Works across languages" is possible because the models can be trained to produce similar vectors for translations of the same text. "Scales to millions" because comparing lists of numbers is a fast mathematical operation, even across a very large index.
 
-    The Spotify example on the right applies the same architecture to music. Each song is converted into a fingerprint — a list of numbers encoding tempo, key, energy, acousticness, and dozens of audio features. Songs with similar fingerprints are stored near each other in this space. When a user plays a track, Spotify finds the tracks with the nearest fingerprints and recommends those — without knowing the genre, artist, or title. The algorithm sees only the numbers. Vector databases for text work identically, replacing audio features with semantic features extracted from the content.
+    Spotify applies the same architecture to music. Each song is converted into a fingerprint — a list of numbers encoding tempo, key, energy, acousticness, and dozens of audio features. Songs with similar fingerprints are stored near each other in this space. When a user plays a track, Spotify finds the tracks with the nearest fingerprints and recommends those — without knowing the genre, artist, or title. The algorithm sees only the numbers. Vector databases for text work identically, replacing audio features with semantic features extracted from the content.
   </aside>
 </section>
 
@@ -4807,21 +4812,19 @@ html[data-motion-profile="cinematic"] .slide {
   <div class="slide__body reveal">
     <p>
       Every document becomes an
-      <button class="term-link" type="button" data-term="Embedding">embedding</button> \u2014
+      <button class="term-link" type="button" data-term="Embedding">embedding</button> —
       a coordinate in meaning-space. Two embeddings are compared with
       <button class="term-link" type="button" data-term="Cosine similarity">cosine similarity</button>,
       a score for how closely their directions align. Scanning millions of embeddings one by
       one would be too slow, so vector databases build an
-      <button class="term-link" type="button" data-term="HNSW">HNSW</button> graph \u2014 one
+      <button class="term-link" type="button" data-term="HNSW">HNSW</button> graph — one
       popular
-      <button class="term-link" type="button" data-term="ANN">ANN</button> index structure \u2014
+      <button class="term-link" type="button" data-term="ANN">ANN</button> index structure —
       to jump straight to the closest neighbors instead of checking every candidate.
     </p>
   </div>
   <aside class="notes">
-    Click any underlined term for its full definition popup \u2014 this slide exists so the jargon in the rest of the deck (and in any vector-database documentation the audience reads afterward) has a fixed reference point.
-
-    "Embedding" is the output of the embed step from the previous slide: a dense numeric vector representing meaning. "Cosine similarity" is the most common way to compare two embeddings \u2014 it measures the angle between them rather than their raw magnitude, which matters because embedding length can vary with text length while the direction (the meaning) is what should be compared. "HNSW" (Hierarchical Navigable Small World) is the specific graph-based index structure most production vector databases (Qdrant, Weaviate, Milvus) use under the hood \u2014 it organizes vectors into layered graphs so a search can skip most of the index and still find the true nearest neighbors with high probability. "ANN" (Approximate Nearest Neighbor) is the broader category HNSW belongs to: an algorithm that trades a small, tunable amount of accuracy for a large speedup over checking every vector exhaustively \u2014 the trade that makes millisecond search over millions of documents possible at all.
+    "Embedding" is the dense numeric vector produced during ingestion: a dense numeric vector representing meaning. "Cosine similarity" is the most common way to compare two embeddings — it measures the angle between them rather than their raw magnitude, which matters because embedding length can vary with text length while the direction (the meaning) is what should be compared. "HNSW" (Hierarchical Navigable Small World) is the specific graph-based index structure most production vector databases (Qdrant, Weaviate, Milvus) use under the hood — it organizes vectors into layered graphs so a search can skip most of the index and still find the true nearest neighbors with high probability. "ANN" (Approximate Nearest Neighbor) is the broader category HNSW belongs to: an algorithm that trades a small, tunable amount of accuracy for a large speedup over checking every vector exhaustively — the trade that makes millisecond search over millions of documents possible at all.
   </aside>
 </section>
 
@@ -4832,7 +4835,7 @@ html[data-motion-profile="cinematic"] .slide {
   <div class="split reveal" style="margin-top:1rem">
     <div>
       <h3 style="font-family:var(--font-display);font-style:italic;color:var(--gold)">Five lines, one answer</h3>
-      <p class="slide__body" style="margin-top:0.5rem">Embedding a query and searching a vector index is a handful of calls against a client library \u2014 no custom math required.</p>
+      <p class="slide__body" style="margin-top:0.5rem">Embedding a query and searching a vector index is a handful of calls against a client library — no custom math required.</p>
       <ul style="list-style:none;margin-top:1rem;font-size:0.92rem;color:var(--text-dim);line-height:1.6">
         <li style="margin-bottom:0.5rem"><span class="tag tag-gold">Embed</span> Turn the question into a vector</li>
         <li style="margin-bottom:0.5rem"><span class="tag tag-accent">Search</span> Ask the index for nearest neighbors</li>
@@ -4863,9 +4866,9 @@ hits = client.<span class="fn">search</span>(
     </div>
   </div>
   <aside class="notes">
-    This slide grounds everything so far in real, runnable code. `embed(...)` stands in for a call to an embedding model (OpenAI, Cohere, or a local sentence-transformer) that converts the query string into the same kind of vector every document chunk was converted into during ingestion. `client.search(...)` is the actual approximate-nearest-neighbor lookup discussed on the jargon slide \u2014 the client library hides the HNSW graph traversal entirely; the caller just gets back `limit` results ordered by similarity.
+    `embed(...)` stands in `embed(...)` stands in for a call to an embedding model (OpenAI, Cohere, or a local sentence-transformer) that converts the query string into the same kind of vector every document chunk was converted into during ingestion. `client.search(...)` is the actual approximate-nearest-neighbor lookup itself — the client library hides the HNSW graph traversal entirely; the caller just gets back `limit` results ordered by similarity.
 
-    The reason this is worth showing in code, not just in a diagram, is to make the abstraction concrete: "vector search" is not a mysterious black box, it is a network call to a database with a query vector as the argument, functionally similar to a SQL `SELECT ... ORDER BY similarity LIMIT 5`. Engineers already comfortable with database clients can map this pattern onto a vector database in minutes.
+    Code makes the abstraction concrete: "vector search" is not a mysterious black box, it is a network call to a database with a query vector as the argument, functionally similar to a SQL `SELECT ... ORDER BY similarity LIMIT 5`. Engineers already comfortable with database clients can map this pattern onto a vector database in minutes.
   </aside>
 </section>
 
@@ -4878,19 +4881,19 @@ hits = client.<span class="fn">search</span>(
       <span class="terminal-window__dot terminal-window__dot--r" aria-hidden="true"></span>
       <span class="terminal-window__dot terminal-window__dot--y" aria-hidden="true"></span>
       <span class="terminal-window__dot terminal-window__dot--g" aria-hidden="true"></span>
-      <span class="terminal-window__title">zsh \u2014 vector-db</span>
+      <span class="terminal-window__title">zsh — vector-db</span>
     </div>
     <pre class="terminal-window__body"><span class="term-prompt">$</span> curl -s localhost:6333/collections/docs/points/search \
     -H "Content-Type: application/json" \
     -d '{"vector": [0.12, -0.03, ...], "limit": 5}'
-<span class="term-dim"># querying HNSW index over 480,000 points\u2026</span>
-<span class="term-ok">\u2713</span> 5 nearest neighbors in 8ms
-<span class="term-ok">\u2713</span> top score: 0.91 (cosine)</pre>
+<span class="term-dim"># querying HNSW index over 480,000 points…</span>
+<span class="term-ok">✓</span> 5 nearest neighbors in 8ms
+<span class="term-ok">✓</span> top score: 0.91 (cosine)</pre>
   </div>
   <aside class="notes">
-    Same operation as the previous slide's Python client, called directly against the vector database's HTTP API with `curl` \u2014 useful for debugging, health checks, or any language without a dedicated client library. The request body is the query embedding (truncated here for space) plus how many results to return.
+    The same search issued directly against the vector database's HTTP API with `curl` — useful for debugging, health checks, or any language without a dedicated client library. The request body is the query embedding (truncated here for space) plus how many results to return.
 
-    The two numbers in the output are worth calling out: "8ms" is the latency of the ANN search itself \u2014 not the embedding step, not the LLM generation, just the index lookup \u2014 across nearly half a million stored points, which is the entire value proposition of approximate nearest-neighbor search over exhaustive comparison. "0.91 (cosine)" is the similarity score of the best match \u2014 the same cosine similarity introduced on the jargon slide, now shown as a concrete number a retrieval system would use to decide whether a result is confident enough to trust.
+    The two numbers in the output are worth calling out: "8ms" is the latency of the ANN search itself — not the embedding step, not the LLM generation, just the index lookup — across nearly half a million stored points, which is the entire value proposition of approximate nearest-neighbor search over exhaustive comparison. "0.91 (cosine)" is the similarity score of the best match — the same cosine similarity introduced on the jargon slide, now shown as a concrete number a retrieval system would use to decide whether a result is confident enough to trust.
   </aside>
 </section>
 
@@ -4921,9 +4924,9 @@ hits = client.<span class="fn">search</span>(
     </div>
   </div>
   <aside class="notes">
-    These bars show recall@10 \u2014 of the documents that actually answer a given question, what fraction show up in the top 10 results \u2014 on a representative internal benchmark comparing three retrieval strategies. Keyword-only search (BM25 / Elasticsearch style) misses paraphrases and synonyms entirely, capping recall around the low 60s no matter how the index is tuned. Vector-only search recovers most of that gap because it matches meaning, but it can still miss exact identifiers \u2014 product codes, legal clause numbers, proper names \u2014 that keyword search would have caught trivially.
+    Recall@10 measures retrieval quality — of the documents that actually answer a given question, what fraction show up in the top 10 results — on a representative internal benchmark comparing three retrieval strategies. Keyword-only search (BM25 / Elasticsearch style) misses paraphrases and synonyms entirely, capping recall around the low 60s no matter how the index is tuned. Vector-only search recovers most of that gap because it matches meaning, but it can still miss exact identifiers — product codes, legal clause numbers, proper names — that keyword search would have caught trivially.
 
-    Hybrid retrieval runs both searches in parallel, merges the candidate lists (often with reciprocal rank fusion, "RRF"), and then reranks the merged set with a heavier cross-encoder model before returning the top results. The combination captures precision from keyword matching and recall from semantic matching, which is why production RAG systems increasingly default to hybrid rather than picking one strategy. The numbers here are illustrative of the shape of the result \u2014 vector clearly beats keyword, hybrid clearly beats vector \u2014 not a claim about any specific dataset.
+    Hybrid retrieval runs both searches in parallel, merges the candidate lists (often with reciprocal rank fusion, "RRF"), and then reranks the merged set with a heavier cross-encoder model before returning the top results. The combination captures precision from keyword matching and recall from semantic matching, which is why production RAG systems increasingly default to hybrid rather than picking one strategy. Exact numbers vary by dataset; the durable finding is the shape of the result — vector clearly beats keyword, hybrid clearly beats vector.
   </aside>
 </section>
 
@@ -4952,9 +4955,9 @@ flowchart LR
     </div>
   </div>
   <aside class="notes">
-    Left side — the vector database takes a question, converts it to a meaning representation, and compares it against stored representations of millions of document passages. The output is a ranked list of the most semantically similar documents: the review mentioning "incredible cacio e pepe" and the blog about "top trattorias" both surface for "best pasta in Rome" because their meaning vectors are close to the query's vector. The database knows nothing about the relationships between those documents — it only measures similarity.
+    A vector database takes a question, converts it to a meaning representation, and compares it against stored representations of millions of document passages. The output is a ranked list of the most semantically similar documents: the review mentioning "incredible cacio e pepe" and the blog about "top trattorias" both surface for "best pasta in Rome" because their meaning vectors are close to the query's vector. The database knows nothing about the relationships between those documents — it only measures similarity.
 
-    Right side — the graph database stores the world as a network. Each entity becomes a node: the restaurant, the city, the dish, the local guide, another restaurant. Each relationship becomes a labelled edge: "located in", "serves", "reviewed by", "also reviewed." To answer a question about this restaurant, a graph traversal follows the edges outward from the restaurant node, collecting connected facts at each hop. The result isn't a list of similar documents — it's a structured map of related entities. Following "reviewed by" to the local guide, then "also reviewed" from that guide to another restaurant, answers "what other places did the same reviewer recommend?" — a question that cannot be answered by similarity search at all.
+    A graph database stores the world as a network. Each entity becomes a node: the restaurant, the city, the dish, the local guide, another restaurant. Each relationship becomes a labelled edge: "located in", "serves", "reviewed by", "also reviewed." To answer a question about this restaurant, a graph traversal follows the edges outward from the restaurant node, collecting connected facts at each hop. The result isn't a list of similar documents — it's a structured map of related entities. Following "reviewed by" to the local guide, then "also reviewed" from that guide to another restaurant, answers "what other places did the same reviewer recommend?" — a question that cannot be answered by similarity search at all.
 
     The two databases answer fundamentally different questions and are best used together: vector search finds the entry points most relevant to a query; graph traversal expands those entry points with connected context.
   </aside>
@@ -5008,31 +5011,31 @@ flowchart LR
 <!-- SLIDE 19 — CHOOSING THE RIGHT STORE -->
 <section class="slide" id="slide-19" data-nav-title="Choosing the right store">
   <p class="slide__label reveal">Decide in 30 seconds</p>
-  <h2 class="slide__heading reveal">Vector or graph \u2014 <span class="accent">which one?</span></h2>
+  <h2 class="slide__heading reveal">Vector or graph — <span class="accent">which one?</span></h2>
   <div class="checklist-grid reveal">
     <div class="checklist-item">
-      <span aria-hidden="true">\u2713</span>
-      <div><strong>"What's similar to this?"</strong> \u2014 reach for a vector database.</div>
+      <span aria-hidden="true">✓</span>
+      <div><strong>"What's similar to this?"</strong> — reach for a vector database.</div>
     </div>
     <div class="checklist-item">
-      <span aria-hidden="true">\u2713</span>
-      <div><strong>"How are these things connected?"</strong> \u2014 reach for a graph database.</div>
+      <span aria-hidden="true">✓</span>
+      <div><strong>"How are these things connected?"</strong> — reach for a graph database.</div>
     </div>
     <div class="checklist-item">
-      <span aria-hidden="true">\u2713</span>
-      <div><strong>Need both</strong> \u2014 similarity to find entry points, then relationships to expand them \u2014 combine them in one pipeline.</div>
+      <span aria-hidden="true">✓</span>
+      <div><strong>Need both</strong> — similarity to find entry points, then relationships to expand them — combine them in one pipeline.</div>
     </div>
     <div class="checklist-item">
-      <span aria-hidden="true">\u2713</span>
-      <div><strong>Still unsure?</strong> Start with vector \u2014 most retrieval questions turn out to be similarity questions.</div>
+      <span aria-hidden="true">✓</span>
+      <div><strong>Still unsure?</strong> Start with vector — most retrieval questions turn out to be similarity questions.</div>
     </div>
   </div>
   <aside class="notes">
-    This is the practical decision rule the whole deck has been building toward. If the question an application needs to answer is fundamentally about likeness \u2014 find documents like this one, find products like this one, find images like this one \u2014 a vector database is the right default: fast approximate nearest-neighbor search over embeddings, exactly as shown on the earlier code and terminal slides.
+    If the question an application needs to answer is fundamentally about likeness — find documents like this one, find products like this one, find images like this one — a vector database is the right default: fast approximate nearest-neighbor search over embeddings.
 
-    If the question is fundamentally about traversal \u2014 who is connected to whom, which entities sit between two other entities, how many hops separate two nodes \u2014 a graph database is the right tool: fraud rings, organizational maps, and supply-chain traceability all live here, as covered on the compare slide.
+    If the question is fundamentally about traversal — who is connected to whom, which entities sit between two other entities, how many hops separate two nodes — a graph database is the right tool: fraud rings, organizational maps, and supply-chain traceability all live here.
 
-    Many production RAG systems eventually need both: vector search narrows millions of documents down to a relevant handful, then a graph traversal enriches those results with the relationships between the entities they mention. Teams starting from zero should still pick one to start \u2014 defaulting to vector is the pragmatic choice, since retrieval questions ("what document answers this?") vastly outnumber traversal questions in most applications, and a graph layer can always be added later once a genuine multi-hop use case appears.
+    Many production RAG systems eventually need both: vector search narrows millions of documents down to a relevant handful, then a graph traversal enriches those results with the relationships between the entities they mention. Teams starting from zero should still pick one to start — defaulting to vector is the pragmatic choice, since retrieval questions ("what document answers this?") vastly outnumber traversal questions in most applications, and a graph layer can always be added later once a genuine multi-hop use case appears.
   </aside>
 </section>
 
@@ -5046,7 +5049,7 @@ flowchart LR
   </div>
   <div class="reveal"><cite>Vectors find similarity &middot; Graphs follow connections &middot; Retrieval ties both into answers you can trust</cite></div>
   <aside class="notes">
-    "Where to look" is the operational constraint the quote points at. An AI model's knowledge is fixed at training time — it cannot absorb tomorrow's report, last week's regulation change, or the document your team wrote this morning. The model's reasoning capability is largely independent of its knowledge currency; a highly capable model fed stale or absent information still produces stale or absent answers. The architecture described across this presentation addresses exactly that gap: retrieval-augmented AI separates the model's reasoning layer from its knowledge layer. The citation beneath the quote names the three layers that work together. "Vectors find similarity" — meaning search converts any question into a coordinate and finds the nearest knowledge; language-independent, fast at scale, tolerant of paraphrase. "Graphs follow connections" — relationship traversal answers questions that require chaining through entities; the answer is assembled by following stored edges rather than by matching text. "Retrieval ties both into answers you can trust" — trust has two components: accuracy (the answer is grounded in retrieved documents, not invented) and traceability (the source document can be cited and verified). The three layers are not alternatives; they are complementary layers of the same architecture.
+    "Where to look" is the operational constraint the quote points at. An AI model's knowledge is fixed at training time — it cannot absorb tomorrow's report, last week's regulation change, or the document your team wrote this morning. The model's reasoning capability is largely independent of its knowledge currency; a highly capable model fed stale or absent information still produces stale or absent answers. Retrieval-augmented AI addresses exactly that gap by separating the model's reasoning layer from its knowledge layer. Three layers work together: "Vectors find similarity" — meaning search converts any question into a coordinate and finds the nearest knowledge; language-independent, fast at scale, tolerant of paraphrase. "Graphs follow connections" — relationship traversal answers questions that require chaining through entities; the answer is assembled by following stored edges rather than by matching text. "Retrieval ties both into answers you can trust" — trust has two components: accuracy (the answer is grounded in retrieved documents, not invented) and traceability (the source document can be cited and verified). The three layers are not alternatives; they are complementary layers of the same architecture.
   </aside>
 </section>
 </div>

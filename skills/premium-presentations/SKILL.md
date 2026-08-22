@@ -211,7 +211,14 @@ Load only the reference needed for the current task.
   Notes are hidden from the audience (CSS `display: none` is applied by the
   runtime on `.slide aside.notes`). The presenter popup reads them via
   `aside.notes` selectors in `slide-engine.js`. See `references/examples.md`
-  for the exact markup pattern.
+  for the exact markup pattern. Content rule: notes **explain — they never
+  direct**. Each aside concisely explains every concept displayed on its
+  slide in plain language, with no staging cues ("pause here", "walk
+  through"), no slide narration or orientation ("this slide shows…"),
+  and no jargon left undecoded — technical terms are explained in
+  everyday words. Full rule: Speaker Notes rule in
+  `references/slide-spec-template.md`; the shipped example decks
+  demonstrate it.
 - **Slide Budget (`data-budget`, conditional):** check the Slide Map's
   `Budget (mm:ss)` / `Budget (ms)` columns (see
   `references/slide-spec-template.md`). If **budgeted** (every row

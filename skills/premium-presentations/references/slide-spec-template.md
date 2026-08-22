@@ -77,8 +77,8 @@ Divider slides mark act boundaries. Acts must reflect the topic's content phases
 | # | ID | Act | Type | Title | Key Content | Visual Pattern | Why Panel | Voiceover Beat | Speaker Notes | Budget (mm:ss) | Budget (ms) |
 |---|----|-----|------|-------|-------------|----------------|-----------|----------------|---------------|----------------|-------------|
 | 1 | slide-1 | 0 | Title | … | … | slide--title | N/A | "{First words the presenter says}" | … | | |
-| 2 | slide-2 | 0 | Hook Quote | … | … | slide--quote | N/A | "{Delivery cue for the quote}" | … | | |
-| 3 | slide-3 | 1 | Content | … | … | FLOW+ live-flow \| PIPE pipeline-vertical \| P9 compare-paradigm \| P14 journey \| TL timeline \| STG stage-card \| GL glass-code \| TERM terminal \| BAR bar-chart \| FLOW setup-flow \| STAT stats-row \| CHK checklist \| kpi-row \| content-grid+aside-card \| data-table | "{Why this matters}" | "{What the presenter says — not a repeat of slide text}" | … | | |
+| 2 | slide-2 | 0 | Hook Quote | … | … | slide--quote | N/A | "{First spoken words}" | {Concise explanation of the quote's concept} | | |
+| 3 | slide-3 | 1 | Content | … | … | FLOW+ live-flow \| PIPE pipeline-vertical \| P9 compare-paradigm \| P14 journey \| TL timeline \| STG stage-card \| GL glass-code \| TERM terminal \| BAR bar-chart \| FLOW setup-flow \| STAT stats-row \| CHK checklist \| kpi-row \| content-grid+aside-card \| data-table | "{Why this matters}" | "{Concept explanations per the Speaker Notes rule below — never delivery cues or slide narration}" | … | | |
 | … | … | … | … | … | … | … | … | … | … | | |
 | N | slide-N | N | Closing Quote | … | … | slide--quote | N/A | "{Anchor phrase delivery}" | … | | |
 
@@ -87,12 +87,23 @@ routing table in [components.md](components.md) — never leave it generic and
 never plan a bare heading + paragraph slide. Vary patterns: ≥5 distinct ones
 in a 12+ slide deck, no pattern on more than 2 consecutive slides.
 
-**Speaker Notes rule:** every slide row carries a Speaker Notes entry — 2–4
-sentences of what the presenter says aloud (delivery cues, transitions, the
-"why" behind the slide). Notes are distinct from on-slide text; they describe
-pacing, emphasis, or context the audience never reads. The generation skill
-renders each entry as `<aside class="notes">…</aside>` as the last child
-inside the `.slide` section.
+**Speaker Notes rule:** every slide row carries a Speaker Notes entry, and
+the generation skill renders each entry as `<aside class="notes">…</aside>`
+as the last child inside the `.slide` section. Notes **explain — they never
+direct**. Each entry is a concise, plain-language explanation of every
+concept displayed on the slide: what it is, why it exists, how it behaves —
+the answer to "explain this clearly," not stage directions.
+
+- No delivery or staging cues ("pause here", "walk through the table",
+  "tell the room…", "give them ten seconds").
+- No slide narration or orientation ("this slide shows…", "as you can
+  see", "next, we'll…"). A note must stand alone when read outside the
+  live presentation.
+- No unexplained jargon: decode every technical term in everyday words,
+  even when the term itself appears on the slide.
+- One idea per sentence; typically 3–6 sentences per slide, fewer on
+  title, quote, and divider slides.
+- Do not restate on-slide wording verbatim; explain the idea underneath it.
 
 **Slide Budget columns (optional, Tier 2):** `Budget (mm:ss)` / `Budget (ms)`
 declare the planned dwell time for each slide (the *Slide Budget*, per
