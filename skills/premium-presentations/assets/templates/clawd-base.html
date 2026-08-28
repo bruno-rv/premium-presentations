@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="clawd" data-parallax="off" data-3d="off" data-theme-label-clawd="Clawd">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{TITLE}}</title>
+<link rel="stylesheet" href="{{SHARED}}premium-themes.css">
+<link rel="stylesheet" href="{{SHARED}}premium-deck.css">
+<link rel="stylesheet" href="{{SHARED}}premium-components.css">
+<link rel="stylesheet" href="{{SHARED}}premium-design-power.css">
+<link rel="stylesheet" href="{{SHARED}}premium-diagrams.css">
+<link rel="stylesheet" href="{{SHARED}}premium-annotations.css">
+<link rel="stylesheet" href="{{SHARED}}premium-extras.css">
+<meta property="og:type" content="article">
+<meta property="og:title" content="{{TITLE}}">
+<meta property="og:description" content="Premium Presentations deck">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{TITLE}}">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23000'/%3E%3Ccircle cx='8' cy='8' r='4' fill='%23ff7a00'/%3E%3C/svg%3E">
+</head>
+<body>
+<div class="deck" id="deck">
+
+<!-- SLIDE 1 — TITLE -->
+<section class="slide slide--title" data-nav-title="{{TITLE}}">
+  <p class="slide__subtitle reveal">Clawd / make it real</p>
+  <h1 class="slide__display reveal">{{TITLE}}<br><span class="accent">one idea at a time</span></h1>
+  <p class="slide__body reveal" style="margin-top:1rem;max-width:38rem">A warm, tactile teaching surface for turning a rough thought into a working artifact.</p>
+  <aside class="notes">Clawd establishes the theme's working metaphor: ideas become useful when they take a visible, testable shape.</aside>
+</section>
+
+<!-- SLIDE 2 — ACT DIVIDER -->
+<section class="slide slide--divider" data-nav-title="Act 1">
+  <div class="slide__number reveal" aria-hidden="true">01</div>
+  <p class="slide__label reveal">Act 1</p>
+  <h2 class="slide__heading reveal">From spark to shape</h2>
+  <p class="slide__body reveal">Use the divider to reset the room before the next concrete move.</p>
+  <aside class="notes">This divider marks a change in mode—from framing the idea to making a concrete move. Keep the next section focused on one transition.</aside>
+</section>
+
+<!-- SLIDE 3 — CONTENT -->
+<section class="slide" data-nav-title="First idea">
+  <p class="slide__label reveal">Components</p>
+  <h2 class="slide__heading reveal">Give the idea a visible next step</h2>
+  <div class="stats-row reveal">
+    <div class="stat-card">
+      <p class="stat-val">01</p>
+      <p class="stat-lbl">Name the idea</p>
+    </div>
+    <div class="stat-card">
+      <p class="stat-val">02</p>
+      <p class="stat-lbl">Show the shape</p>
+    </div>
+    <div class="stat-card">
+      <p class="stat-val">03</p>
+      <p class="stat-lbl">Ship the proof</p>
+    </div>
+  </div>
+  <aside class="notes">The three beats form a reusable loop: name the idea so the room can align, show its shape so it can be inspected, then ship a small proof so it can be judged.</aside>
+</section>
+
+</div>
+<script src="{{SHARED}}premium-controller.js" defer></script>
+<script src="{{SHARED}}premium-design-power.js" defer></script>
+<script src="{{SHARED}}premium-controls.js" defer></script>
+<script src="{{SHARED}}premium-annotations.js" defer></script>
+<script src="{{SHARED}}premium-timer.js" defer></script>
+<script src="{{SHARED}}premium-tts.js" defer></script>
+<script src="{{SHARED}}premium-search.js" defer></script>
+<script src="{{SHARED}}premium-clicker.js" defer></script>
+<script src="{{SHARED}}premium-og-cover.js" defer></script>
+<script src="{{SHARED}}premium-slide-content.js" defer></script>
+<script src="{{SHARED}}premium-presenter.js" defer></script>
+<script src="{{SHARED}}slide-engine.js" defer></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    new SlideEngine();
+  });
+</script>
+</body>
+</html>
