@@ -13,9 +13,9 @@ Three pillars:
 
 | Pillar | Meaning | Today |
 |--------|---------|-------|
-| **Compile** | Spec → validated deck; deck doctor is a hard gate | Strong (v1.1.1) |
-| **Deliver** | Presenter popup, rehearsal, timer, annotations | Strong, keep deepening |
-| **Own** | Single file, no CDN, offline, share anywhere | Strong, distribution rough |
+| **Compile** | Spec → validated deck; deck doctor is a hard gate | Strong (v2.2.0) |
+| **Deliver** | Presenter popup, rehearsal, timer, annotations | Strong |
+| **Own** | Single file, no CDN, offline, share anywhere | Strong |
 
 ## Non-goals (anti-Gamma guardrails)
 
@@ -25,36 +25,13 @@ Three pillars:
 - Litmus test: a feature that requires a persistent server is the wrong feature.
   LAN or file-based only.
 
-## v1.2 — Fix foundations
+## Shipped
 
-Close the gaps the product audit surfaced. No new surface area.
-
-1. **Real PDF export** — Playwright (already a validator dep) renders each slide
-   headless and merges. Replaces `window.print()`. Also migrates `og-cover.sh` off
-   the separate system-Chrome requirement → one browser path for the whole skill.
-2. **Kitchen-sink example deck shipped in the plugin package** — today the package
-   contains zero inspectable decks; onboarding relies entirely on scaffolding.
-3. **Handout export** — deck + mandatory speaker notes → single markdown/PDF
-   leave-behind. Cheap; notes already exist on every slide.
-
-## v1.3 — Deepen the presenter moat
-
-4. **Rehearsal coach** — persist rehearsal runs across sessions, pace deltas vs
-   plan, write suggested per-slide time budgets back into the spec.
-5. **Teleprompter mode** — auto-scrolling notes in the presenter popup, sized for
-   distance reading.
-6. **Deck diffing / partial regeneration** — spec change → regenerate only affected
-   slides. Editing is the weakest story in every AI deck tool; the spec-driven
-   architecture makes it uniquely tractable here.
-
-## v2 — Agent-native differentiators
-
-7. **Deck recipes** — `/present-pr`, `/present-architecture`, `/present-postmortem`:
-   one command, deck from live repo context. The feature a cloud editor can never build.
-8. **Brand-kit theme generator** — productize the design-power theme composer:
-   logo/site → theme tokens, validator enforces contrast. 4 themes → infinite.
-9. **LAN audience follow-along** — `share-deck.sh` LAN mode grows slide-sync so
-   audience devices track the presenter. Local-first, no SaaS.
+- **v1.2** — Playwright PDF export (replaces `window.print()`), OG cover, Markdown handout export, kitchen-sink example deck in the package.
+- **v1.3.0** — Rehearsal coach (persisted runs, pace deltas, suggested per-slide budgets), teleprompter mode, spec-aware partial regeneration.
+- **v2.0.0** — `/present-pr`; brand-kit theme generator (`scripts/generate_theme.py`); LAN audience follow-along (`premium-follow.js`).
+- **v2.1.0** — `/present-architecture` and `/present-postmortem` recipes.
+- **v2.2.0** — current plugin version.
 
 ## Known limitations
 
