@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="clawd" data-parallax="off" data-3d="off" data-theme-label-clawd="Clawd">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clawd Theme Preview</title>
+<link rel="stylesheet" href="../shared/premium-themes.css">
+<link rel="stylesheet" href="../shared/premium-deck.css">
+<link rel="stylesheet" href="../shared/premium-components.css">
+<link rel="stylesheet" href="../shared/premium-design-power.css">
+<link rel="stylesheet" href="../shared/premium-diagrams.css">
+<link rel="stylesheet" href="../shared/premium-annotations.css">
+<link rel="stylesheet" href="../shared/premium-extras.css">
+<style>
+  body { font-family: var(--font-body); }
+  .slide__display,
+  .slide__heading { font-family: var(--font-display); }
+  .slide__label,
+  .slide__subtitle { font-family: var(--font-mono); }
+  .clawd-cutouts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    width: min(100%, 760px);
+    margin-top: 22px;
+  }
+  .clawd-cutout {
+    margin: 0;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface);
+  }
+  .clawd-cutout img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+  }
+  .clawd-cutout figcaption {
+    padding: 9px 11px 11px;
+    color: var(--text-dim);
+    font: 0.72rem/1.3 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  @media (max-width: 700px) {
+    .clawd-cutouts { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="deck" id="deck">
+  <section class="slide slide--title" data-nav-title="Clawd">
+    <p class="slide__subtitle reveal">Theme preview</p>
+    <h1 class="slide__display reveal">Clawd system</h1>
+    <p class="slide__body reveal" style="margin-top:1rem;max-width:38rem">Tactile orange mascot energy, dark workshop surfaces, and a clear path from idea to artifact.</p>
+    <aside class="notes">The preview shows how Clawd pairs a tactile mascot identity with a dark, workshop-like reading surface.</aside>
+  </section>
+  <section class="slide slide--divider" data-nav-title="Make it real">
+    <div class="slide__number reveal" aria-hidden="true">01</div>
+    <p class="slide__label reveal">Make it real</p>
+    <h2 class="slide__heading reveal">A reset before the next move</h2>
+    <p class="slide__body reveal">The map visual gives the audience a visual breath while the narrative changes direction.</p>
+    <aside class="notes">Use the divider when the audience needs a visual reset. The registered map visual supplies atmosphere without competing with the section claim.</aside>
+  </section>
+  <section class="slide" data-nav-title="Clawd in motion">
+    <p class="slide__label reveal">Clawd in motion</p>
+    <h2 class="slide__heading reveal">One mascot, three useful beats</h2>
+    <div class="clawd-cutouts reveal" aria-label="Clawd action cutouts">
+      <figure class="clawd-cutout">
+        <img src="../shared/assets/clawd/clawd-build.webp" alt="Clawd building a small orange artifact">
+        <figcaption>Build</figcaption>
+      </figure>
+      <figure class="clawd-cutout">
+        <img src="../shared/assets/clawd/clawd-inspect.webp" alt="Clawd inspecting a small orange artifact">
+        <figcaption>Inspect</figcaption>
+      </figure>
+      <figure class="clawd-cutout">
+        <img src="../shared/assets/clawd/clawd-present.webp" alt="Clawd presenting a small orange artifact">
+        <figcaption>Present</figcaption>
+      </figure>
+    </div>
+    <aside class="notes">The cutouts make the theme's visual vocabulary concrete: building, inspecting, and presenting are three distinct beats authors can map to their story.</aside>
+  </section>
+</div>
+<script src="../shared/premium-controller.js" defer></script>
+<script src="../shared/premium-design-power.js" defer></script>
+<script src="../shared/premium-controls.js" defer></script>
+<script src="../shared/premium-annotations.js" defer></script>
+<script src="../shared/premium-timer.js" defer></script>
+<script src="../shared/premium-tts.js" defer></script>
+<script src="../shared/premium-search.js" defer></script>
+<script src="../shared/premium-clicker.js" defer></script>
+<script src="../shared/premium-og-cover.js" defer></script>
+<script src="../shared/premium-slide-content.js" defer></script>
+<script src="../shared/premium-presenter.js" defer></script>
+<script src="../shared/slide-engine.js" defer></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    new SlideEngine();
+  });
+</script>
+</body>
+</html>
