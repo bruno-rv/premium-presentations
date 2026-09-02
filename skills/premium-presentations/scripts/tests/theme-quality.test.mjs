@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -117,6 +117,8 @@ test('theme font stacks avoid reported overused families and keep warm hierarchy
     'assets/templates/preview-warm.html',
     'assets/templates/preview-red.html',
     'assets/templates/preview-cupertino.html',
+    'assets/templates/clawd-base.html',
+    'assets/templates/preview-clawd.html',
     'assets/shared/premium-themes.css',
     'assets/shared/premium-controls.js',
     'assets/shared/premium-components.css',
@@ -134,4 +136,43 @@ test('theme font stacks avoid reported overused families and keep warm hierarchy
 
   assert.ok(display && body, 'warm theme should define display and body font stacks');
   assert.notEqual(display, body, 'warm theme display and body stacks should not be identical');
+});
+
+test('Clawd preview resolves six action assets with accessible metadata', () => {
+  const previewPath = 'assets/templates/preview-clawd.html';
+  const previewHtml = read(previewPath);
+  const dom = new JSDOM(previewHtml);
+  const cutouts = [...dom.window.document.querySelectorAll('.clawd-cutout')];
+  const expectedActions = ['build', 'inspect', 'present', 'plan', 'test', 'handoff'];
+  const assetRoot = resolve(root, 'assets/shared/assets/clawd');
+
+  assert.equal(cutouts.length, expectedActions.length, 'Clawd preview should show six action cards');
+
+  const actions = cutouts.map((cutout) => {
+    const image = cutout.querySelector('img');
+    const caption = cutout.querySelector('figcaption');
+
+    assert.ok(image, 'each Clawd action card should include an image');
+    assert.ok(image.alt.trim(), 'each Clawd action image should have non-empty alt text');
+    assert.ok(caption?.textContent.trim(), 'each Clawd action image should have a non-empty caption');
+
+    const imagePath = resolve(dirname(resolve(root, previewPath)), image.getAttribute('src'));
+    assert.ok(imagePath.startsWith(`${assetRoot}/`), 'Clawd action images should stay in the Clawd asset directory');
+    assert.ok(existsSync(imagePath), `Clawd action image should resolve: ${imagePath}`);
+
+    return imagePath.slice(assetRoot.length + 1).replace(/^clawd-/, '').replace(/\.webp$/, '');
+  });
+
+  assert.deepEqual(actions, expectedActions);
+});
+
+test('Clawd preview keeps two action columns on compact screens', () => {
+  const previewHtml = read('assets/templates/preview-clawd.html');
+  const mobileBlock = previewHtml.match(/@media \(max-width:\s*700px\)\s*\{([\s\S]*?)\n\s*\}/)?.[1] ?? '';
+
+  assert.match(
+    mobileBlock,
+    /\.clawd-cutouts\s*\{\s*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);\s*\}/,
+    'compact Clawd previews should keep two columns to avoid mobile slide overflow',
+  );
 });
