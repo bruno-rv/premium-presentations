@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Clawd Theme Preview</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23000'/%3E%3Ccircle cx='8' cy='8' r='4' fill='%23ff7a00'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="../shared/premium-themes.css">
 <link rel="stylesheet" href="../shared/premium-deck.css">
 <link rel="stylesheet" href="../shared/premium-components.css">
@@ -45,7 +46,7 @@
     letter-spacing: 0.08em;
   }
   @media (max-width: 700px) {
-    .clawd-cutouts { grid-template-columns: 1fr; }
+    .clawd-cutouts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
 </style>
 </head>
@@ -54,8 +55,8 @@
   <section class="slide slide--title" data-nav-title="Clawd">
     <p class="slide__subtitle reveal">Theme preview</p>
     <h1 class="slide__display reveal">Clawd system</h1>
-    <p class="slide__body reveal" style="margin-top:1rem;max-width:38rem">Tactile orange mascot energy, dark workshop surfaces, and a clear path from idea to artifact.</p>
-    <aside class="notes">The preview shows how Clawd pairs a tactile mascot identity with a dark, workshop-like reading surface.</aside>
+    <p class="slide__body reveal" style="margin-top:1rem;max-width:38rem">Tactile orange mascot energy, warm paper surfaces, and a clear path from idea to artifact.</p>
+    <aside class="notes">The preview shows how Clawd pairs a tactile mascot identity with a warm paper reading surface.</aside>
   </section>
   <section class="slide slide--divider" data-nav-title="Make it real">
     <div class="slide__number reveal" aria-hidden="true">01</div>
@@ -66,7 +67,7 @@
   </section>
   <section class="slide" data-nav-title="Clawd in motion">
     <p class="slide__label reveal">Clawd in motion</p>
-    <h2 class="slide__heading reveal">One mascot, three useful beats</h2>
+    <h2 class="slide__heading reveal">One mascot, six useful beats</h2>
     <div class="clawd-cutouts reveal" aria-label="Clawd action cutouts">
       <figure class="clawd-cutout">
         <img src="../shared/assets/clawd/clawd-build.webp" alt="Clawd building a small orange artifact">
@@ -80,8 +81,20 @@
         <img src="../shared/assets/clawd/clawd-present.webp" alt="Clawd presenting a small orange artifact">
         <figcaption>Present</figcaption>
       </figure>
+      <figure class="clawd-cutout">
+        <img src="../shared/assets/clawd/clawd-plan.webp" alt="Clawd planning a path to a small orange artifact">
+        <figcaption>Plan</figcaption>
+      </figure>
+      <figure class="clawd-cutout">
+        <img src="../shared/assets/clawd/clawd-test.webp" alt="Clawd testing a small orange artifact">
+        <figcaption>Test</figcaption>
+      </figure>
+      <figure class="clawd-cutout">
+        <img src="../shared/assets/clawd/clawd-handoff.webp" alt="Clawd handing off a small orange artifact">
+        <figcaption>Handoff</figcaption>
+      </figure>
     </div>
-    <aside class="notes">The cutouts make the theme's visual vocabulary concrete: building, inspecting, and presenting are three distinct beats authors can map to their story.</aside>
+    <aside class="notes">The cutouts make the theme's visual vocabulary concrete: plan, build, inspect, test, handoff, and present are six distinct beats authors can map to their story.</aside>
   </section>
 </div>
 <script src="../shared/premium-controller.js" defer></script>
