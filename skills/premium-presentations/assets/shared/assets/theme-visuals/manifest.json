@@ -50,5 +50,18 @@
         "src": "cupertino-map.webp"
       }
     ]
+  },
+  "clawd": {
+    "visualIdentity": "warm paper, graphite, burnt-orange Clawd mascot",
+    "assets": [
+      {
+        "role": "hero",
+        "src": "clawd-hero.webp"
+      },
+      {
+        "role": "map",
+        "src": "clawd-map.webp"
+      }
+    ]
   }
 }

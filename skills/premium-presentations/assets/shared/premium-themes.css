@@ -164,6 +164,46 @@ html[data-theme="cupertino"] {
   --theme-cupertino-ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* Clawd theme: warm paper, graphite text, and burnt-orange mascot energy. */
+html[data-theme="clawd"] {
+  --font-display: Georgia, 'Times New Roman', serif;
+  --font-body: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-editorial: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Menlo', monospace;
+  --bg: #f4ede2;
+  --surface: #fff9ef;
+  --surface2: #f2ece2;
+  --border: rgba(41, 36, 30, 0.1);
+  --border-bright: rgba(201, 87, 26, 0.28);
+  --text: #29241e;
+  --text-dim: #625c55;
+  --accent: #c9571a;
+  --accent-strong: #853a11;
+  --accent-dim: rgba(201, 87, 26, 0.12);
+  --accent2: #a5623e;
+  --gold: #a06d1f;
+  --gold-dim: rgba(160, 109, 31, 0.1);
+  --orange: #bf5b00;
+  --orange-dim: rgba(191, 91, 0, 0.1);
+  --cyan: #007aff;
+  --cyan-dim: rgba(0, 122, 255, 0.1);
+  --green: #248a3d;
+  --green-dim: rgba(36, 138, 61, 0.1);
+  --red: #d70015;
+  --red-dim: rgba(215, 0, 21, 0.1);
+  --blue: #0066cc;
+  --violet: #5856d6;
+  --violet-dim: rgba(88, 86, 214, 0.1);
+  --code-bg: #f6f0e7;
+  --code-text: #48433c;
+  --progress-gradient: linear-gradient(90deg, var(--accent), var(--accent-strong));
+  --grain-opacity: 0.015;
+  --flow-glow-alpha: 18%;
+  --term-bg: #f6f0e7;
+  --term-bar: #f2ece2;
+  --term-text: #48433c;
+}
+
 html[data-theme="cupertino"] .slide {
   background:
     radial-gradient(
